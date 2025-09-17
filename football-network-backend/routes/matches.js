@@ -5,15 +5,20 @@ const { authenticateToken } = require("../middleware/auth");
 
 const router = express.Router();
 
-// POST /api/matches/invitations - Envoyer une invitation de match
+// POST /api/matches/invitations - Envoyer une invitation de match (CORRIGÉE)
 router.post(
   "/invitations",
   [
     authenticateToken,
+    body("senderTeamId").isInt().withMessage("Sender team ID is required"), // AJOUTÉ
     body("receiverTeamId").isInt().withMessage("Receiver team ID is required"),
     body("proposedDate").isISO8601().withMessage("Valid date is required"),
-    body("proposedLocationId").optional().isInt(),
-    body("message").optional().isLength({ max: 500 }),
+    body("proposedLocationId")
+      .optional({ nullable: true, checkFalsy: true })
+      .isInt(),
+    body("message")
+      .optional({ nullable: true, checkFalsy: true })
+      .isLength({ max: 500 }),
   ],
   async (req, res) => {
     try {
@@ -22,22 +27,25 @@ router.post(
         return res.status(400).json({ errors: errors.array() });
       }
 
-      const { receiverTeamId, proposedDate, proposedLocationId, message } =
-        req.body;
+      const {
+        senderTeamId,
+        receiverTeamId,
+        proposedDate,
+        proposedLocationId,
+        message,
+      } = req.body; // MODIFIÉ
 
-      // Vérifier que l'utilisateur est capitaine d'une équipe
-      const [senderTeams] = await db.execute(
-        'SELECT team_id FROM team_members WHERE user_id = ? AND role = "captain" AND is_active = true',
-        [req.user.id]
+      // Vérifier que l'utilisateur est capitaine de l'équipe spécifiée (MODIFIÉ)
+      const [senderTeamCheck] = await db.execute(
+        'SELECT team_id FROM team_members WHERE user_id = ? AND team_id = ? AND role = "captain" AND is_active = true',
+        [req.user.id, senderTeamId]
       );
 
-      if (senderTeams.length === 0) {
+      if (senderTeamCheck.length === 0) {
         return res
           .status(403)
-          .json({ error: "Only team captains can send match invitations" });
+          .json({ error: "You are not the captain of this team" }); // MODIFIÉ
       }
-
-      const senderTeamId = senderTeams[0].team_id;
 
       // Vérifier que l'équipe receveuse existe
       const [receiverTeams] = await db.execute(
@@ -50,7 +58,8 @@ router.post(
       }
 
       // Vérifier qu'on n'envoie pas une invitation à sa propre équipe
-      if (senderTeamId === parseInt(receiverTeamId)) {
+      if (parseInt(senderTeamId) === parseInt(receiverTeamId)) {
+        // MODIFIÉ
         return res.status(400).json({ error: "Cannot invite your own team" });
       }
 
@@ -66,7 +75,7 @@ router.post(
        WHERE sender_team_id = ? AND receiver_team_id = ? 
        AND proposed_date BETWEEN ? AND ? 
        AND status = 'pending'`,
-        [senderTeamId, receiverTeamId, dayStart, dayEnd]
+        [senderTeamId, receiverTeamId, dayStart, dayEnd] // MODIFIÉ
       );
 
       if (existingInvitations.length > 0) {
@@ -85,7 +94,7 @@ router.post(
        (sender_team_id, receiver_team_id, proposed_date, proposed_location_id, message, expires_at) 
        VALUES (?, ?, ?, ?, ?, ?)`,
         [
-          senderTeamId,
+          senderTeamId, // MODIFIÉ - utilise senderTeamId du formulaire
           receiverTeamId,
           proposedDate,
           proposedLocationId || null,
@@ -97,6 +106,7 @@ router.post(
       res.status(201).json({
         message: "Match invitation sent successfully",
         invitationId: result.insertId,
+        senderTeamId: senderTeamId, // AJOUTÉ pour confirmation
       });
     } catch (error) {
       console.error("Send invitation error:", error);

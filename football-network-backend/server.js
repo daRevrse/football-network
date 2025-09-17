@@ -82,6 +82,23 @@ io.on("connection", (socket) => {
 
   socket.on("join_match", (matchId) => {
     socket.join(`match_${matchId}`);
+
+    // Notifier les autres utilisateurs qu'un nouveau user est en ligne
+    socket.to(`match_${matchId}`).emit("user_joined", {
+      userId: socket.userId,
+      socketId: socket.id,
+    });
+  });
+
+  socket.on("send_message", (data) => {
+    // Diffuser le message à tous les utilisateurs de ce match
+    socket.to(`match_${data.matchId}`).emit("new_message", {
+      id: data.messageId,
+      content: data.content,
+      sender: data.sender,
+      sentAt: data.sentAt,
+      type: "text",
+    });
   });
 
   socket.on("disconnect", () => {

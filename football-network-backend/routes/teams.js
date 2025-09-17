@@ -347,21 +347,29 @@ router.post("/:id/join", authenticateToken, async (req, res) => {
       return res.status(400).json({ error: "Team is full" });
     }
 
-    // Vérifier que l'utilisateur n'est pas déjà membre
+    // Vérifier si l'utilisateur a déjà un enregistrement pour cette équipe
     const [existingMember] = await db.execute(
-      "SELECT id FROM team_members WHERE team_id = ? AND user_id = ? AND is_active = true",
+      "SELECT id, is_active FROM team_members WHERE team_id = ? AND user_id = ?",
       [teamId, req.user.id]
     );
 
     if (existingMember.length > 0) {
-      return res.status(400).json({ error: "Already a member of this team" });
+      if (existingMember[0].is_active) {
+        return res.status(400).json({ error: "Already a member of this team" });
+      } else {
+        // Réactiver le membership existant
+        await db.execute(
+          "UPDATE team_members SET is_active = true, joined_at = CURRENT_TIMESTAMP WHERE team_id = ? AND user_id = ?",
+          [teamId, req.user.id]
+        );
+      }
+    } else {
+      // Créer un nouvel enregistrement
+      await db.execute(
+        "INSERT INTO team_members (team_id, user_id, role) VALUES (?, ?, ?)",
+        [teamId, req.user.id, "player"]
+      );
     }
-
-    // Ajouter l'utilisateur à l'équipe
-    await db.execute(
-      "INSERT INTO team_members (team_id, user_id, role) VALUES (?, ?, ?)",
-      [teamId, req.user.id, "player"]
-    );
 
     res.json({ message: "Successfully joined team" });
   } catch (error) {

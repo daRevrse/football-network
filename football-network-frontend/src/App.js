@@ -12,6 +12,14 @@ import Signup from "./components/auth/Signup";
 import Dashboard from "./components/Dashboard";
 import Navbar from "./components/layout/Navbar";
 import "./index.css";
+import Profile from "./components/Profile";
+import MyTeams from "./components/teams/MyTeams";
+import SearchTeams from "./components/teams/SearchTeams";
+import Invitations from "./components/matches/Invitations";
+import MatchDetails from "./components/matches/MatchDetails";
+import Matches from "./components/matches/Matches";
+import Calendar from "./components/calendar/Calendar";
+import TeamDetails from "./components/teams/TeamDetails";
 
 // Composant de protection des routes
 const ProtectedRoute = ({ children }) => {
@@ -73,6 +81,70 @@ function App() {
                 element={
                   <ProtectedRoute>
                     <Dashboard />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/profile"
+                element={
+                  <ProtectedRoute>
+                    <Profile />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/teams"
+                element={
+                  <ProtectedRoute>
+                    <MyTeams />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/teams/:teamId"
+                element={
+                  <ProtectedRoute>
+                    <TeamDetails />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/teams/search"
+                element={
+                  <ProtectedRoute>
+                    <SearchTeams />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/invitations"
+                element={
+                  <ProtectedRoute>
+                    <Invitations />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/matches"
+                element={
+                  <ProtectedRoute>
+                    <Matches />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/matches/:matchId"
+                element={
+                  <ProtectedRoute>
+                    <MatchDetails />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/calendar"
+                element={
+                  <ProtectedRoute>
+                    <Calendar />
                   </ProtectedRoute>
                 }
               />
