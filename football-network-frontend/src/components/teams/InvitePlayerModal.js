@@ -1,9 +1,14 @@
-// ==========================================
-// src/components/teams/InvitePlayerModal.js - Modal d'invitation de joueur
-// ==========================================
-
+// football-network-frontend/src/components/teams/InvitePlayerModal.js - VERSION MISE À JOUR
 import React, { useState, useEffect } from "react";
-import { X, UserPlus, Search, Mail, Send } from "lucide-react";
+import {
+  X,
+  UserPlus,
+  Search,
+  Mail,
+  Send,
+  AlertCircle,
+  CheckCircle,
+} from "lucide-react";
 import toast from "react-hot-toast";
 import axios from "axios";
 
@@ -18,6 +23,10 @@ const InvitePlayerModal = ({ team, onClose, onPlayerInvited }) => {
   const [sending, setSending] = useState(false);
   const [inviteMethod, setInviteMethod] = useState("search"); // 'search' ou 'email'
   const [emailInvite, setEmailInvite] = useState("");
+  const [invitationMessage, setInvitationMessage] = useState(
+    `Vous êtes invité(e) à rejoindre l'équipe "${team.name}"`
+  );
+  const [sentInvitations, setSentInvitations] = useState([]);
 
   useEffect(() => {
     if (searchTerm.length > 2) {
@@ -39,7 +48,7 @@ const InvitePlayerModal = ({ team, onClose, onPlayerInvited }) => {
       );
 
       // Filtrer les joueurs qui ne sont pas déjà dans l'équipe
-      const teamMemberIds = team.members.map((member) => member.id);
+      const teamMemberIds = team.members?.map((member) => member.id) || [];
       const filtered = response.data.filter(
         (player) => !teamMemberIds.includes(player.id)
       );
@@ -77,32 +86,98 @@ const InvitePlayerModal = ({ team, onClose, onPlayerInvited }) => {
 
     try {
       setSending(true);
+      const newSentInvitations = [];
 
       if (inviteMethod === "search") {
-        // Envoyer les invitations aux joueurs sélectionnés
-        const promises = selectedPlayers.map((player) =>
-          axios.post(`${API_BASE_URL}/teams/${team.id}/invite`, {
-            playerId: player.id,
-            message: `Vous êtes invité(e) à rejoindre l'équipe "${team.name}"`,
-          })
-        );
+        // Envoyer les invitations aux joueurs sélectionnés avec gestion d'erreurs individuelles
+        const promises = selectedPlayers.map(async (player) => {
+          try {
+            const response = await axios.post(
+              `${API_BASE_URL}/teams/${team.id}/invite`,
+              {
+                playerId: player.id,
+                message: invitationMessage.trim() || null,
+              }
+            );
+
+            newSentInvitations.push({
+              player,
+              success: true,
+              message: `Invitation envoyée à ${player.firstName} ${player.lastName}`,
+              data: response.data,
+            });
+          } catch (error) {
+            newSentInvitations.push({
+              player,
+              success: false,
+              message:
+                error.response?.data?.error ||
+                `Erreur pour ${player.firstName} ${player.lastName}`,
+              error: error.response?.data?.error,
+            });
+          }
+        });
 
         await Promise.all(promises);
-        toast.success(`${selectedPlayers.length} invitation(s) envoyée(s) !`);
+
+        // Afficher les résultats
+        const successful = newSentInvitations.filter((inv) => inv.success);
+        const failed = newSentInvitations.filter((inv) => !inv.success);
+
+        if (successful.length > 0) {
+          toast.success(
+            `${successful.length} invitation(s) envoyée(s) avec succès !`
+          );
+        }
+
+        if (failed.length > 0) {
+          failed.forEach((inv) => {
+            toast.error(inv.message);
+          });
+        }
       } else {
         // Envoyer invitation par email
-        await axios.post(`${API_BASE_URL}/teams/${team.id}/invite-email`, {
-          email: emailInvite.trim(),
-          message: `Vous êtes invité(e) à rejoindre l'équipe "${team.name}"`,
-        });
-        toast.success("Invitation envoyée par email !");
+        try {
+          const response = await axios.post(
+            `${API_BASE_URL}/teams/${team.id}/invite-email`,
+            {
+              email: emailInvite.trim(),
+              message: invitationMessage.trim() || null,
+            }
+          );
+
+          toast.success("Invitation envoyée par email !");
+          newSentInvitations.push({
+            email: emailInvite.trim(),
+            success: true,
+            message: "Invitation envoyée par email",
+            data: response.data,
+          });
+        } catch (error) {
+          toast.error(
+            error.response?.data?.error ||
+              "Erreur lors de l'envoi de l'invitation par email"
+          );
+          newSentInvitations.push({
+            email: emailInvite.trim(),
+            success: false,
+            message: error.response?.data?.error || "Erreur lors de l'envoi",
+            error: error.response?.data?.error,
+          });
+        }
       }
 
-      onPlayerInvited();
+      setSentInvitations(newSentInvitations);
+
+      // Si au moins une invitation a réussi, fermer le modal après un délai
+      if (newSentInvitations.some((inv) => inv.success)) {
+        setTimeout(() => {
+          onPlayerInvited();
+        }, 1500);
+      }
     } catch (error) {
-      toast.error(
-        error.response?.data?.error || "Erreur lors de l'envoi des invitations"
-      );
+      console.error("Send invitations error:", error);
+      toast.error("Erreur lors de l'envoi des invitations");
     } finally {
       setSending(false);
     }
@@ -128,6 +203,10 @@ const InvitePlayerModal = ({ team, onClose, onPlayerInvited }) => {
       semi_pro: "Semi-pro",
     };
     return labels[level] || level;
+  };
+
+  const isPlayerAlreadyInvited = (playerId) => {
+    return sentInvitations.some((inv) => inv.player?.id === playerId);
   };
 
   return (
@@ -162,10 +241,9 @@ const InvitePlayerModal = ({ team, onClose, onPlayerInvited }) => {
                   : "border-gray-200 hover:border-gray-300"
               }`}
             >
-              <Search className="w-5 h-5 mx-auto mb-2" />
-              <div className="font-medium">Rechercher des joueurs</div>
-              <div className="text-sm opacity-75">
-                Trouvez des joueurs existants
+              <div className="flex items-center justify-center">
+                <Search className="w-5 h-5 mr-2" />
+                <span className="font-medium">Rechercher des joueurs</span>
               </div>
             </button>
 
@@ -177,27 +255,48 @@ const InvitePlayerModal = ({ team, onClose, onPlayerInvited }) => {
                   : "border-gray-200 hover:border-gray-300"
               }`}
             >
-              <Mail className="w-5 h-5 mx-auto mb-2" />
-              <div className="font-medium">Inviter par email</div>
-              <div className="text-sm opacity-75">
-                Invitez quelqu'un à s'inscrire
+              <div className="flex items-center justify-center">
+                <Mail className="w-5 h-5 mr-2" />
+                <span className="font-medium">Inviter par email</span>
               </div>
             </button>
+          </div>
+
+          {/* Message d'invitation personnalisable */}
+          <div className="mb-6">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Message d'invitation
+            </label>
+            <textarea
+              value={invitationMessage}
+              onChange={(e) => setInvitationMessage(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent resize-none"
+              rows={3}
+              maxLength={500}
+              placeholder={`Vous êtes invité(e) à rejoindre l'équipe "${team.name}"`}
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              {invitationMessage.length}/500 caractères
+            </p>
           </div>
 
           {/* Recherche de joueurs */}
           {inviteMethod === "search" && (
             <div className="space-y-4">
-              {/* Barre de recherche */}
-              <div className="relative">
-                <Search className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
-                <input
-                  type="text"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                  placeholder="Rechercher un joueur par nom..."
-                />
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Rechercher des joueurs
+                </label>
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <input
+                    type="text"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                    placeholder="Nom, prénom ou email..."
+                  />
+                </div>
               </div>
 
               {/* Joueurs sélectionnés */}
@@ -215,7 +314,7 @@ const InvitePlayerModal = ({ team, onClose, onPlayerInvited }) => {
                         {player.firstName} {player.lastName}
                         <button
                           onClick={() => togglePlayerSelection(player)}
-                          className="ml-2 text-green-600 hover:text-green-800"
+                          className="ml-2 hover:text-green-600"
                         >
                           <X className="w-3 h-3" />
                         </button>
@@ -226,74 +325,73 @@ const InvitePlayerModal = ({ team, onClose, onPlayerInvited }) => {
               )}
 
               {/* Résultats de recherche */}
-              <div className="space-y-2 max-h-60 overflow-y-auto">
-                {loading && (
-                  <div className="text-center py-4">
-                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-green-500 mx-auto"></div>
-                  </div>
-                )}
+              {loading ? (
+                <div className="text-center py-4">
+                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-green-500 mx-auto"></div>
+                  <p className="text-gray-600 mt-2">Recherche en cours...</p>
+                </div>
+              ) : availablePlayers.length > 0 ? (
+                <div className="border border-gray-200 rounded-lg max-h-60 overflow-y-auto">
+                  {availablePlayers.map((player) => {
+                    const isSelected = selectedPlayers.find(
+                      (p) => p.id === player.id
+                    );
+                    const wasInvited = isPlayerAlreadyInvited(player.id);
 
-                {!loading &&
-                  searchTerm.length > 2 &&
-                  availablePlayers.length === 0 && (
-                    <div className="text-center py-8 text-gray-500">
-                      <Search className="w-8 h-8 text-gray-300 mx-auto mb-2" />
-                      <p>Aucun joueur trouvé pour "{searchTerm}"</p>
-                    </div>
-                  )}
-
-                {availablePlayers.map((player) => {
-                  const isSelected = selectedPlayers.find(
-                    (p) => p.id === player.id
-                  );
-                  return (
-                    <div
-                      key={player.id}
-                      onClick={() => togglePlayerSelection(player)}
-                      className={`p-3 border rounded-lg cursor-pointer transition-colors ${
-                        isSelected
-                          ? "border-green-500 bg-green-50"
-                          : "border-gray-200 hover:border-gray-300 hover:bg-gray-50"
-                      }`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center space-x-3">
-                          <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center text-white font-semibold">
-                            {player.firstName[0]}
-                            {player.lastName[0]}
+                    return (
+                      <div
+                        key={player.id}
+                        className={`p-3 border-b border-gray-100 last:border-b-0 hover:bg-gray-50 cursor-pointer ${
+                          isSelected ? "bg-green-50" : ""
+                        } ${wasInvited ? "opacity-50" : ""}`}
+                        onClick={() =>
+                          !wasInvited && togglePlayerSelection(player)
+                        }
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center space-x-3">
+                            <div className="flex-1">
+                              <div className="flex items-center">
+                                <h4 className="font-medium text-gray-900">
+                                  {player.firstName} {player.lastName}
+                                </h4>
+                                {wasInvited && (
+                                  <CheckCircle className="w-4 h-4 ml-2 text-green-500" />
+                                )}
+                              </div>
+                              <div className="text-sm text-gray-600">
+                                {getPositionLabel(player.position)} •{" "}
+                                {getSkillLevelLabel(player.skillLevel)}
+                              </div>
+                              <div className="text-xs text-gray-500">
+                                {player.email}
+                              </div>
+                            </div>
                           </div>
-                          <div>
-                            <p className="font-medium">
-                              {player.firstName} {player.lastName}
-                            </p>
-                            <p className="text-sm text-gray-600">
-                              {getPositionLabel(player.position)} •{" "}
-                              {getSkillLevelLabel(player.skillLevel)}
-                            </p>
-                            {player.locationCity && (
-                              <p className="text-xs text-gray-500">
-                                {player.locationCity}
-                              </p>
-                            )}
-                          </div>
-                        </div>
-
-                        <div
-                          className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
-                            isSelected
-                              ? "border-green-500 bg-green-500"
-                              : "border-gray-300"
-                          }`}
-                        >
-                          {isSelected && (
-                            <div className="w-2 h-2 bg-white rounded-full"></div>
+                          {!wasInvited && (
+                            <div
+                              className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+                                isSelected
+                                  ? "border-green-500 bg-green-500"
+                                  : "border-gray-300"
+                              }`}
+                            >
+                              {isSelected && (
+                                <div className="w-2 h-2 bg-white rounded-full"></div>
+                              )}
+                            </div>
                           )}
                         </div>
                       </div>
-                    </div>
-                  );
-                })}
-              </div>
+                    );
+                  })}
+                </div>
+              ) : searchTerm.length > 2 ? (
+                <div className="text-center py-4 text-gray-500">
+                  <UserPlus className="w-8 h-8 mx-auto mb-2 text-gray-300" />
+                  <p>Aucun joueur trouvé</p>
+                </div>
+              ) : null}
             </div>
           )}
 
@@ -320,17 +418,45 @@ const InvitePlayerModal = ({ team, onClose, onPlayerInvited }) => {
                     <p className="font-medium mb-1">Comment ça fonctionne :</p>
                     <ul className="space-y-1 text-blue-700">
                       <li>
-                        • Un email d'invitation sera envoyé à cette adresse
+                        • Si la personne a déjà un compte, elle recevra
+                        l'invitation directement
                       </li>
-                      <li>• La personne pourra s'inscrire sur la plateforme</li>
                       <li>
-                        • Elle rejoindra automatiquement votre équipe après
-                        inscription
+                        • Sinon, elle sera invitée à s'inscrire sur la
+                        plateforme
+                      </li>
+                      <li>
+                        • L'invitation sera en attente jusqu'à ce qu'elle
+                        réponde
                       </li>
                     </ul>
                   </div>
                 </div>
               </div>
+            </div>
+          )}
+
+          {/* Résultats des invitations envoyées */}
+          {sentInvitations.length > 0 && (
+            <div className="mt-6 space-y-2">
+              <h4 className="font-medium text-gray-900">Résultats :</h4>
+              {sentInvitations.map((invitation, index) => (
+                <div
+                  key={index}
+                  className={`flex items-center p-3 rounded-lg ${
+                    invitation.success
+                      ? "bg-green-50 text-green-800"
+                      : "bg-red-50 text-red-800"
+                  }`}
+                >
+                  {invitation.success ? (
+                    <CheckCircle className="w-4 h-4 mr-2" />
+                  ) : (
+                    <AlertCircle className="w-4 h-4 mr-2" />
+                  )}
+                  <span className="text-sm">{invitation.message}</span>
+                </div>
+              ))}
             </div>
           )}
 
@@ -366,25 +492,27 @@ const InvitePlayerModal = ({ team, onClose, onPlayerInvited }) => {
             onClick={onClose}
             className="px-4 py-2 text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
           >
-            Annuler
+            {sentInvitations.some((inv) => inv.success) ? "Fermer" : "Annuler"}
           </button>
 
-          <button
-            onClick={sendInvitations}
-            disabled={
-              sending ||
-              (inviteMethod === "search" && selectedPlayers.length === 0) ||
-              (inviteMethod === "email" && !emailInvite.trim())
-            }
-            className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          >
-            <Send className="w-4 h-4 mr-2" />
-            {sending
-              ? "Envoi..."
-              : inviteMethod === "search"
-              ? `Inviter ${selectedPlayers.length} joueur(s)`
-              : "Envoyer l'invitation"}
-          </button>
+          {!sentInvitations.some((inv) => inv.success) && (
+            <button
+              onClick={sendInvitations}
+              disabled={
+                sending ||
+                (inviteMethod === "search" && selectedPlayers.length === 0) ||
+                (inviteMethod === "email" && !emailInvite.trim())
+              }
+              className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              <Send className="w-4 h-4 mr-2" />
+              {sending
+                ? "Envoi..."
+                : inviteMethod === "search"
+                ? `Inviter ${selectedPlayers.length} joueur(s)`
+                : "Envoyer l'invitation"}
+            </button>
+          )}
         </div>
       </div>
     </div>

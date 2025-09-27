@@ -1,3 +1,4 @@
+// football-network-frontend/src/App.js - MISE À JOUR
 import React from "react";
 import {
   BrowserRouter as Router,
@@ -20,6 +21,8 @@ import MatchDetails from "./components/matches/MatchDetails";
 import Matches from "./components/matches/Matches";
 import Calendar from "./components/calendar/Calendar";
 import TeamDetails from "./components/teams/TeamDetails";
+// NOUVELLES IMPORTATIONS
+import PlayerInvitations from "./components/invitations/PlayerInvitations";
 
 // Composant de protection des routes
 const ProtectedRoute = ({ children }) => {
@@ -121,6 +124,15 @@ function App() {
                 element={
                   <ProtectedRoute>
                     <Invitations />
+                  </ProtectedRoute>
+                }
+              />
+              {/* NOUVELLE ROUTE : Invitations de joueurs */}
+              <Route
+                path="/player-invitations"
+                element={
+                  <ProtectedRoute>
+                    <PlayerInvitations />
                   </ProtectedRoute>
                 }
               />

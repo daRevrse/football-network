@@ -31,6 +31,7 @@ import axios from "axios";
 import EditTeamModal from "./EditTeamModal";
 import DeleteTeamModal from "./DeleteTeamModal";
 import InvitePlayerModal from "./InvitePlayerModal";
+import TeamInvitations from "./TeamInvitations";
 
 const API_BASE_URL =
   process.env.REACT_APP_API_URL || "http://localhost:5000/api";
@@ -136,6 +137,9 @@ const TeamDetails = () => {
     { id: "members", label: "Membres", icon: Users },
     { id: "matches", label: "Matchs", icon: Calendar },
     { id: "stats", label: "Statistiques", icon: TrendingUp },
+    ...(isOwner
+      ? [{ id: "invitations", label: "Invitations", icon: UserPlus }]
+      : []),
   ];
 
   if (loading) {
@@ -362,6 +366,9 @@ const TeamDetails = () => {
             <MatchesTab matches={matches} team={team} />
           )}
           {activeTab === "stats" && <StatsTab team={team} matches={matches} />}
+          {activeTab === "invitations" && isOwner && (
+            <TeamInvitations teamId={team.id} teamName={team.name} />
+          )}
         </div>
       </div>
 

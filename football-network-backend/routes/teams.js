@@ -2,9 +2,9 @@ const express = require("express");
 const { body, validationResult } = require("express-validator");
 const db = require("../config/database");
 const { authenticateToken } = require("../middleware/auth");
+const NotificationService = require("../services/NotificationService");
 
 const router = express.Router();
-
 // POST /api/teams - Créer une nouvelle équipe
 router.post(
   "/",
@@ -324,17 +324,71 @@ router.get("/:id", authenticateToken, async (req, res) => {
 });
 
 // POST /api/teams/:id/join - Rejoindre une équipe
+// router.post("/:id/join", authenticateToken, async (req, res) => {
+//   try {
+//     const teamId = req.params.id;
+
+//     // Vérifier que l'équipe existe et a de la place
+//     const [teams] = await db.execute(
+//       `SELECT t.max_players, COUNT(tm.user_id) as current_players
+//        FROM teams t
+//        LEFT JOIN team_members tm ON t.id = tm.team_id AND tm.is_active = true
+//        WHERE t.id = ? AND t.is_active = true
+//        GROUP BY t.id, t.max_players`,
+//       [teamId]
+//     );
+
+//     if (teams.length === 0) {
+//       return res.status(404).json({ error: "Team not found" });
+//     }
+
+//     const team = teams[0];
+//     if (team.current_players >= team.max_players) {
+//       return res.status(400).json({ error: "Team is full" });
+//     }
+
+//     // Vérifier si l'utilisateur a déjà un enregistrement pour cette équipe
+//     const [existingMember] = await db.execute(
+//       "SELECT id, is_active FROM team_members WHERE team_id = ? AND user_id = ?",
+//       [teamId, req.user.id]
+//     );
+
+//     if (existingMember.length > 0) {
+//       if (existingMember[0].is_active) {
+//         return res.status(400).json({ error: "Already a member of this team" });
+//       } else {
+//         // Réactiver le membership existant
+//         await db.execute(
+//           "UPDATE team_members SET is_active = true, joined_at = CURRENT_TIMESTAMP WHERE team_id = ? AND user_id = ?",
+//           [teamId, req.user.id]
+//         );
+//       }
+//     } else {
+//       // Créer un nouvel enregistrement
+//       await db.execute(
+//         "INSERT INTO team_members (team_id, user_id, role) VALUES (?, ?, ?)",
+//         [teamId, req.user.id, "player"]
+//       );
+//     }
+
+//     res.json({ message: "Successfully joined team" });
+//   } catch (error) {
+//     console.error("Join team error:", error);
+//     res.status(500).json({ error: "Internal server error" });
+//   }
+// });
+
 router.post("/:id/join", authenticateToken, async (req, res) => {
   try {
     const teamId = req.params.id;
 
     // Vérifier que l'équipe existe et a de la place
     const [teams] = await db.execute(
-      `SELECT t.max_players, COUNT(tm.user_id) as current_players
+      `SELECT t.max_players, COUNT(tm.user_id) as current_players, t.name
        FROM teams t
        LEFT JOIN team_members tm ON t.id = tm.team_id AND tm.is_active = true
        WHERE t.id = ? AND t.is_active = true
-       GROUP BY t.id, t.max_players`,
+       GROUP BY t.id, t.max_players, t.name`,
       [teamId]
     );
 
@@ -345,6 +399,19 @@ router.post("/:id/join", authenticateToken, async (req, res) => {
     const team = teams[0];
     if (team.current_players >= team.max_players) {
       return res.status(400).json({ error: "Team is full" });
+    }
+
+    // NOUVELLE SÉCURITÉ : Vérifier qu'il existe une invitation acceptée
+    const [acceptedInvitation] = await db.execute(
+      'SELECT id FROM player_invitations WHERE team_id = ? AND user_id = ? AND status = "accepted"',
+      [teamId, req.user.id]
+    );
+
+    if (acceptedInvitation.length === 0) {
+      return res.status(403).json({
+        error:
+          "You need an accepted invitation to join this team. Please ask the team captain to invite you.",
+      });
     }
 
     // Vérifier si l'utilisateur a déjà un enregistrement pour cette équipe
@@ -371,7 +438,10 @@ router.post("/:id/join", authenticateToken, async (req, res) => {
       );
     }
 
-    res.json({ message: "Successfully joined team" });
+    res.json({
+      message: "Successfully joined team",
+      teamName: team.name,
+    });
   } catch (error) {
     console.error("Join team error:", error);
     res.status(500).json({ error: "Internal server error" });
@@ -395,12 +465,9 @@ router.delete("/:id/leave", authenticateToken, async (req, res) => {
 
     // Un capitaine ne peut pas quitter son équipe (il doit la supprimer ou transférer le capitanat)
     if (membership[0].role === "captain") {
-      return res
-        .status(400)
-        .json({
-          error:
-            "Captain cannot leave team. Transfer captaincy or delete team.",
-        });
+      return res.status(400).json({
+        error: "Captain cannot leave team. Transfer captaincy or delete team.",
+      });
     }
 
     // Retirer l'utilisateur de l'équipe
@@ -415,6 +482,291 @@ router.delete("/:id/leave", authenticateToken, async (req, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
+
+// // POST /api/teams/:id/invite - Inviter un joueur (par ID utilisateur)
+// router.post(
+//   "/:id/invite",
+//   [
+//     authenticateToken,
+//     body("playerId").isInt().withMessage("Player ID is required"),
+//     body("message")
+//       .optional({ nullable: true, checkFalsy: true })
+//       .isLength({ max: 500 })
+//       .withMessage("Message too long"),
+//   ],
+//   async (req, res) => {
+//     try {
+//       const errors = validationResult(req);
+//       if (!errors.isEmpty()) {
+//         return res.status(400).json({ errors: errors.array() });
+//       }
+
+//       const teamId = req.params.id;
+//       const { playerId, message } = req.body;
+
+//       // Vérifier que l'utilisateur est capitaine de l'équipe
+//       const [captainCheck] = await db.execute(
+//         'SELECT tm.team_id, t.name as team_name, t.max_players FROM team_members tm JOIN teams t ON tm.team_id = t.id WHERE tm.user_id = ? AND tm.team_id = ? AND tm.role = "captain" AND tm.is_active = true AND t.is_active = true',
+//         [req.user.id, teamId]
+//       );
+
+//       if (captainCheck.length === 0) {
+//         return res
+//           .status(403)
+//           .json({ error: "Only team captain can send invitations" });
+//       }
+
+//       const team = captainCheck[0];
+
+//       // Vérifier que le joueur à inviter existe
+//       const [playerCheck] = await db.execute(
+//         "SELECT id, first_name, last_name, email FROM users WHERE id = ? AND is_active = true",
+//         [playerId]
+//       );
+
+//       if (playerCheck.length === 0) {
+//         return res.status(404).json({ error: "Player not found" });
+//       }
+
+//       const player = playerCheck[0];
+
+//       // Vérifier que le joueur n'est pas déjà membre de l'équipe
+//       const [memberCheck] = await db.execute(
+//         "SELECT id FROM team_members WHERE team_id = ? AND user_id = ? AND is_active = true",
+//         [teamId, playerId]
+//       );
+
+//       if (memberCheck.length > 0) {
+//         return res
+//           .status(400)
+//           .json({ error: "Player is already a member of this team" });
+//       }
+
+//       // Vérifier qu'il n'y a pas déjà une invitation pending
+//       const [existingInvitation] = await db.execute(
+//         'SELECT id FROM player_invitations WHERE team_id = ? AND user_id = ? AND status = "pending"',
+//         [teamId, playerId]
+//       );
+
+//       if (existingInvitation.length > 0) {
+//         return res
+//           .status(400)
+//           .json({ error: "Invitation already sent to this player" });
+//       }
+
+//       // Vérifier que l'équipe a encore de la place
+//       const [memberCount] = await db.execute(
+//         "SELECT COUNT(*) as count FROM team_members WHERE team_id = ? AND is_active = true",
+//         [teamId]
+//       );
+
+//       if (memberCount[0].count >= team.max_players) {
+//         return res.status(400).json({ error: "Team is full" });
+//       }
+
+//       // Créer l'invitation avec expiration dans 7 jours
+//       const expiresAt = new Date();
+//       expiresAt.setDate(expiresAt.getDate() + 7);
+
+//       const [result] = await db.execute(
+//         "INSERT INTO player_invitations (team_id, user_id, invited_by, message, expires_at) VALUES (?, ?, ?, ?, ?)",
+//         [teamId, playerId, req.user.id, message || null, expiresAt]
+//       );
+
+//       res.status(201).json({
+//         message: "Invitation sent successfully",
+//         invitationId: result.insertId,
+//         playerName: `${player.first_name} ${player.last_name}`,
+//         teamName: team.team_name,
+//         expiresAt: expiresAt,
+//       });
+//     } catch (error) {
+//       console.error("Send player invitation error:", error);
+
+//       // Gérer l'erreur de contrainte unique
+//       if (error.code === "ER_DUP_ENTRY") {
+//         return res
+//           .status(400)
+//           .json({ error: "Invitation already exists for this player" });
+//       }
+
+//       res.status(500).json({ error: "Internal server error" });
+//     }
+//   }
+// );
+
+// // POST /api/teams/:id/invite-email - Inviter un joueur par email
+// router.post(
+//   "/:id/invite-email",
+//   [
+//     authenticateToken,
+//     body("email").isEmail().withMessage("Valid email is required"),
+//     body("message")
+//       .optional({ nullable: true, checkFalsy: true })
+//       .isLength({ max: 500 })
+//       .withMessage("Message too long"),
+//   ],
+//   async (req, res) => {
+//     try {
+//       const errors = validationResult(req);
+//       if (!errors.isEmpty()) {
+//         return res.status(400).json({ errors: errors.array() });
+//       }
+
+//       const teamId = req.params.id;
+//       const { email, message } = req.body;
+
+//       // Vérifier que l'utilisateur est capitaine de l'équipe
+//       const [captainCheck] = await db.execute(
+//         'SELECT tm.team_id, t.name as team_name FROM team_members tm JOIN teams t ON tm.team_id = t.id WHERE tm.user_id = ? AND tm.team_id = ? AND tm.role = "captain" AND tm.is_active = true AND t.is_active = true',
+//         [req.user.id, teamId]
+//       );
+
+//       if (captainCheck.length === 0) {
+//         return res
+//           .status(403)
+//           .json({ error: "Only team captain can send invitations" });
+//       }
+
+//       // Vérifier si un utilisateur avec cet email existe déjà
+//       const [userCheck] = await db.execute(
+//         "SELECT id FROM users WHERE email = ?",
+//         [email]
+//       );
+
+//       if (userCheck.length > 0) {
+//         // Si l'utilisateur existe, utiliser la route d'invitation normale
+//         const playerId = userCheck[0].id;
+//         req.body.playerId = playerId;
+//         // Rediriger vers la route d'invitation par ID
+//         return router.stack
+//           .find(
+//             (layer) =>
+//               layer.route?.path === "/:id/invite" && layer.route?.methods.post
+//           )
+//           ?.route.stack[1].handle(req, res);
+//       }
+
+//       // TODO: Implémenter l'envoi d'email pour les utilisateurs non inscrits
+//       // Pour l'instant, on retourne une erreur
+//       res.status(400).json({
+//         error:
+//           "Email invitation for non-registered users not implemented yet. Please ask them to register first.",
+//       });
+//     } catch (error) {
+//       console.error("Send email invitation error:", error);
+//       res.status(500).json({ error: "Internal server error" });
+//     }
+//   }
+// );
+
+// // GET /api/teams/:id/invitations - Récupérer les invitations envoyées par l'équipe
+// router.get("/:id/invitations", authenticateToken, async (req, res) => {
+//   try {
+//     const teamId = req.params.id;
+//     const { status = "all", limit = 20, offset = 0 } = req.query;
+
+//     // Vérifier que l'utilisateur est capitaine de l'équipe
+//     const [captainCheck] = await db.execute(
+//       'SELECT team_id FROM team_members WHERE user_id = ? AND team_id = ? AND role = "captain" AND is_active = true',
+//       [req.user.id, teamId]
+//     );
+
+//     if (captainCheck.length === 0) {
+//       return res
+//         .status(403)
+//         .json({ error: "Only team captain can view team invitations" });
+//     }
+
+//     let query = `
+//       SELECT pi.id, pi.user_id, pi.message, pi.status, pi.sent_at, pi.expires_at,
+//              pi.response_message, pi.responded_at,
+//              u.first_name, u.last_name, u.email, u.position, u.skill_level
+//       FROM player_invitations pi
+//       JOIN users u ON pi.user_id = u.id
+//       WHERE pi.team_id = ?`;
+
+//     const queryParams = [teamId];
+
+//     if (status && status !== "all") {
+//       query += " AND pi.status = ?";
+//       queryParams.push(status);
+//     }
+
+//     query += " ORDER BY pi.sent_at DESC LIMIT ? OFFSET ?";
+//     queryParams.push(parseInt(limit), parseInt(offset));
+
+//     const [invitations] = await db.execute(query, queryParams);
+
+//     const formattedInvitations = invitations.map((inv) => ({
+//       id: inv.id,
+//       status: inv.status,
+//       message: inv.message,
+//       sentAt: inv.sent_at,
+//       expiresAt: inv.expires_at,
+//       responseMessage: inv.response_message,
+//       respondedAt: inv.responded_at,
+//       player: {
+//         id: inv.user_id,
+//         firstName: inv.first_name,
+//         lastName: inv.last_name,
+//         email: inv.email,
+//         position: inv.position,
+//         skillLevel: inv.skill_level,
+//       },
+//       isExpired: inv.expires_at && new Date() > new Date(inv.expires_at),
+//     }));
+
+//     res.json(formattedInvitations);
+//   } catch (error) {
+//     console.error("Get team invitations error:", error);
+//     res.status(500).json({ error: "Internal server error" });
+//   }
+// });
+
+// // DELETE /api/teams/:id/invitations/:invitationId - Annuler une invitation
+// router.delete(
+//   "/:id/invitations/:invitationId",
+//   authenticateToken,
+//   async (req, res) => {
+//     try {
+//       const teamId = req.params.id;
+//       const invitationId = req.params.invitationId;
+
+//       // Vérifier que l'utilisateur est capitaine de l'équipe
+//       const [captainCheck] = await db.execute(
+//         'SELECT team_id FROM team_members WHERE user_id = ? AND team_id = ? AND role = "captain" AND is_active = true',
+//         [req.user.id, teamId]
+//       );
+
+//       if (captainCheck.length === 0) {
+//         return res
+//           .status(403)
+//           .json({ error: "Only team captain can cancel invitations" });
+//       }
+
+//       // Vérifier que l'invitation existe et est en attente
+//       const [invitation] = await db.execute(
+//         'SELECT id, status FROM player_invitations WHERE id = ? AND team_id = ? AND status = "pending"',
+//         [invitationId, teamId]
+//       );
+
+//       if (invitation.length === 0) {
+//         return res.status(404).json({ error: "Pending invitation not found" });
+//       }
+
+//       // Supprimer l'invitation
+//       await db.execute("DELETE FROM player_invitations WHERE id = ?", [
+//         invitationId,
+//       ]);
+
+//       res.json({ message: "Invitation cancelled successfully" });
+//     } catch (error) {
+//       console.error("Cancel invitation error:", error);
+//       res.status(500).json({ error: "Internal server error" });
+//     }
+//   }
+// );
 
 // PUT /api/teams/:id - Mettre à jour une équipe (capitaine seulement)
 router.put(
@@ -506,6 +858,324 @@ router.put(
       res.json({ message: "Team updated successfully" });
     } catch (error) {
       console.error("Update team error:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  }
+);
+
+// POST /api/teams/:id/invite - Inviter un joueur (par ID utilisateur)
+router.post(
+  "/:id/invite",
+  [
+    authenticateToken,
+    body("playerId").isInt().withMessage("Player ID is required"),
+    body("message")
+      .optional({ nullable: true, checkFalsy: true })
+      .isLength({ max: 500 })
+      .withMessage("Message too long"),
+  ],
+  async (req, res) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ errors: errors.array() });
+      }
+
+      const teamId = req.params.id;
+      const { playerId, message } = req.body;
+
+      // Vérifier que l'utilisateur est capitaine de l'équipe
+      const [captainCheck] = await db.execute(
+        'SELECT tm.team_id, t.name as team_name, t.max_players FROM team_members tm JOIN teams t ON tm.team_id = t.id WHERE tm.user_id = ? AND tm.team_id = ? AND tm.role = "captain" AND tm.is_active = true AND t.is_active = true',
+        [req.user.id, teamId]
+      );
+
+      if (captainCheck.length === 0) {
+        return res
+          .status(403)
+          .json({ error: "Only team captain can send invitations" });
+      }
+
+      const team = captainCheck[0];
+
+      // Vérifier que le joueur à inviter existe
+      const [playerCheck] = await db.execute(
+        "SELECT id, first_name, last_name, email FROM users WHERE id = ? AND is_active = true",
+        [playerId]
+      );
+
+      if (playerCheck.length === 0) {
+        return res.status(404).json({ error: "Player not found" });
+      }
+
+      const player = playerCheck[0];
+
+      // Vérifier que le joueur n'est pas déjà membre de l'équipe
+      const [memberCheck] = await db.execute(
+        "SELECT id FROM team_members WHERE team_id = ? AND user_id = ? AND is_active = true",
+        [teamId, playerId]
+      );
+
+      if (memberCheck.length > 0) {
+        return res
+          .status(400)
+          .json({ error: "Player is already a member of this team" });
+      }
+
+      // Vérifier qu'il n'y a pas déjà une invitation pending
+      const [existingInvitation] = await db.execute(
+        'SELECT id FROM player_invitations WHERE team_id = ? AND user_id = ? AND status = "pending"',
+        [teamId, playerId]
+      );
+
+      if (existingInvitation.length > 0) {
+        return res
+          .status(400)
+          .json({ error: "Invitation already sent to this player" });
+      }
+
+      // Vérifier que l'équipe a encore de la place
+      const [memberCount] = await db.execute(
+        "SELECT COUNT(*) as count FROM team_members WHERE team_id = ? AND is_active = true",
+        [teamId]
+      );
+
+      if (memberCount[0].count >= team.max_players) {
+        return res.status(400).json({ error: "Team is full" });
+      }
+
+      // Créer l'invitation avec expiration dans 7 jours
+      const expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + 7);
+
+      const [result] = await db.execute(
+        "INSERT INTO player_invitations (team_id, user_id, invited_by, message, expires_at) VALUES (?, ?, ?, ?, ?)",
+        [teamId, playerId, req.user.id, message || null, expiresAt]
+      );
+
+      // CORRECTION : Vérifier si le service de notification est disponible
+      if (
+        req.notificationService &&
+        req.notificationService.notifyPlayerInvitation
+      ) {
+        try {
+          await req.notificationService.notifyPlayerInvitation(playerId, {
+            invitationId: result.insertId,
+            teamId: teamId,
+            teamName: team.team_name,
+            inviterName: `${req.user.firstName || "Capitaine"} ${
+              req.user.lastName || ""
+            }`,
+          });
+          console.log("📨 Notification sent for invitation:", result.insertId);
+        } catch (notifError) {
+          console.error("⚠️ Failed to send notification:", notifError);
+          // Ne pas faire échouer la création de l'invitation si la notification échoue
+        }
+      } else {
+        console.log("⚠️ Notification service not available");
+      }
+
+      res.status(201).json({
+        message: "Invitation sent successfully",
+        invitationId: result.insertId,
+        playerName: `${player.first_name} ${player.last_name}`,
+        teamName: team.team_name,
+        expiresAt: expiresAt,
+      });
+    } catch (error) {
+      console.error("Send player invitation error:", error);
+
+      // Gérer l'erreur de contrainte unique
+      if (error.code === "ER_DUP_ENTRY") {
+        return res
+          .status(400)
+          .json({ error: "Invitation already exists for this player" });
+      }
+
+      res.status(500).json({ error: "Internal server error" });
+    }
+  }
+);
+
+// POST /api/teams/:id/invite-email - Inviter un joueur par email
+router.post(
+  "/:id/invite-email",
+  [
+    authenticateToken,
+    body("email").isEmail().withMessage("Valid email is required"),
+    body("message")
+      .optional({ nullable: true, checkFalsy: true })
+      .isLength({ max: 500 })
+      .withMessage("Message too long"),
+  ],
+  async (req, res) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ errors: errors.array() });
+      }
+
+      const teamId = req.params.id;
+      const { email, message } = req.body;
+
+      // Vérifier que l'utilisateur est capitaine de l'équipe
+      const [captainCheck] = await db.execute(
+        'SELECT tm.team_id, t.name as team_name FROM team_members tm JOIN teams t ON tm.team_id = t.id WHERE tm.user_id = ? AND tm.team_id = ? AND tm.role = "captain" AND tm.is_active = true AND t.is_active = true',
+        [req.user.id, teamId]
+      );
+
+      if (captainCheck.length === 0) {
+        return res
+          .status(403)
+          .json({ error: "Only team captain can send invitations" });
+      }
+
+      // Vérifier si un utilisateur avec cet email existe déjà
+      const [userCheck] = await db.execute(
+        "SELECT id FROM users WHERE email = ?",
+        [email]
+      );
+
+      if (userCheck.length > 0) {
+        // Si l'utilisateur existe, créer une invitation normale
+        const playerId = userCheck[0].id;
+
+        // Réutiliser la logique de la route d'invitation normale
+        req.body.playerId = playerId;
+        delete req.body.email; // Supprimer l'email du body
+
+        // Appeler la logique d'invitation par ID
+        return router.stack
+          .find(
+            (layer) =>
+              layer.route &&
+              layer.route.path === "/:id/invite" &&
+              layer.route.methods.post
+          )
+          .route.stack.find((layer) => layer.name === "bound dispatch")
+          .handle(req, res);
+      }
+
+      // TODO: Implémenter l'envoi d'email pour les utilisateurs non inscrits
+      // Pour l'instant, on retourne une erreur explicative
+      res.status(400).json({
+        error:
+          "This email is not registered on the platform. Please ask the person to register first, then you can invite them by searching their name.",
+      });
+    } catch (error) {
+      console.error("Send email invitation error:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  }
+);
+
+// GET /api/teams/:id/invitations - Récupérer les invitations envoyées par l'équipe
+router.get("/:id/invitations", authenticateToken, async (req, res) => {
+  try {
+    const teamId = req.params.id;
+    const { status = "all", limit = 20, offset = 0 } = req.query;
+
+    // Vérifier que l'utilisateur est capitaine de l'équipe
+    const [captainCheck] = await db.execute(
+      'SELECT team_id FROM team_members WHERE user_id = ? AND team_id = ? AND role = "captain" AND is_active = true',
+      [req.user.id, teamId]
+    );
+
+    if (captainCheck.length === 0) {
+      return res
+        .status(403)
+        .json({ error: "Only team captain can view team invitations" });
+    }
+
+    let query = `
+      SELECT pi.id, pi.user_id, pi.message, pi.status, pi.sent_at, pi.expires_at,
+             pi.response_message, pi.responded_at,
+             u.first_name, u.last_name, u.email, u.position, u.skill_level
+      FROM player_invitations pi
+      JOIN users u ON pi.user_id = u.id
+      WHERE pi.team_id = ?`;
+
+    const queryParams = [teamId];
+
+    if (status && status !== "all") {
+      query += " AND pi.status = ?";
+      queryParams.push(status);
+    }
+
+    query += " ORDER BY pi.sent_at DESC LIMIT ? OFFSET ?";
+    queryParams.push(parseInt(limit), parseInt(offset));
+
+    const [invitations] = await db.execute(query, queryParams);
+
+    const formattedInvitations = invitations.map((inv) => ({
+      id: inv.id,
+      status: inv.status,
+      message: inv.message,
+      sentAt: inv.sent_at,
+      expiresAt: inv.expires_at,
+      responseMessage: inv.response_message,
+      respondedAt: inv.responded_at,
+      player: {
+        id: inv.user_id,
+        firstName: inv.first_name,
+        lastName: inv.last_name,
+        email: inv.email,
+        position: inv.position,
+        skillLevel: inv.skill_level,
+      },
+      isExpired: inv.expires_at && new Date() > new Date(inv.expires_at),
+    }));
+
+    res.json(formattedInvitations);
+  } catch (error) {
+    console.error("Get team invitations error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// DELETE /api/teams/:id/invitations/:invitationId - Annuler une invitation
+router.delete(
+  "/:id/invitations/:invitationId",
+  authenticateToken,
+  async (req, res) => {
+    try {
+      const teamId = req.params.id;
+      const invitationId = req.params.invitationId;
+
+      // Vérifier que l'utilisateur est capitaine de l'équipe
+      const [captainCheck] = await db.execute(
+        'SELECT team_id FROM team_members WHERE user_id = ? AND team_id = ? AND role = "captain" AND is_active = true',
+        [req.user.id, teamId]
+      );
+
+      if (captainCheck.length === 0) {
+        return res
+          .status(403)
+          .json({ error: "Only team captain can cancel invitations" });
+      }
+
+      // Vérifier que l'invitation existe et est en attente
+      const [invitation] = await db.execute(
+        'SELECT id, status FROM player_invitations WHERE id = ? AND team_id = ? AND status = "pending"',
+        [invitationId, teamId]
+      );
+
+      if (invitation.length === 0) {
+        return res.status(404).json({ error: "Pending invitation not found" });
+      }
+
+      // Supprimer l'invitation
+      await db.execute("DELETE FROM player_invitations WHERE id = ?", [
+        invitationId,
+      ]);
+
+      req.notificationService.notifyInvitationStatusUpdate(invitation.user_id);
+      req.notificationService.notifyInvitationStatusUpdate(req.user.id);
+
+      res.json({ message: "Invitation cancelled successfully" });
+    } catch (error) {
+      console.error("Cancel invitation error:", error);
       res.status(500).json({ error: "Internal server error" });
     }
   }

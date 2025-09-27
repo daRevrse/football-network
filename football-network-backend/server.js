@@ -6,11 +6,15 @@ const rateLimit = require("express-rate-limit");
 const http = require("http");
 const socketIo = require("socket.io");
 
+const socketManager = require("./services/SocketManager");
+const NotificationService = require("./services/NotificationService");
+
 // Import des routes
 const authRoutes = require("./routes/auth");
 const userRoutes = require("./routes/users");
 const teamRoutes = require("./routes/teams");
 const matchRoutes = require("./routes/matches");
+const playerInvitationRoutes = require("./routes/player-invitations");
 
 // Import de la base de données
 const db = require("./config/database");
@@ -22,7 +26,14 @@ const io = socketIo(server, {
     origin: process.env.FRONTEND_URL || "http://localhost:3000",
     methods: ["GET", "POST"],
   },
+  // Configuration pour améliorer les performances
+  transports: ["websocket", "polling"],
+  pingTimeout: 60000,
+  pingInterval: 25000,
 });
+
+// Initialiser le gestionnaire de sockets
+socketManager.initialize(io);
 
 // Middleware de sécurité
 app.use(helmet());
@@ -34,11 +45,11 @@ app.use(
 );
 
 // Rate limiting
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // 100 requêtes par IP
-});
-app.use("/api/", limiter);
+// const limiter = rateLimit({
+//   windowMs: 15 * 60 * 1000, // 15 minutes
+//   max: 100, // 100 requêtes par IP
+// });
+// app.use("/api/", limiter);
 
 // Middleware de parsing
 app.use(express.json({ limit: "10mb" }));
@@ -49,15 +60,79 @@ app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/teams", teamRoutes);
 app.use("/api/matches", matchRoutes);
+app.use("/api/player-invitations", playerInvitationRoutes);
+
+// Routes pour les notifications (nouvelles)
+app.get(
+  "/api/notifications/stats",
+  require("./middleware/auth").authenticateToken,
+  (req, res) => {
+    // TODO: Implémenter les statistiques des notifications depuis la DB
+    res.json({
+      unreadCount: 0,
+      totalCount: 0,
+      lastUpdate: new Date().toISOString(),
+    });
+  }
+);
+
+// Route pour marquer les notifications comme lues
+app.patch(
+  "/api/notifications/:id/read",
+  require("./middleware/auth").authenticateToken,
+  (req, res) => {
+    // TODO: Marquer la notification comme lue en DB
+    res.json({ success: true });
+  }
+);
 
 // Route de test
 app.get("/api/health", (req, res) => {
+  const stats = socketManager.getStats();
   res.json({
     status: "OK",
     message: "Football Network API is running",
     timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV || "development",
+    socket: {
+      connected: stats.connectedUsers > 0,
+      ...stats,
+    },
   });
 });
+
+// Route de test pour les notifications (développement uniquement)
+if (process.env.NODE_ENV !== "production") {
+  app.post(
+    "/api/dev/test-notification",
+    require("./middleware/auth").authenticateToken,
+    (req, res) => {
+      const { userId, type, message } = req.body;
+
+      const testNotification = {
+        id: `test-${Date.now()}`,
+        type: type || "general",
+        title: "Test Notification",
+        message: message || "This is a test notification",
+        timestamp: new Date().toISOString(),
+        read: false,
+      };
+
+      const sent = socketManager.sendToUser(
+        userId || req.user.id,
+        "notification",
+        testNotification
+      );
+
+      res.json({
+        success: true,
+        sent: sent,
+        notification: testNotification,
+        userOnline: socketManager.isUserOnline(userId || req.user.id),
+      });
+    }
+  );
+}
 
 // Gestion des erreurs 404
 app.use("*", (req, res) => {
@@ -106,8 +181,25 @@ io.on("connection", (socket) => {
   });
 });
 
+// Gérer l'arrêt propre du serveur
+process.on("SIGTERM", () => {
+  console.log("🛑 SIGTERM received, shutting down gracefully");
+  server.close(() => {
+    console.log("✅ Process terminated");
+  });
+});
+
+process.on("SIGINT", () => {
+  console.log("🛑 SIGINT received, shutting down gracefully");
+  server.close(() => {
+    console.log("✅ Process terminated");
+  });
+});
+
 const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
   console.log(`📊 Environment: ${process.env.NODE_ENV || "development"}`);
+  console.log(`🔌 Socket.IO initialized`);
+  console.log(`📬 Notification service ready`);
 });
