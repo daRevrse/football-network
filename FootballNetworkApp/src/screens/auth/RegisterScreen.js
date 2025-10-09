@@ -1,139 +1,135 @@
-import React, { useState } from 'react';
+// ====== src/screens/auth/RegisterScreen.js ======
+import React, { useCallback } from 'react';
 import {
   View,
   Text,
-  TextInput,
-  TouchableOpacity,
-  ScrollView,
   KeyboardAvoidingView,
   Platform,
   Alert,
+  TouchableOpacity,
+  StatusBar,
+  StyleSheet,
+  ScrollView,
 } from 'react-native';
+import Icon from 'react-native-vector-icons/Feather';
+import { ModernButton } from '../../components/common';
+import { StepIndicator } from '../../components/common/StepIndicator';
+import { COLORS, DIMENSIONS, FONTS } from '../../styles/theme';
+import { useMultiStepForm } from '../../hooks/useMultiStepForm';
 import { useAuthImproved } from '../../utils/hooks/useAuthImproved';
+import {
+  PersonalInfoStep,
+  SecurityStep,
+  FootballProfileStep,
+  SummaryStep,
+} from './RegisterSteps';
 
-// Constantes
-const COLORS = {
-  PRIMARY: '#22C55E',
-  BACKGROUND: '#F8FAFC',
-  TEXT_PRIMARY: '#1F2937',
-  TEXT_SECONDARY: '#6B7280',
-  TEXT_MUTED: '#9CA3AF',
-  TEXT_WHITE: '#FFFFFF',
-  CARD_BACKGROUND: '#FFFFFF',
-  BORDER: '#E5E7EB',
-  ERROR: '#EF4444',
-};
-
-const DIMENSIONS = {
-  CONTAINER_PADDING: 16,
-  SPACING_XL: 32,
-  SPACING_LG: 24,
-  SPACING_MD: 16,
-  SPACING_SM: 8,
-  INPUT_HEIGHT: 48,
-  BUTTON_HEIGHT: 48,
-  BORDER_RADIUS_MD: 8,
-};
-
-const FONTS = {
-  SIZE: {
-    SM: 14,
-    MD: 16,
-    LG: 18,
-    XL: 20,
-  },
-};
-
-const SKILL_LEVELS = [
-  { value: 'beginner', label: 'Débutant' },
-  { value: 'amateur', label: 'Amateur' },
-  { value: 'intermediate', label: 'Intermédiaire' },
-  { value: 'advanced', label: 'Avancé' },
-  { value: 'expert', label: 'Expert' },
-];
-
-const POSITIONS = [
-  { value: 'goalkeeper', label: 'Gardien' },
-  { value: 'defender', label: 'Défenseur' },
-  { value: 'midfielder', label: 'Milieu' },
-  { value: 'forward', label: 'Attaquant' },
-  { value: 'any', label: 'Polyvalent' },
+const STEPS = [
+  { id: 'personal', label: 'Profil', component: PersonalInfoStep },
+  { id: 'security', label: 'Sécurité', component: SecurityStep },
+  { id: 'football', label: 'Football', component: FootballProfileStep },
+  { id: 'summary', label: 'Validation', component: SummaryStep },
 ];
 
 export const RegisterScreen = ({ navigation }) => {
-  const [formData, setFormData] = useState({
-    email: '',
-    password: '',
-    confirmPassword: '',
-    firstName: '',
-    lastName: '',
-    phone: '',
-    birthDate: '',
-    position: 'any',
-    skillLevel: 'amateur',
-    locationCity: '',
-  });
-  const [errors, setErrors] = useState({});
-  const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const {
+    currentStep,
+    formData,
+    errors,
+    isFirstStep,
+    isLastStep,
+    updateField,
+    setFieldErrors,
+    nextStep,
+    previousStep,
+    reset,
+  } = useMultiStepForm(STEPS);
 
   const { signup, isLoading } = useAuthImproved();
 
-  const updateField = (field, value) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
-    // Effacer l'erreur du champ modifié
-    if (errors[field]) {
-      setErrors(prev => ({ ...prev, [field]: null }));
+  React.useEffect(() => {
+    if (!formData.position) {
+      updateField('position', 'any');
     }
-  };
+    if (!formData.skillLevel) {
+      updateField('skillLevel', 'amateur');
+    }
+  }, [formData.position, formData.skillLevel, updateField]);
 
-  const validateForm = () => {
+  const validateCurrentStep = useCallback(() => {
     const newErrors = {};
 
-    // Email
-    if (!formData.email) {
-      newErrors.email = "L'email est requis";
-    } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
-      newErrors.email = "Format d'email invalide";
+    switch (currentStep) {
+      case 1:
+        if (!formData.firstName?.trim()) {
+          newErrors.firstName = 'Le prénom est requis';
+        }
+        if (!formData.lastName?.trim()) {
+          newErrors.lastName = 'Le nom est requis';
+        }
+        if (!formData.email?.trim()) {
+          newErrors.email = "L'email est requis";
+        } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
+          newErrors.email = "Format d'email invalide";
+        }
+        break;
+
+      case 2:
+        if (!formData.password) {
+          newErrors.password = 'Le mot de passe est requis';
+        } else if (formData.password.length < 6) {
+          newErrors.password = 'Minimum 6 caractères';
+        } else if (!/[A-Z]/.test(formData.password)) {
+          newErrors.password = 'Une majuscule requise';
+        } else if (!/[0-9]/.test(formData.password)) {
+          newErrors.password = 'Un chiffre requis';
+        }
+
+        if (!formData.confirmPassword) {
+          newErrors.confirmPassword = 'Confirmation requise';
+        } else if (formData.password !== formData.confirmPassword) {
+          newErrors.confirmPassword = 'Les mots de passe ne correspondent pas';
+        }
+        break;
+
+      case 3:
+        break;
+
+      case 4:
+        break;
     }
 
-    // Mot de passe
-    if (!formData.password) {
-      newErrors.password = 'Le mot de passe est requis';
-    } else if (formData.password.length < 6) {
-      newErrors.password = 'Minimum 6 caractères';
+    if (Object.keys(newErrors).length > 0) {
+      setFieldErrors(newErrors);
+      return false;
     }
 
-    // Confirmation mot de passe
-    if (!formData.confirmPassword) {
-      newErrors.confirmPassword = 'Confirmation requise';
-    } else if (formData.password !== formData.confirmPassword) {
-      newErrors.confirmPassword = 'Les mots de passe ne correspondent pas';
+    return true;
+  }, [currentStep, formData, setFieldErrors]);
+
+  const handleNext = useCallback(() => {
+    if (validateCurrentStep()) {
+      nextStep();
     }
+  }, [validateCurrentStep, nextStep]);
 
-    // Prénom et nom
-    if (!formData.firstName) {
-      newErrors.firstName = 'Le prénom est requis';
-    }
-    if (!formData.lastName) {
-      newErrors.lastName = 'Le nom est requis';
-    }
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
-
-  const handleSignup = async () => {
-    if (!validateForm()) return;
-
+  const handleSignup = useCallback(async () => {
     try {
       const result = await signup(formData);
 
       if (result.success) {
         Alert.alert(
-          'Inscription réussie !',
+          'Inscription réussie ! 🎉',
           `Bienvenue ${result.user.firstName} !`,
-          [{ text: 'OK' }],
+          [
+            {
+              text: 'Se connecter',
+              onPress: () => {
+                reset();
+                navigation.navigate('Login');
+              },
+            },
+          ],
         );
       } else {
         Alert.alert("Erreur d'inscription", result.error);
@@ -141,235 +137,137 @@ export const RegisterScreen = ({ navigation }) => {
     } catch (error) {
       Alert.alert('Erreur', 'Une erreur inattendue est survenue');
     }
-  };
+  }, [formData, signup, reset, navigation]);
 
-  const InputField = ({
-    label,
-    value,
-    onChangeText,
-    placeholder,
-    error,
-    ...props
-  }) => (
-    <View style={{ marginBottom: DIMENSIONS.SPACING_MD }}>
-      <Text
-        style={{
-          fontSize: FONTS.SIZE.SM,
-          fontWeight: '500',
-          color: COLORS.TEXT_PRIMARY,
-          marginBottom: DIMENSIONS.SPACING_SM,
-        }}
-      >
-        {label}
-      </Text>
-      <TextInput
-        style={{
-          height: DIMENSIONS.INPUT_HEIGHT,
-          borderWidth: 1,
-          borderColor: error ? COLORS.ERROR : COLORS.BORDER,
-          borderRadius: DIMENSIONS.BORDER_RADIUS_MD,
-          paddingHorizontal: DIMENSIONS.SPACING_MD,
-          backgroundColor: COLORS.CARD_BACKGROUND,
-          fontSize: FONTS.SIZE.MD,
-        }}
-        value={value}
-        onChangeText={onChangeText}
-        placeholder={placeholder}
-        placeholderTextColor={COLORS.TEXT_MUTED}
-        {...props}
-      />
-      {error && (
-        <Text
-          style={{
-            fontSize: FONTS.SIZE.SM,
-            color: COLORS.ERROR,
-            marginTop: DIMENSIONS.SPACING_SM,
-          }}
-        >
-          {error}
-        </Text>
-      )}
-    </View>
-  );
+  const CurrentStepComponent = STEPS[currentStep - 1].component;
 
   return (
-    <KeyboardAvoidingView
-      style={{ flex: 1 }}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
-      <ScrollView
-        style={{ flex: 1, backgroundColor: COLORS.BACKGROUND }}
-        contentContainerStyle={{ flexGrow: 1 }}
-        keyboardShouldPersistTaps="handled"
+    <View style={styles.container}>
+      <StatusBar
+        barStyle="dark-content"
+        backgroundColor={COLORS.BACKGROUND_LIGHT}
+      />
+
+      <KeyboardAvoidingView
+        style={styles.keyboardView}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
-        <View
-          style={{
-            flex: 1,
-            paddingHorizontal: DIMENSIONS.CONTAINER_PADDING,
-            paddingVertical: DIMENSIONS.SPACING_LG,
-          }}
+        {/* Step Indicator */}
+        <View style={styles.stepIndicatorContainer}>
+          <StepIndicator steps={STEPS} currentStep={currentStep} />
+        </View>
+
+        {/* Form Content */}
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
         >
-          {/* Header */}
-          <View
-            style={{
-              alignItems: 'center',
-              marginBottom: DIMENSIONS.SPACING_XL,
-            }}
-          >
-            <Text
-              style={{
-                fontSize: FONTS.SIZE.XL,
-                fontWeight: 'bold',
-                color: COLORS.TEXT_PRIMARY,
-                marginBottom: DIMENSIONS.SPACING_SM,
-              }}
-            >
-              Créer un compte
-            </Text>
-            <Text
-              style={{
-                fontSize: FONTS.SIZE.MD,
-                color: COLORS.TEXT_SECONDARY,
-                textAlign: 'center',
-              }}
-            >
-              Rejoignez la communauté Football Network
-            </Text>
+          <CurrentStepComponent
+            formData={formData}
+            updateField={updateField}
+            errors={errors}
+          />
+        </ScrollView>
+
+        {/* Navigation Buttons */}
+        <View style={styles.footer}>
+          <View style={styles.buttonContainer}>
+            {!isFirstStep && (
+              <ModernButton
+                title="Précédent"
+                onPress={previousStep}
+                variant="outline"
+                leftIconName="arrow-left"
+                fullWidth={false}
+                size="small"
+              />
+            )}
+
+            <View style={styles.spacer} />
+
+            {!isLastStep ? (
+              <ModernButton
+                title="Suivant"
+                onPress={handleNext}
+                variant="primary"
+                rightIconName="arrow-right"
+              />
+            ) : (
+              <ModernButton
+                title="Créer mon compte"
+                onPress={handleSignup}
+                disabled={isLoading}
+                isLoading={isLoading}
+                variant="primary"
+                leftIconName="check-circle"
+              />
+            )}
           </View>
 
-          {/* Formulaire */}
-          <View style={{ marginBottom: DIMENSIONS.SPACING_LG }}>
-            {/* Informations personnelles */}
-            <View
-              style={{
-                flexDirection: 'row',
-                justifyContent: 'space-between',
-              }}
-            >
-              <View style={{ flex: 1, marginRight: DIMENSIONS.SPACING_SM }}>
-                <InputField
-                  label="Prénom *"
-                  value={formData.firstName}
-                  onChangeText={value => updateField('firstName', value)}
-                  placeholder="Jean"
-                  error={errors.firstName}
-                  autoCapitalize="words"
-                />
-              </View>
-              <View style={{ flex: 1, marginLeft: DIMENSIONS.SPACING_SM }}>
-                <InputField
-                  label="Nom *"
-                  value={formData.lastName}
-                  onChangeText={value => updateField('lastName', value)}
-                  placeholder="Dupont"
-                  error={errors.lastName}
-                  autoCapitalize="words"
-                />
-              </View>
-            </View>
-
-            <InputField
-              label="Email *"
-              value={formData.email}
-              onChangeText={value => updateField('email', value)}
-              placeholder="jean.dupont@email.com"
-              keyboardType="email-address"
-              autoCapitalize="none"
-              error={errors.email}
-            />
-
-            <InputField
-              label="Téléphone"
-              value={formData.phone}
-              onChangeText={value => updateField('phone', value)}
-              placeholder="+33 6 12 34 56 78"
-              keyboardType="phone-pad"
-              error={errors.phone}
-            />
-
-            <InputField
-              label="Ville"
-              value={formData.locationCity}
-              onChangeText={value => updateField('locationCity', value)}
-              placeholder="Paris"
-              error={errors.locationCity}
-            />
-
-            <InputField
-              label="Mot de passe *"
-              value={formData.password}
-              onChangeText={value => updateField('password', value)}
-              placeholder="Minimum 6 caractères"
-              secureTextEntry={!showPassword}
-              error={errors.password}
-            />
-
-            <InputField
-              label="Confirmer le mot de passe *"
-              value={formData.confirmPassword}
-              onChangeText={value => updateField('confirmPassword', value)}
-              placeholder="Confirmer votre mot de passe"
-              secureTextEntry={!showConfirmPassword}
-              error={errors.confirmPassword}
-            />
-
-            {/* TODO: Ajouter des sélecteurs pour position et niveau */}
-          </View>
-
-          {/* Bouton d'inscription */}
-          <TouchableOpacity
-            onPress={handleSignup}
-            disabled={isLoading}
-            style={{
-              height: DIMENSIONS.BUTTON_HEIGHT,
-              backgroundColor: isLoading ? COLORS.TEXT_MUTED : COLORS.PRIMARY,
-              borderRadius: DIMENSIONS.BORDER_RADIUS_MD,
-              justifyContent: 'center',
-              alignItems: 'center',
-              marginBottom: DIMENSIONS.SPACING_MD,
-            }}
-          >
-            <Text
-              style={{
-                fontSize: FONTS.SIZE.MD,
-                fontWeight: 'bold',
-                color: COLORS.TEXT_WHITE,
-              }}
-            >
-              {isLoading ? 'Inscription...' : "S'inscrire"}
-            </Text>
-          </TouchableOpacity>
-
-          {/* Lien vers connexion */}
-          <View
-            style={{
-              flexDirection: 'row',
-              justifyContent: 'center',
-              alignItems: 'center',
-            }}
-          >
-            <Text
-              style={{
-                fontSize: FONTS.SIZE.MD,
-                color: COLORS.TEXT_SECONDARY,
-              }}
-            >
-              Déjà un compte ?{' '}
-            </Text>
+          {/* Login Link */}
+          <View style={styles.loginLink}>
+            <Text style={styles.loginLinkText}>Déjà un compte ? </Text>
             <TouchableOpacity onPress={() => navigation.navigate('Login')}>
-              <Text
-                style={{
-                  fontSize: FONTS.SIZE.MD,
-                  fontWeight: 'bold',
-                  color: COLORS.PRIMARY,
-                }}
-              >
-                Se connecter
-              </Text>
+              <Text style={styles.loginLinkButton}>Se connecter</Text>
             </TouchableOpacity>
           </View>
         </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+      </KeyboardAvoidingView>
+    </View>
   );
 };
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: COLORS.BACKGROUND_LIGHT,
+  },
+  keyboardView: {
+    flex: 1,
+  },
+  stepIndicatorContainer: {
+    paddingTop: Platform.OS === 'ios' ? 60 : 40,
+    paddingBottom: DIMENSIONS.SPACING_MD,
+    backgroundColor: COLORS.WHITE,
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
+    paddingHorizontal: DIMENSIONS.CONTAINER_PADDING,
+  },
+  footer: {
+    backgroundColor: COLORS.WHITE,
+    paddingHorizontal: DIMENSIONS.CONTAINER_PADDING,
+    paddingTop: DIMENSIONS.SPACING_MD,
+    paddingBottom:
+      Platform.OS === 'ios' ? DIMENSIONS.SPACING_LG : DIMENSIONS.SPACING_MD,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.BORDER,
+  },
+  buttonContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: DIMENSIONS.SPACING_SM,
+  },
+  spacer: {
+    width: DIMENSIONS.SPACING_SM,
+  },
+  loginLink: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loginLinkText: {
+    fontSize: FONTS.SIZE.SM,
+    color: COLORS.TEXT_SECONDARY,
+  },
+  loginLinkButton: {
+    fontSize: FONTS.SIZE.SM,
+    fontWeight: FONTS.WEIGHT.BOLD,
+    color: COLORS.PRIMARY,
+  },
+});

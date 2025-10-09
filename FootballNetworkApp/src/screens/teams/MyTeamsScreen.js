@@ -1,3 +1,4 @@
+// ====== src/screens/teams/MyTeamsScreen.js ======
 import React, { useState, useCallback } from 'react';
 import {
   View,
@@ -6,180 +7,89 @@ import {
   TouchableOpacity,
   RefreshControl,
   Alert,
-  Image,
+  StyleSheet,
+  StatusBar,
 } from 'react-native';
 import { useSelector, useDispatch } from 'react-redux';
-import { LoadingSpinner } from '../../components/common';
-
-// Constantes
-const COLORS = {
-  PRIMARY: '#22C55E',
-  BACKGROUND: '#F8FAFC',
-  CARD_BACKGROUND: '#FFFFFF',
-  TEXT_PRIMARY: '#1F2937',
-  TEXT_SECONDARY: '#6B7280',
-  TEXT_WHITE: '#FFFFFF',
-  BORDER_LIGHT: '#F3F4F6',
-  SUCCESS: '#10B981',
-  WARNING: '#F59E0B',
-  ERROR: '#EF4444',
-};
-
-const DIMENSIONS = {
-  CONTAINER_PADDING: 16,
-  SPACING_MD: 16,
-  SPACING_LG: 24,
-  SPACING_XL: 32,
-  BORDER_RADIUS_LG: 12,
-  BORDER_RADIUS_MD: 8,
-};
-
-const FONTS = {
-  SIZE: {
-    SM: 14,
-    MD: 16,
-    LG: 18,
-    XL: 20,
-    XXL: 24,
-  },
-};
+import Icon from 'react-native-vector-icons/Feather';
+import { useTheme } from '../../hooks/useTheme';
+import { DIMENSIONS, FONTS, SHADOWS } from '../../styles/theme';
 
 // Composant TeamCard
-const TeamCard = React.memo(({ team, onPress, onManage }) => (
+const TeamCard = React.memo(({ team, onPress, onManage, COLORS }) => (
   <TouchableOpacity
-    style={{
-      backgroundColor: COLORS.CARD_BACKGROUND,
-      borderRadius: DIMENSIONS.BORDER_RADIUS_LG,
-      padding: DIMENSIONS.SPACING_MD,
-      marginBottom: DIMENSIONS.SPACING_MD,
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.1,
-      shadowRadius: 3.84,
-      elevation: 5,
-    }}
+    style={[styles.teamCard, { backgroundColor: COLORS.WHITE }]}
     onPress={() => onPress(team)}
     activeOpacity={0.7}
   >
-    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+    <View style={styles.teamCardContent}>
       {/* Photo d'équipe */}
       <View
-        style={{
-          width: 60,
-          height: 60,
-          borderRadius: 30,
-          backgroundColor: COLORS.PRIMARY_LIGHT || '#86EFAC',
-          justifyContent: 'center',
-          alignItems: 'center',
-          marginRight: DIMENSIONS.SPACING_MD,
-        }}
+        style={[
+          styles.teamAvatar,
+          { backgroundColor: COLORS.PRIMARY_ULTRA_LIGHT },
+        ]}
       >
-        {team.photo ? (
-          <Image
-            source={{ uri: team.photo }}
-            style={{ width: 60, height: 60, borderRadius: 30 }}
-          />
-        ) : (
-          <Text style={{ fontSize: 24 }}>⚽</Text>
-        )}
+        <Icon name="dribbble" size={32} color={COLORS.PRIMARY} />
       </View>
 
       {/* Infos équipe */}
-      <View style={{ flex: 1 }}>
-        <Text
-          style={{
-            fontSize: FONTS.SIZE.LG,
-            fontWeight: 'bold',
-            color: COLORS.TEXT_PRIMARY,
-            marginBottom: 4,
-          }}
-        >
+      <View style={styles.teamInfo}>
+        <Text style={[styles.teamName, { color: COLORS.TEXT_PRIMARY }]}>
           {team.name}
         </Text>
 
-        <View
-          style={{
-            flexDirection: 'row',
-            alignItems: 'center',
-            marginBottom: 4,
-          }}
-        >
-          <Text style={{ fontSize: 12 }}>👥</Text>
-          <Text
-            style={{
-              fontSize: FONTS.SIZE.SM,
-              color: COLORS.TEXT_SECONDARY,
-              marginLeft: 4,
-              marginRight: 12,
-            }}
-          >
-            {team.currentMembers || 0}/{team.maxPlayers || 11} joueurs
-          </Text>
+        <View style={styles.teamMeta}>
+          <View style={styles.metaItem}>
+            <Icon name="users" size={14} color={COLORS.TEXT_SECONDARY} />
+            <Text style={[styles.metaText, { color: COLORS.TEXT_SECONDARY }]}>
+              {team.currentMembers || 0}/{team.maxPlayers || 11}
+            </Text>
+          </View>
 
-          <Text style={{ fontSize: 12 }}>📍</Text>
-          <Text
-            style={{
-              fontSize: FONTS.SIZE.SM,
-              color: COLORS.TEXT_SECONDARY,
-              marginLeft: 4,
-            }}
-          >
-            {team.locationCity || 'Non définie'}
-          </Text>
+          <View style={styles.metaItem}>
+            <Icon name="map-pin" size={14} color={COLORS.TEXT_SECONDARY} />
+            <Text style={[styles.metaText, { color: COLORS.TEXT_SECONDARY }]}>
+              {team.locationCity || 'Non définie'}
+            </Text>
+          </View>
         </View>
 
-        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+        <View style={styles.teamFooter}>
           <View
-            style={{
-              backgroundColor: getSkillLevelColor(team.skillLevel),
-              paddingHorizontal: 8,
-              paddingVertical: 2,
-              borderRadius: 12,
-              marginRight: 8,
-            }}
+            style={[
+              styles.skillBadge,
+              { backgroundColor: getSkillLevelColor(team.skillLevel) },
+            ]}
           >
-            <Text
-              style={{
-                fontSize: FONTS.SIZE.SM,
-                color: COLORS.TEXT_WHITE,
-                fontWeight: '600',
-              }}
-            >
+            <Text style={styles.skillBadgeText}>
               {getSkillLevelLabel(team.skillLevel)}
             </Text>
           </View>
 
-          <Text
-            style={{
-              fontSize: FONTS.SIZE.SM,
-              color: COLORS.TEXT_SECONDARY,
-            }}
-          >
-            {team.role === 'captain' ? '👑 Capitaine' : '👤 Membre'}
-          </Text>
+          <View style={styles.roleContainer}>
+            <Icon
+              name={team.role === 'captain' ? 'award' : 'user'}
+              size={14}
+              color={COLORS.TEXT_SECONDARY}
+            />
+            <Text style={[styles.roleText, { color: COLORS.TEXT_SECONDARY }]}>
+              {team.role === 'captain' ? 'Capitaine' : 'Membre'}
+            </Text>
+          </View>
         </View>
       </View>
 
       {/* Actions */}
       {team.role === 'captain' && (
         <TouchableOpacity
-          style={{
-            backgroundColor: COLORS.PRIMARY,
-            paddingHorizontal: 12,
-            paddingVertical: 8,
-            borderRadius: DIMENSIONS.BORDER_RADIUS_MD,
+          style={[styles.manageButton, { backgroundColor: COLORS.PRIMARY }]}
+          onPress={e => {
+            e.stopPropagation();
+            onManage(team);
           }}
-          onPress={() => onManage(team)}
         >
-          <Text
-            style={{
-              color: COLORS.TEXT_WHITE,
-              fontSize: FONTS.SIZE.SM,
-              fontWeight: '600',
-            }}
-          >
-            Gérer
-          </Text>
+          <Icon name="settings" size={18} color={COLORS.WHITE} />
         </TouchableOpacity>
       )}
     </View>
@@ -188,41 +98,29 @@ const TeamCard = React.memo(({ team, onPress, onManage }) => (
 
 // Helpers
 const getSkillLevelColor = level => {
-  switch (level) {
-    case 'beginner':
-      return '#94A3B8';
-    case 'amateur':
-      return '#3B82F6';
-    case 'intermediate':
-      return '#F59E0B';
-    case 'advanced':
-      return '#EF4444';
-    case 'expert':
-      return '#8B5CF6';
-    default:
-      return '#6B7280';
-  }
+  const colors = {
+    beginner: '#94A3B8',
+    amateur: '#3B82F6',
+    intermediate: '#F59E0B',
+    advanced: '#EF4444',
+    expert: '#8B5CF6',
+  };
+  return colors[level] || '#6B7280';
 };
 
 const getSkillLevelLabel = level => {
-  switch (level) {
-    case 'beginner':
-      return 'Débutant';
-    case 'amateur':
-      return 'Amateur';
-    case 'intermediate':
-      return 'Intermédiaire';
-    case 'advanced':
-      return 'Avancé';
-    case 'expert':
-      return 'Expert';
-    default:
-      return 'Non défini';
-  }
+  const labels = {
+    beginner: 'Débutant',
+    amateur: 'Amateur',
+    intermediate: 'Intermédiaire',
+    advanced: 'Avancé',
+    expert: 'Expert',
+  };
+  return labels[level] || 'Non défini';
 };
 
 export const MyTeamsScreen = ({ navigation }) => {
-  const dispatch = useDispatch();
+  const { colors: COLORS, isDark } = useTheme('auto');
   const { user } = useSelector(state => state.auth);
   const teamsState = useSelector(state => {
     if (!state || !state.teams) {
@@ -245,7 +143,6 @@ export const MyTeamsScreen = ({ navigation }) => {
       currentMembers: 8,
       maxPlayers: 11,
       role: 'captain',
-      photo: null,
       createdAt: '2024-01-15',
     },
     {
@@ -257,7 +154,6 @@ export const MyTeamsScreen = ({ navigation }) => {
       currentMembers: 6,
       maxPlayers: 11,
       role: 'member',
-      photo: null,
       createdAt: '2024-02-20',
     },
   ];
@@ -266,7 +162,6 @@ export const MyTeamsScreen = ({ navigation }) => {
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
-    // TODO: Charger les vraies données depuis l'API
     setTimeout(() => setRefreshing(false), 1000);
   }, []);
 
@@ -297,7 +192,11 @@ export const MyTeamsScreen = ({ navigation }) => {
           },
           {
             text: 'Inviter des joueurs',
-            onPress: () => handleInvitePlayers(team),
+            onPress: () =>
+              Alert.alert(
+                'Info',
+                "Fonctionnalité d'invitation en développement",
+              ),
           },
           { text: 'Annuler', style: 'cancel' },
         ],
@@ -306,109 +205,56 @@ export const MyTeamsScreen = ({ navigation }) => {
     [navigation],
   );
 
-  const handleInvitePlayers = useCallback(team => {
-    Alert.alert('Info', "Fonctionnalité d'invitation en développement");
-  }, []);
-
   const handleCreateTeam = useCallback(() => {
     navigation.navigate('CreateTeam');
   }, [navigation]);
 
-  if (isLoading && !refreshing) {
-    return <LoadingSpinner message="Chargement de vos équipes..." />;
-  }
-
   return (
-    <View style={{ flex: 1, backgroundColor: COLORS.BACKGROUND }}>
+    <View
+      style={[styles.container, { backgroundColor: COLORS.BACKGROUND_LIGHT }]}
+    >
+      <StatusBar
+        barStyle={isDark ? 'light-content' : 'dark-content'}
+        backgroundColor={COLORS.PRIMARY}
+      />
+
       {/* Header */}
-      <View
-        style={{
-          backgroundColor: COLORS.PRIMARY,
-          paddingTop: 50,
-          paddingBottom: 20,
-          paddingHorizontal: DIMENSIONS.CONTAINER_PADDING,
-        }}
-      >
-        <View
-          style={{
-            flexDirection: 'row',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-          }}
-        >
-          <View>
-            <Text
-              style={{
-                fontSize: FONTS.SIZE.XXL,
-                color: COLORS.TEXT_WHITE,
-                fontWeight: 'bold',
-              }}
-            >
-              Mes Équipes
-            </Text>
-            <Text
-              style={{
-                fontSize: FONTS.SIZE.MD,
-                color: COLORS.TEXT_WHITE,
-                opacity: 0.9,
-                marginTop: 4,
-              }}
-            >
+      <View style={[styles.header, { backgroundColor: COLORS.PRIMARY }]}>
+        <View style={styles.headerContent}>
+          <View style={styles.headerLeft}>
+            <View style={styles.headerTitleContainer}>
+              <Icon name="users" size={24} color={COLORS.WHITE} />
+              <Text style={styles.headerTitle}>Mes Équipes</Text>
+            </View>
+            <Text style={styles.headerSubtitle}>
               {displayTeams.length} équipe{displayTeams.length > 1 ? 's' : ''}
             </Text>
           </View>
 
           <TouchableOpacity
-            style={{
-              backgroundColor: 'rgba(255, 255, 255, 0.2)',
-              paddingHorizontal: 16,
-              paddingVertical: 10,
-              borderRadius: 20,
-              borderWidth: 1,
-              borderColor: 'rgba(255, 255, 255, 0.3)',
-            }}
+            style={styles.createButton}
             onPress={handleCreateTeam}
           >
-            <Text
-              style={{
-                color: COLORS.TEXT_WHITE,
-                fontSize: FONTS.SIZE.SM,
-                fontWeight: '600',
-              }}
-            >
-              + Créer
-            </Text>
+            <Icon name="plus" size={18} color={COLORS.WHITE} />
+            <Text style={styles.createButtonText}>Créer</Text>
           </TouchableOpacity>
         </View>
       </View>
 
       <ScrollView
-        contentContainerStyle={{
-          paddingHorizontal: DIMENSIONS.CONTAINER_PADDING,
-          paddingVertical: DIMENSIONS.SPACING_LG,
-        }}
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
+        showsVerticalScrollIndicator={false}
       >
         {error && (
           <View
-            style={{
-              backgroundColor: '#FEE2E2',
-              borderRadius: DIMENSIONS.BORDER_RADIUS_MD,
-              padding: DIMENSIONS.SPACING_MD,
-              marginBottom: DIMENSIONS.SPACING_LG,
-              borderLeftWidth: 4,
-              borderLeftColor: COLORS.ERROR,
-            }}
+            style={[styles.errorBox, { backgroundColor: COLORS.ERROR_LIGHT }]}
           >
-            <Text
-              style={{
-                fontSize: FONTS.SIZE.SM,
-                color: '#991B1B',
-                fontWeight: 'bold',
-              }}
-            >
+            <Icon name="alert-circle" size={20} color={COLORS.ERROR} />
+            <Text style={[styles.errorText, { color: COLORS.ERROR_DARK }]}>
               Erreur: {error}
             </Text>
           </View>
@@ -423,61 +269,40 @@ export const MyTeamsScreen = ({ navigation }) => {
                 team={team}
                 onPress={handleTeamPress}
                 onManage={handleManageTeam}
+                COLORS={COLORS}
               />
             ))}
           </View>
         ) : (
           /* État vide */
-          <View
-            style={{
-              backgroundColor: COLORS.CARD_BACKGROUND,
-              borderRadius: DIMENSIONS.BORDER_RADIUS_LG,
-              padding: DIMENSIONS.SPACING_XL,
-              alignItems: 'center',
-              marginTop: DIMENSIONS.SPACING_XL,
-            }}
-          >
-            <Text style={{ fontSize: 64, marginBottom: 16 }}>⚽</Text>
-            <Text
-              style={{
-                fontSize: FONTS.SIZE.LG,
-                fontWeight: 'bold',
-                color: COLORS.TEXT_PRIMARY,
-                marginBottom: 8,
-                textAlign: 'center',
-              }}
+          <View style={[styles.emptyState, { backgroundColor: COLORS.WHITE }]}>
+            <View
+              style={[
+                styles.emptyIcon,
+                { backgroundColor: COLORS.BACKGROUND_LIGHT },
+              ]}
             >
+              <Icon name="users" size={48} color={COLORS.TEXT_MUTED} />
+            </View>
+            <Text style={[styles.emptyTitle, { color: COLORS.TEXT_PRIMARY }]}>
               Aucune équipe
             </Text>
             <Text
-              style={{
-                fontSize: FONTS.SIZE.MD,
-                color: COLORS.TEXT_SECONDARY,
-                textAlign: 'center',
-                lineHeight: 22,
-                marginBottom: DIMENSIONS.SPACING_LG,
-              }}
+              style={[
+                styles.emptyDescription,
+                { color: COLORS.TEXT_SECONDARY },
+              ]}
             >
               Créez votre première équipe pour commencer à organiser des matchs
               !
             </Text>
 
             <TouchableOpacity
-              style={{
-                backgroundColor: COLORS.PRIMARY,
-                paddingHorizontal: 24,
-                paddingVertical: 12,
-                borderRadius: DIMENSIONS.BORDER_RADIUS_MD,
-              }}
+              style={[styles.emptyButton, { backgroundColor: COLORS.PRIMARY }]}
               onPress={handleCreateTeam}
             >
-              <Text
-                style={{
-                  color: COLORS.TEXT_WHITE,
-                  fontSize: FONTS.SIZE.MD,
-                  fontWeight: '600',
-                }}
-              >
+              <Icon name="plus-circle" size={20} color={COLORS.WHITE} />
+              <Text style={styles.emptyButtonText}>
                 Créer ma première équipe
               </Text>
             </TouchableOpacity>
@@ -487,3 +312,186 @@ export const MyTeamsScreen = ({ navigation }) => {
     </View>
   );
 };
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
+  header: {
+    paddingTop: 50,
+    paddingBottom: DIMENSIONS.SPACING_MD,
+    paddingHorizontal: DIMENSIONS.CONTAINER_PADDING,
+    ...SHADOWS.MEDIUM,
+  },
+  headerContent: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  headerLeft: {
+    flex: 1,
+  },
+  headerTitleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: DIMENSIONS.SPACING_XXS,
+  },
+  headerTitle: {
+    fontSize: FONTS.SIZE.XXL,
+    color: '#FFFFFF',
+    fontWeight: FONTS.WEIGHT.BOLD,
+    marginLeft: DIMENSIONS.SPACING_SM,
+  },
+  headerSubtitle: {
+    fontSize: FONTS.SIZE.MD,
+    color: '#FFFFFF',
+    opacity: 0.9,
+  },
+  createButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    paddingHorizontal: DIMENSIONS.SPACING_MD,
+    paddingVertical: DIMENSIONS.SPACING_SM,
+    borderRadius: DIMENSIONS.BORDER_RADIUS_FULL,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+    gap: DIMENSIONS.SPACING_XS,
+  },
+  createButtonText: {
+    color: '#FFFFFF',
+    fontSize: FONTS.SIZE.SM,
+    fontWeight: FONTS.WEIGHT.SEMIBOLD,
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingHorizontal: DIMENSIONS.CONTAINER_PADDING,
+    paddingVertical: DIMENSIONS.SPACING_LG,
+  },
+  errorBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: DIMENSIONS.BORDER_RADIUS_MD,
+    padding: DIMENSIONS.SPACING_MD,
+    marginBottom: DIMENSIONS.SPACING_LG,
+    borderLeftWidth: 4,
+    gap: DIMENSIONS.SPACING_SM,
+  },
+  errorText: {
+    fontSize: FONTS.SIZE.SM,
+    fontWeight: FONTS.WEIGHT.SEMIBOLD,
+    flex: 1,
+  },
+  teamCard: {
+    borderRadius: DIMENSIONS.BORDER_RADIUS_MD,
+    padding: DIMENSIONS.SPACING_MD,
+    marginBottom: DIMENSIONS.SPACING_MD,
+    ...SHADOWS.SMALL,
+  },
+  teamCardContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  teamAvatar: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: DIMENSIONS.SPACING_MD,
+  },
+  teamInfo: {
+    flex: 1,
+  },
+  teamName: {
+    fontSize: FONTS.SIZE.LG,
+    fontWeight: FONTS.WEIGHT.BOLD,
+    marginBottom: DIMENSIONS.SPACING_XS,
+  },
+  teamMeta: {
+    flexDirection: 'row',
+    gap: DIMENSIONS.SPACING_MD,
+    marginBottom: DIMENSIONS.SPACING_XS,
+  },
+  metaItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: DIMENSIONS.SPACING_XXS,
+  },
+  metaText: {
+    fontSize: FONTS.SIZE.SM,
+  },
+  teamFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: DIMENSIONS.SPACING_SM,
+  },
+  skillBadge: {
+    paddingHorizontal: DIMENSIONS.SPACING_SM,
+    paddingVertical: DIMENSIONS.SPACING_XXS,
+    borderRadius: DIMENSIONS.BORDER_RADIUS_FULL,
+  },
+  skillBadgeText: {
+    fontSize: FONTS.SIZE.XS,
+    color: '#FFFFFF',
+    fontWeight: FONTS.WEIGHT.SEMIBOLD,
+  },
+  roleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: DIMENSIONS.SPACING_XXS,
+  },
+  roleText: {
+    fontSize: FONTS.SIZE.SM,
+  },
+  manageButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: DIMENSIONS.SPACING_SM,
+  },
+  emptyState: {
+    borderRadius: DIMENSIONS.BORDER_RADIUS_MD,
+    padding: DIMENSIONS.SPACING_XL,
+    alignItems: 'center',
+    marginTop: DIMENSIONS.SPACING_XL,
+    ...SHADOWS.SMALL,
+  },
+  emptyIcon: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: DIMENSIONS.SPACING_LG,
+  },
+  emptyTitle: {
+    fontSize: FONTS.SIZE.XL,
+    fontWeight: FONTS.WEIGHT.BOLD,
+    marginBottom: DIMENSIONS.SPACING_SM,
+    textAlign: 'center',
+  },
+  emptyDescription: {
+    fontSize: FONTS.SIZE.MD,
+    textAlign: 'center',
+    lineHeight: FONTS.SIZE.MD * FONTS.LINE_HEIGHT.RELAXED,
+    marginBottom: DIMENSIONS.SPACING_LG,
+  },
+  emptyButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: DIMENSIONS.SPACING_LG,
+    paddingVertical: DIMENSIONS.SPACING_MD,
+    borderRadius: DIMENSIONS.BORDER_RADIUS_MD,
+    gap: DIMENSIONS.SPACING_SM,
+  },
+  emptyButtonText: {
+    color: '#FFFFFF',
+    fontSize: FONTS.SIZE.MD,
+    fontWeight: FONTS.WEIGHT.SEMIBOLD,
+  },
+});

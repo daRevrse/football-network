@@ -2,6 +2,7 @@ import React from 'react';
 import { createStackNavigator } from '@react-navigation/stack';
 import { LoginScreen } from '../screens/auth/LoginScreen';
 import { RegisterScreen } from '../screens/auth/RegisterScreen';
+import { ForgotPasswordScreen } from '../screens/auth/ForgotPasswordScreen';
 
 const Stack = createStackNavigator();
 
@@ -38,38 +39,12 @@ export const AuthNavigator = () => {
   return (
     <Stack.Navigator
       screenOptions={{
-        headerStyle: {
-          backgroundColor: COLORS.PRIMARY,
-        },
-        headerTintColor: COLORS.TEXT_WHITE,
-        headerTitleStyle: {
-          fontWeight: 'bold',
-        },
+        headerShown: false, // Pas de header pour un design moderne
       }}
     >
-      <Stack.Screen
-        name="Login"
-        component={LoginScreen}
-        options={{
-          title: 'Connexion',
-          headerShown: false,
-        }}
-      />
-      <Stack.Screen
-        name="Register"
-        component={RegisterScreen}
-        options={{
-          title: 'Inscription',
-        }}
-      />
-      <Stack.Screen
-        name="ForgotPassword"
-        component={TemporaryScreen}
-        initialParams={{ title: 'Mot de passe oublié' }}
-        options={{
-          title: 'Mot de passe oublié',
-        }}
-      />
+      <Stack.Screen name="Login" component={LoginScreen} />
+      <Stack.Screen name="Register" component={RegisterScreen} />
+      <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
     </Stack.Navigator>
   );
 };

@@ -1,4 +1,5 @@
-import React, { useEffect } from 'react';
+// ====== src/screens/dashboard/DashboardScreen.js ======
+import React, { useRef } from 'react';
 import {
   View,
   Text,
@@ -6,78 +7,53 @@ import {
   TouchableOpacity,
   RefreshControl,
   Alert,
+  StyleSheet,
+  StatusBar,
+  Animated,
 } from 'react-native';
 import { useSelector, useDispatch } from 'react-redux';
-import { LoadingSpinner } from '../../components/common';
+import Icon from 'react-native-vector-icons/Feather';
+import { DIMENSIONS, FONTS, SHADOWS } from '../../styles/theme';
+import { useTheme } from '../../hooks/useTheme';
 import { logout } from '../../store/slices/authSlice';
 
-// Constantes temporaires (seront remplacées par les imports @utils)
-const COLORS = {
-  PRIMARY: '#22C55E',
-  BACKGROUND: '#F8FAFC',
-  CARD_BACKGROUND: '#FFFFFF',
-  TEXT_PRIMARY: '#1F2937',
-  TEXT_SECONDARY: '#6B7280',
-  TEXT_WHITE: '#FFFFFF',
-  BORDER_LIGHT: '#F3F4F6',
-  SUCCESS: '#10B981',
-  WARNING: '#F59E0B',
-  ERROR: '#EF4444',
-};
-
-const DIMENSIONS = {
-  CONTAINER_PADDING: 16,
-  SPACING_MD: 16,
-  SPACING_LG: 24,
-  SPACING_XL: 32,
-  BORDER_RADIUS_LG: 12,
-};
-
-const FONTS = {
-  SIZE: {
-    SM: 14,
-    MD: 16,
-    LG: 18,
-    XL: 20,
-    XXL: 24,
-  },
-};
+const HEADER_MAX_HEIGHT = 120;
+const HEADER_MIN_HEIGHT = 70;
+const HEADER_SCROLL_DISTANCE = HEADER_MAX_HEIGHT - HEADER_MIN_HEIGHT;
 
 export const DashboardScreen = ({ navigation }) => {
   const dispatch = useDispatch();
   const { user } = useSelector(state => state.auth);
-  const { myTeams } = useSelector(state => state.teams);
-  const { upcomingMatches, invitations } = useSelector(state => state.matches);
-  const { unreadCount } = useSelector(state => state.notifications);
+  const { myTeams } = useSelector(state => state.teams || { myTeams: [] });
+  const { upcomingMatches, invitations } = useSelector(
+    state => state.matches || { upcomingMatches: [], invitations: [] },
+  );
+  const { unreadCount } = useSelector(
+    state => state.notifications || { unreadCount: 0 },
+  );
 
   const [refreshing, setRefreshing] = React.useState(false);
+  const scrollY = useRef(new Animated.Value(0)).current;
+
+  // Thème dynamique
+  const { colors: COLORS, isDark } = useTheme('auto'); // 'auto', 'light', 'dark', ou 'time'
 
   const onRefresh = React.useCallback(() => {
     setRefreshing(true);
-    // TODO: Rafraîchir les données
     setTimeout(() => setRefreshing(false), 1000);
   }, []);
 
-  // Fonction de déconnexion
   const handleLogout = () => {
     Alert.alert('Déconnexion', 'Êtes-vous sûr de vouloir vous déconnecter ?', [
-      {
-        text: 'Annuler',
-        style: 'cancel',
-      },
+      { text: 'Annuler', style: 'cancel' },
       {
         text: 'Déconnexion',
         style: 'destructive',
-        onPress: () => {
-          // Déconnecter sans afficher d'alert après
-          dispatch(logout());
-          // L'utilisateur sera automatiquement redirigé vers l'écran de connexion
-        },
+        onPress: () => dispatch(logout()),
       },
     ]);
   };
 
-  // Données temporaires pour la demo
   const stats = {
     matchesThisWeek: 2,
     teamsCount: myTeams.length || 0,
@@ -89,26 +65,23 @@ export const DashboardScreen = ({ navigation }) => {
     {
       id: 'create-match',
       title: 'Créer un match',
-      icon: '⚽',
+      iconName: 'calendar',
       color: COLORS.PRIMARY,
       onPress: () => Alert.alert('Info', 'Fonctionnalité en développement'),
     },
     {
       id: 'find-team',
       title: 'Trouver une équipe',
-      icon: '🔍',
-      color: COLORS.SUCCESS,
+      iconName: 'search',
+      color: COLORS.SECONDARY,
       onPress: () => Alert.alert('Info', 'Fonctionnalité en développement'),
     },
     {
       id: 'create-team',
       title: 'Créer une équipe',
-      icon: '👥',
-      color: COLORS.WARNING,
-      onPress: () =>
-        navigation.navigate('Teams', {
-          screen: 'CreateTeam',
-        }),
+      iconName: 'users',
+      color: COLORS.SUCCESS,
+      onPress: () => navigation.navigate('Teams', { screen: 'CreateTeam' }),
     },
   ];
 
@@ -120,6 +93,7 @@ export const DashboardScreen = ({ navigation }) => {
       description: 'FC Barcelone vs Real Madrid',
       time: 'Il y a 2h',
       status: 'pending',
+      iconName: 'mail',
     },
     {
       id: '2',
@@ -128,205 +102,186 @@ export const DashboardScreen = ({ navigation }) => {
       description: 'Jean Dupont a rejoint Les Tigres',
       time: 'Il y a 4h',
       status: 'info',
+      iconName: 'user-plus',
     },
   ];
 
+  // Animations du header
+  const headerHeight = scrollY.interpolate({
+    inputRange: [0, HEADER_SCROLL_DISTANCE],
+    outputRange: [HEADER_MAX_HEIGHT, HEADER_MIN_HEIGHT],
+    extrapolate: 'clamp',
+  });
+
+  const headerOpacity = scrollY.interpolate({
+    inputRange: [0, HEADER_SCROLL_DISTANCE / 2, HEADER_SCROLL_DISTANCE],
+    outputRange: [1, 0.5, 0],
+    extrapolate: 'clamp',
+  });
+
+  const appNameSize = scrollY.interpolate({
+    inputRange: [0, HEADER_SCROLL_DISTANCE],
+    outputRange: [24, 18],
+    extrapolate: 'clamp',
+  });
+
+  const iconSize = scrollY.interpolate({
+    inputRange: [0, HEADER_SCROLL_DISTANCE],
+    outputRange: [24, 20],
+    extrapolate: 'clamp',
+  });
+
   return (
-    <View style={{ flex: 1, backgroundColor: COLORS.BACKGROUND }}>
-      {/* Header */}
-      <View
-        style={{
-          backgroundColor: COLORS.PRIMARY,
-          paddingTop: 50,
-          paddingBottom: 20,
-          paddingHorizontal: DIMENSIONS.CONTAINER_PADDING,
-        }}
+    <View
+      style={[styles.container, { backgroundColor: COLORS.BACKGROUND_LIGHT }]}
+    >
+      <StatusBar
+        barStyle={isDark ? 'light-content' : 'dark-content'}
+        backgroundColor={COLORS.PRIMARY}
+      />
+
+      {/* Animated Header */}
+      <Animated.View
+        style={[
+          styles.header,
+          { height: headerHeight, backgroundColor: COLORS.PRIMARY },
+        ]}
       >
-        <View
-          style={{
-            flexDirection: 'row',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-          }}
-        >
-          <View style={{ flex: 1 }}>
-            <Text
-              style={{
-                fontSize: FONTS.SIZE.LG,
-                color: COLORS.TEXT_WHITE,
-                fontWeight: 'bold',
-              }}
+        <View style={styles.headerContent}>
+          <View style={styles.headerLeft}>
+            <View style={styles.appNameContainer}>
+              <Animated.View
+                style={{
+                  transform: [
+                    {
+                      scale: iconSize.interpolate({
+                        inputRange: [18, 24],
+                        outputRange: [0.75, 1],
+                      }),
+                    },
+                  ],
+                }}
+              >
+                <Icon name="dribbble" size={24} color={COLORS.BLACK} />
+              </Animated.View>
+              <Animated.Text
+                style={[styles.appName, { fontSize: appNameSize }]}
+              >
+                FootConnect
+              </Animated.Text>
+            </View>
+            {/* <Animated.Text
+              style={[styles.subGreeting, { opacity: headerOpacity }]}
             >
-              Bonjour {user?.firstName || 'Joueur'} ! 👋
-            </Text>
-            <Text
-              style={{
-                fontSize: FONTS.SIZE.SM,
-                color: COLORS.TEXT_WHITE,
-                opacity: 0.9,
-                marginTop: 4,
-              }}
-            >
-              Prêt pour de nouveaux matchs ?
-            </Text>
+              Bienvenue {user?.firstName || 'Joueur'}
+            </Animated.Text> */}
           </View>
 
-          {/* Actions header */}
-          <View
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-            }}
-          >
+          <View style={styles.headerRight}>
             {/* Notifications */}
             <TouchableOpacity
-              style={{
-                position: 'relative',
-                padding: 8,
-                marginRight: 8,
-              }}
+              style={styles.notificationButton}
               onPress={() =>
                 Alert.alert('Notifications', 'Fonctionnalité en développement')
               }
             >
-              <Text style={{ fontSize: 24 }}>🔔</Text>
+              <Icon name="bell" size={22} color={COLORS.BLACK} />
               {unreadCount > 0 && (
                 <View
-                  style={{
-                    position: 'absolute',
-                    top: 0,
-                    right: 0,
-                    backgroundColor: COLORS.ERROR,
-                    borderRadius: 10,
-                    minWidth: 20,
-                    height: 20,
-                    justifyContent: 'center',
-                    alignItems: 'center',
-                  }}
+                  style={[
+                    styles.badge,
+                    {
+                      backgroundColor: COLORS.ERROR,
+                      borderColor: COLORS.PRIMARY,
+                    },
+                  ]}
                 >
-                  <Text
-                    style={{
-                      color: COLORS.TEXT_WHITE,
-                      fontSize: 12,
-                      fontWeight: 'bold',
-                    }}
-                  >
+                  <Text style={styles.badgeText}>
                     {unreadCount > 9 ? '9+' : unreadCount}
                   </Text>
                 </View>
               )}
             </TouchableOpacity>
 
-            {/* Bouton logout */}
+            {/* Logout Button */}
             <TouchableOpacity
-              style={{
-                backgroundColor: 'rgba(255, 255, 255, 0.2)',
-                paddingHorizontal: 12,
-                paddingVertical: 8,
-                borderRadius: 20,
-                borderWidth: 1,
-                borderColor: 'rgba(255, 255, 255, 0.3)',
-              }}
+              style={styles.logoutButton}
               onPress={handleLogout}
             >
-              <Text
-                style={{
-                  color: COLORS.TEXT_WHITE,
-                  fontSize: FONTS.SIZE.SM,
-                  fontWeight: '600',
-                }}
-              >
-                ↗️ Déconnexion
-              </Text>
+              <Icon name="log-out" size={24} color={COLORS.BLACK} />
+              {/* <Text style={styles.logoutText}>Déconnexion</Text> */}
             </TouchableOpacity>
           </View>
         </View>
-      </View>
+      </Animated.View>
 
-      <ScrollView
-        contentContainerStyle={{
-          paddingHorizontal: DIMENSIONS.CONTAINER_PADDING,
-          paddingVertical: DIMENSIONS.SPACING_LG,
-        }}
+      <Animated.ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
+        showsVerticalScrollIndicator={false}
+        onScroll={Animated.event(
+          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+          { useNativeDriver: false },
+        )}
+        scrollEventThrottle={16}
       >
-        {/* Statistiques rapides */}
-        <View
-          style={{
-            flexDirection: 'row',
-            justifyContent: 'space-between',
-            marginBottom: DIMENSIONS.SPACING_LG,
-          }}
-        >
+        {/* Stats Cards */}
+        <View style={styles.statsContainer}>
           <StatCard
             title="Matchs cette semaine"
             value={stats.matchesThisWeek}
-            icon="⚽"
+            iconName="dribbble"
             color={COLORS.PRIMARY}
+            bgColor={COLORS.WHITE}
+            textColor={COLORS.TEXT_PRIMARY}
+            subtextColor={COLORS.TEXT_SECONDARY}
           />
           <StatCard
             title="Mes équipes"
             value={stats.teamsCount}
-            icon="👥"
+            iconName="users"
             color={COLORS.SUCCESS}
+            bgColor={COLORS.WHITE}
+            textColor={COLORS.TEXT_PRIMARY}
+            subtextColor={COLORS.TEXT_SECONDARY}
           />
           <StatCard
             title="Invitations"
             value={stats.pendingInvitations}
-            icon="📨"
+            iconName="inbox"
             color={COLORS.WARNING}
+            bgColor={COLORS.WHITE}
+            textColor={COLORS.TEXT_PRIMARY}
+            subtextColor={COLORS.TEXT_SECONDARY}
           />
         </View>
 
-        {/* Actions rapides */}
-        <View style={{ marginBottom: DIMENSIONS.SPACING_LG }}>
-          <Text
-            style={{
-              fontSize: FONTS.SIZE.LG,
-              fontWeight: 'bold',
-              color: COLORS.TEXT_PRIMARY,
-              marginBottom: DIMENSIONS.SPACING_MD,
-            }}
-          >
+        {/* Quick Actions */}
+        <View style={styles.section}>
+          <Text style={[styles.sectionTitle, { color: COLORS.TEXT_PRIMARY }]}>
             Actions rapides
           </Text>
-
-          <View
-            style={{
-              flexDirection: 'row',
-              justifyContent: 'space-between',
-            }}
-          >
+          <View style={styles.actionsGrid}>
             {quickActions.map(action => (
               <TouchableOpacity
                 key={action.id}
-                style={{
-                  flex: 1,
-                  marginHorizontal: 4,
-                  backgroundColor: COLORS.CARD_BACKGROUND,
-                  borderRadius: DIMENSIONS.BORDER_RADIUS_LG,
-                  padding: DIMENSIONS.SPACING_MD,
-                  alignItems: 'center',
-                  shadowColor: '#000',
-                  shadowOffset: { width: 0, height: 2 },
-                  shadowOpacity: 0.1,
-                  shadowRadius: 3.84,
-                  elevation: 5,
-                }}
+                style={[styles.actionCard, { backgroundColor: COLORS.WHITE }]}
                 onPress={action.onPress}
+                activeOpacity={0.7}
               >
-                <Text style={{ fontSize: 24, marginBottom: 8 }}>
-                  {action.icon}
-                </Text>
+                <View
+                  style={[
+                    styles.actionIcon,
+                    { backgroundColor: action.color + '20' },
+                  ]}
+                >
+                  <Icon name={action.iconName} size={24} color={action.color} />
+                </View>
                 <Text
-                  style={{
-                    fontSize: FONTS.SIZE.SM,
-                    color: COLORS.TEXT_PRIMARY,
-                    textAlign: 'center',
-                    fontWeight: '500',
-                  }}
+                  style={[styles.actionTitle, { color: COLORS.TEXT_PRIMARY }]}
                 >
                   {action.title}
                 </Text>
@@ -335,163 +290,342 @@ export const DashboardScreen = ({ navigation }) => {
           </View>
         </View>
 
-        {/* Activité récente */}
-        <View>
-          <Text
-            style={{
-              fontSize: FONTS.SIZE.LG,
-              fontWeight: 'bold',
-              color: COLORS.TEXT_PRIMARY,
-              marginBottom: DIMENSIONS.SPACING_MD,
-            }}
-          >
+        {/* Recent Activity */}
+        <View style={styles.section}>
+          <Text style={[styles.sectionTitle, { color: COLORS.TEXT_PRIMARY }]}>
             Activité récente
           </Text>
 
-          {recentActivity.map(activity => (
-            <TouchableOpacity
-              key={activity.id}
-              style={{
-                backgroundColor: COLORS.CARD_BACKGROUND,
-                borderRadius: DIMENSIONS.BORDER_RADIUS_LG,
-                padding: DIMENSIONS.SPACING_MD,
-                marginBottom: DIMENSIONS.SPACING_MD,
-                shadowColor: '#000',
-                shadowOffset: { width: 0, height: 2 },
-                shadowOpacity: 0.1,
-                shadowRadius: 3.84,
-                elevation: 5,
-              }}
+          {recentActivity.length > 0 ? (
+            recentActivity.map(activity => (
+              <TouchableOpacity
+                key={activity.id}
+                style={[styles.activityCard, { backgroundColor: COLORS.WHITE }]}
+                activeOpacity={0.7}
+              >
+                <View style={styles.activityLeft}>
+                  <View
+                    style={[
+                      styles.activityIcon,
+                      {
+                        backgroundColor:
+                          activity.status === 'pending'
+                            ? COLORS.WARNING_LIGHT
+                            : COLORS.SUCCESS_LIGHT,
+                      },
+                    ]}
+                  >
+                    <Icon
+                      name={activity.iconName}
+                      size={20}
+                      color={
+                        activity.status === 'pending'
+                          ? COLORS.WARNING
+                          : COLORS.SUCCESS
+                      }
+                    />
+                  </View>
+                  <View style={styles.activityContent}>
+                    <Text
+                      style={[
+                        styles.activityTitle,
+                        { color: COLORS.TEXT_PRIMARY },
+                      ]}
+                    >
+                      {activity.title}
+                    </Text>
+                    <Text
+                      style={[
+                        styles.activityDescription,
+                        { color: COLORS.TEXT_SECONDARY },
+                      ]}
+                    >
+                      {activity.description}
+                    </Text>
+                    <Text
+                      style={[
+                        styles.activityTime,
+                        { color: COLORS.TEXT_MUTED },
+                      ]}
+                    >
+                      {activity.time}
+                    </Text>
+                  </View>
+                </View>
+                <View
+                  style={[
+                    styles.statusDot,
+                    {
+                      backgroundColor:
+                        activity.status === 'pending'
+                          ? COLORS.WARNING
+                          : COLORS.SUCCESS,
+                    },
+                  ]}
+                />
+              </TouchableOpacity>
+            ))
+          ) : (
+            <View
+              style={[styles.emptyState, { backgroundColor: COLORS.WHITE }]}
             >
               <View
-                style={{
-                  flexDirection: 'row',
-                  justifyContent: 'space-between',
-                  alignItems: 'flex-start',
-                }}
+                style={[
+                  styles.emptyIcon,
+                  { backgroundColor: COLORS.BACKGROUND_LIGHT },
+                ]}
               >
-                <View style={{ flex: 1 }}>
-                  <Text
-                    style={{
-                      fontSize: FONTS.SIZE.MD,
-                      fontWeight: '600',
-                      color: COLORS.TEXT_PRIMARY,
-                      marginBottom: 4,
-                    }}
-                  >
-                    {activity.title}
-                  </Text>
-                  <Text
-                    style={{
-                      fontSize: FONTS.SIZE.SM,
-                      color: COLORS.TEXT_SECONDARY,
-                      marginBottom: 8,
-                    }}
-                  >
-                    {activity.description}
-                  </Text>
-                  <Text
-                    style={{
-                      fontSize: FONTS.SIZE.SM,
-                      color: COLORS.TEXT_SECONDARY,
-                    }}
-                  >
-                    {activity.time}
-                  </Text>
-                </View>
-
-                <View
-                  style={{
-                    width: 8,
-                    height: 8,
-                    borderRadius: 4,
-                    backgroundColor:
-                      activity.status === 'pending'
-                        ? COLORS.WARNING
-                        : COLORS.SUCCESS,
-                    marginTop: 6,
-                  }}
-                />
+                <Icon name="activity" size={48} color={COLORS.TEXT_MUTED} />
               </View>
-            </TouchableOpacity>
-          ))}
+              <Text style={[styles.emptyTitle, { color: COLORS.TEXT_PRIMARY }]}>
+                Aucune activité récente
+              </Text>
+              <Text
+                style={[
+                  styles.emptyDescription,
+                  { color: COLORS.TEXT_SECONDARY },
+                ]}
+              >
+                Commencez par créer une équipe ou chercher des adversaires !
+              </Text>
+            </View>
+          )}
         </View>
-
-        {/* État vide si pas d'activité */}
-        {recentActivity.length === 0 && (
-          <View
-            style={{
-              backgroundColor: COLORS.CARD_BACKGROUND,
-              borderRadius: DIMENSIONS.BORDER_RADIUS_LG,
-              padding: DIMENSIONS.SPACING_XL,
-              alignItems: 'center',
-            }}
-          >
-            <Text style={{ fontSize: 48, marginBottom: 16 }}>⚽</Text>
-            <Text
-              style={{
-                fontSize: FONTS.SIZE.LG,
-                fontWeight: 'bold',
-                color: COLORS.TEXT_PRIMARY,
-                marginBottom: 8,
-                textAlign: 'center',
-              }}
-            >
-              Aucune activité récente
-            </Text>
-            <Text
-              style={{
-                fontSize: FONTS.SIZE.MD,
-                color: COLORS.TEXT_SECONDARY,
-                textAlign: 'center',
-                lineHeight: 22,
-              }}
-            >
-              Commencez par créer une équipe ou chercher des adversaires !
-            </Text>
-          </View>
-        )}
-      </ScrollView>
+      </Animated.ScrollView>
     </View>
   );
 };
 
 // Composant StatCard
-const StatCard = ({ title, value, icon, color }) => (
-  <View
-    style={{
-      flex: 1,
-      backgroundColor: COLORS.CARD_BACKGROUND,
-      borderRadius: DIMENSIONS.BORDER_RADIUS_LG,
-      padding: DIMENSIONS.SPACING_MD,
-      marginHorizontal: 4,
-      alignItems: 'center',
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.1,
-      shadowRadius: 3.84,
-      elevation: 5,
-    }}
-  >
-    <Text style={{ fontSize: 24, marginBottom: 8 }}>{icon}</Text>
-    <Text
-      style={{
-        fontSize: FONTS.SIZE.XXL,
-        fontWeight: 'bold',
-        color: color,
-        marginBottom: 4,
-      }}
-    >
-      {value}
-    </Text>
-    <Text
-      style={{
-        fontSize: FONTS.SIZE.SM,
-        color: COLORS.TEXT_SECONDARY,
-        textAlign: 'center',
-      }}
-    >
-      {title}
-    </Text>
+const StatCard = ({
+  title,
+  value,
+  iconName,
+  color,
+  bgColor,
+  textColor,
+  subtextColor,
+}) => (
+  <View style={[styles.statCard, { backgroundColor: bgColor }]}>
+    <View style={[styles.statIcon, { backgroundColor: color + '20' }]}>
+      <Icon name={iconName} size={24} color={color} />
+    </View>
+    <Text style={[styles.statValue, { color }]}>{value}</Text>
+    <Text style={[styles.statTitle, { color: subtextColor }]}>{title}</Text>
   </View>
 );
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
+  header: {
+    paddingTop: 50,
+    paddingHorizontal: DIMENSIONS.CONTAINER_PADDING,
+    justifyContent: 'flex-end',
+    paddingBottom: DIMENSIONS.SPACING_SM,
+    ...SHADOWS.MEDIUM,
+  },
+  headerContent: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  headerLeft: {
+    flex: 1,
+  },
+  appNameContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: DIMENSIONS.SPACING_XXS,
+  },
+  appName: {
+    color: '#FFFFFF',
+    fontWeight: FONTS.WEIGHT.BOLD,
+    marginLeft: DIMENSIONS.SPACING_SM,
+    letterSpacing: -0.5,
+  },
+  subGreeting: {
+    fontSize: FONTS.SIZE.SM,
+    color: '#FFFFFF',
+  },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  notificationButton: {
+    position: 'relative',
+    padding: DIMENSIONS.SPACING_SM,
+    marginRight: DIMENSIONS.SPACING_XS,
+  },
+  badge: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+  },
+  badgeText: {
+    color: '#FFFFFF',
+    fontSize: FONTS.SIZE.XXS,
+    fontWeight: FONTS.WEIGHT.BOLD,
+  },
+  logoutButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    // backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    paddingHorizontal: DIMENSIONS.SPACING_MD,
+    paddingVertical: DIMENSIONS.SPACING_XS,
+    borderRadius: DIMENSIONS.BORDER_RADIUS_FULL,
+    // borderWidth: 1,
+    // borderColor: 'rgba(255, 255, 255, 0.3)',
+  },
+  logoutText: {
+    color: '#FFFFFF',
+    fontSize: FONTS.SIZE.SM,
+    fontWeight: FONTS.WEIGHT.SEMIBOLD,
+    marginLeft: DIMENSIONS.SPACING_XXS,
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingHorizontal: DIMENSIONS.CONTAINER_PADDING,
+    paddingVertical: DIMENSIONS.SPACING_LG,
+  },
+  statsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: DIMENSIONS.SPACING_LG,
+    gap: DIMENSIONS.SPACING_SM,
+  },
+  statCard: {
+    flex: 1,
+    borderRadius: DIMENSIONS.BORDER_RADIUS_MD,
+    padding: DIMENSIONS.SPACING_MD,
+    alignItems: 'center',
+    ...SHADOWS.SMALL,
+  },
+  statIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: DIMENSIONS.SPACING_SM,
+  },
+  statValue: {
+    fontSize: FONTS.SIZE.XXL,
+    fontWeight: FONTS.WEIGHT.BOLD,
+    marginBottom: DIMENSIONS.SPACING_XXS,
+  },
+  statTitle: {
+    fontSize: FONTS.SIZE.XS,
+    textAlign: 'center',
+    fontWeight: FONTS.WEIGHT.MEDIUM,
+  },
+  section: {
+    marginBottom: DIMENSIONS.SPACING_XL,
+  },
+  sectionTitle: {
+    fontSize: FONTS.SIZE.LG,
+    fontWeight: FONTS.WEIGHT.BOLD,
+    marginBottom: DIMENSIONS.SPACING_MD,
+  },
+  actionsGrid: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: DIMENSIONS.SPACING_SM,
+  },
+  actionCard: {
+    flex: 1,
+    borderRadius: DIMENSIONS.BORDER_RADIUS_MD,
+    padding: DIMENSIONS.SPACING_MD,
+    alignItems: 'center',
+    ...SHADOWS.SMALL,
+  },
+  actionIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: DIMENSIONS.SPACING_SM,
+  },
+  actionTitle: {
+    fontSize: FONTS.SIZE.SM,
+    textAlign: 'center',
+    fontWeight: FONTS.WEIGHT.MEDIUM,
+  },
+  activityCard: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    borderRadius: DIMENSIONS.BORDER_RADIUS_MD,
+    padding: DIMENSIONS.SPACING_MD,
+    marginBottom: DIMENSIONS.SPACING_SM,
+    ...SHADOWS.SMALL,
+  },
+  activityLeft: {
+    flexDirection: 'row',
+    flex: 1,
+  },
+  activityIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: DIMENSIONS.SPACING_MD,
+  },
+  activityContent: {
+    flex: 1,
+  },
+  activityTitle: {
+    fontSize: FONTS.SIZE.MD,
+    fontWeight: FONTS.WEIGHT.SEMIBOLD,
+    marginBottom: DIMENSIONS.SPACING_XXS,
+  },
+  activityDescription: {
+    fontSize: FONTS.SIZE.SM,
+    marginBottom: DIMENSIONS.SPACING_XXS,
+  },
+  activityTime: {
+    fontSize: FONTS.SIZE.XS,
+  },
+  statusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginTop: DIMENSIONS.SPACING_SM,
+  },
+  emptyState: {
+    borderRadius: DIMENSIONS.BORDER_RADIUS_MD,
+    padding: DIMENSIONS.SPACING_XL,
+    alignItems: 'center',
+    ...SHADOWS.SMALL,
+  },
+  emptyIcon: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: DIMENSIONS.SPACING_MD,
+  },
+  emptyTitle: {
+    fontSize: FONTS.SIZE.LG,
+    fontWeight: FONTS.WEIGHT.BOLD,
+    marginBottom: DIMENSIONS.SPACING_SM,
+    textAlign: 'center',
+  },
+  emptyDescription: {
+    fontSize: FONTS.SIZE.MD,
+    textAlign: 'center',
+    lineHeight: FONTS.SIZE.MD * FONTS.LINE_HEIGHT.RELAXED,
+  },
+});

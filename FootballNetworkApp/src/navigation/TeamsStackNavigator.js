@@ -1,6 +1,10 @@
 import React from 'react';
 import { createStackNavigator } from '@react-navigation/stack';
-import { MyTeamsScreen, CreateTeamScreen } from '../screens/teams';
+import {
+  MyTeamsScreen,
+  CreateTeamScreen,
+  TeamDetailScreen,
+} from '../screens/teams';
 
 const Stack = createStackNavigator();
 
@@ -79,12 +83,17 @@ export const TeamsStackNavigator = () => {
       />
       <Stack.Screen
         name="TeamDetail"
-        component={TemporaryScreen}
+        component={TeamDetailScreen}
         initialParams={{ title: "Détail de l'équipe" }}
-        options={({ route }) => ({
-          title: route.params?.teamName || 'Équipe',
+        // options={({ route }) => ({
+        //   title: route.params?.teamName || 'Équipe',
+        //   headerBackTitle: 'Retour',
+        // })}
+        options={{
+          title: "Détail de l'équipe",
           headerBackTitle: 'Retour',
-        })}
+          header: () => null,
+        }}
       />
       <Stack.Screen
         name="EditTeam"
