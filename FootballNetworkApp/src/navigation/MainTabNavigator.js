@@ -6,8 +6,12 @@ import { View, Text, StyleSheet } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import { DashboardScreen } from '../screens/dashboard';
 import { TeamsStackNavigator } from './TeamsStackNavigator';
+import { MatchesStackNavigator } from './MatchesStackNavigator';
+import { SearchStackNavigator } from './SearchStackNavigator';
+// import { ProfileStackNavigator } from './ProfileStackNavigator';
 import { useTheme } from '../hooks/useTheme';
 import { DIMENSIONS, FONTS, SHADOWS } from '../styles/theme';
+import { ProfileScreen } from './../screens/profile/ProfileScreen';
 
 const Tab = createBottomTabNavigator();
 
@@ -61,22 +65,6 @@ const SearchScreen = () => (
     title="Recherche d'équipes"
     description="Trouvez des équipes et des adversaires près de chez vous"
     iconName="search"
-  />
-);
-
-const MatchesScreen = () => (
-  <ComingSoonScreen
-    title="Mes matchs"
-    description="Gérez vos matchs passés et à venir"
-    iconName="calendar"
-  />
-);
-
-const ProfileScreen = () => (
-  <ComingSoonScreen
-    title="Mon profil"
-    description="Consultez et modifiez vos informations"
-    iconName="user"
   />
 );
 
@@ -187,12 +175,12 @@ export const MainTabNavigator = () => {
       />
       <Tab.Screen
         name="Search"
-        component={SearchScreen}
+        component={SearchStackNavigator}
         options={{ title: 'Recherche' }}
       />
       <Tab.Screen
         name="Matches"
-        component={MatchesScreen}
+        component={MatchesStackNavigator}
         options={{ title: 'Matchs' }}
       />
       <Tab.Screen

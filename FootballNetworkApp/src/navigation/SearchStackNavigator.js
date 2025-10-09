@@ -3,9 +3,9 @@ import React from 'react';
 import { createStackNavigator } from '@react-navigation/stack';
 import {
   SearchScreen,
-  SearchResultsScreen,
-  TeamProfileScreen,
-} from '@screens/search';
+  // SearchResultsScreen,
+  // TeamProfileScreen,
+} from '../screens/search';
 import { COLORS } from '@utils/constants';
 
 const Stack = createStackNavigator();
@@ -28,7 +28,7 @@ export const SearchStackNavigator = () => {
         component={SearchScreen}
         options={{ title: 'Rechercher des équipes' }}
       />
-      <Stack.Screen
+      {/* <Stack.Screen
         name="SearchResults"
         component={SearchResultsScreen}
         options={{ title: 'Résultats de recherche' }}
@@ -39,7 +39,7 @@ export const SearchStackNavigator = () => {
         options={({ route }) => ({
           title: route.params?.teamName || 'Profil équipe',
         })}
-      />
+      /> */}
     </Stack.Navigator>
   );
 };

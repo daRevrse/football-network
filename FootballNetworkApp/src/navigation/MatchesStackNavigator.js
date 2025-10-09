@@ -6,7 +6,7 @@ import {
   MatchDetailScreen,
   CreateMatchScreen,
   InvitationsScreen,
-} from '@screens/matches';
+} from '../screens/matches';
 import { COLORS } from '@utils/constants';
 
 const Stack = createStackNavigator();
@@ -27,22 +27,25 @@ export const MatchesStackNavigator = () => {
       <Stack.Screen
         name="Matches"
         component={MatchesScreen}
-        options={{ title: 'Mes Matchs' }}
+        options={{ headerShown: false }}
       />
       <Stack.Screen
         name="MatchDetail"
         component={MatchDetailScreen}
-        options={{ title: 'Détail du match' }}
+        // options={{ title: 'Détail du match' }}
+        options={{ headerShown: false }}
       />
       <Stack.Screen
         name="CreateMatch"
         component={CreateMatchScreen}
-        options={{ title: 'Créer un match' }}
+        // options={{ title: 'Créer un match' }}
+        options={{ headerShown: false }}
       />
       <Stack.Screen
         name="Invitations"
         component={InvitationsScreen}
-        options={{ title: 'Invitations reçues' }}
+        // options={{ title: 'Invitations reçues' }}
+        options={{ headerShown: false }}
       />
     </Stack.Navigator>
   );
