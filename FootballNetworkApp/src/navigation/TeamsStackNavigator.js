@@ -4,6 +4,8 @@ import {
   MyTeamsScreen,
   CreateTeamScreen,
   TeamDetailScreen,
+  EditTeamScreen,
+  TeamMembersScreen,
 } from '../screens/teams';
 
 const Stack = createStackNavigator();
@@ -12,45 +14,6 @@ const Stack = createStackNavigator();
 const COLORS = {
   PRIMARY: '#22C55E',
   TEXT_WHITE: '#FFFFFF',
-};
-
-// Écrans temporaires
-const TemporaryScreen = ({ route }) => {
-  const { View, Text } = require('react-native');
-  return (
-    <View
-      style={{
-        flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
-        backgroundColor: '#F8FAFC',
-        paddingHorizontal: 32,
-      }}
-    >
-      <Text style={{ fontSize: 48, marginBottom: 16 }}>🚧</Text>
-      <Text
-        style={{
-          fontSize: 20,
-          fontWeight: 'bold',
-          color: '#1F2937',
-          marginBottom: 8,
-          textAlign: 'center',
-        }}
-      >
-        {route.params?.title || 'Écran en développement'}
-      </Text>
-      <Text
-        style={{
-          fontSize: 16,
-          color: '#6B7280',
-          textAlign: 'center',
-          lineHeight: 24,
-        }}
-      >
-        Cette fonctionnalité sera bientôt disponible !
-      </Text>
-    </View>
-  );
 };
 
 export const TeamsStackNavigator = () => {
@@ -85,32 +48,24 @@ export const TeamsStackNavigator = () => {
         name="TeamDetail"
         component={TeamDetailScreen}
         initialParams={{ title: "Détail de l'équipe" }}
-        // options={({ route }) => ({
-        //   title: route.params?.teamName || 'Équipe',
-        //   headerBackTitle: 'Retour',
-        // })}
         options={{
-          title: "Détail de l'équipe",
-          headerBackTitle: 'Retour',
-          header: () => null,
+          headerShown: false,
         }}
       />
       <Stack.Screen
         name="EditTeam"
-        component={TemporaryScreen}
+        component={EditTeamScreen}
         initialParams={{ title: "Modifier l'équipe" }}
         options={{
-          title: "Modifier l'équipe",
-          headerBackTitle: 'Retour',
+          headerShown: false,
         }}
       />
       <Stack.Screen
         name="TeamMembers"
-        component={TemporaryScreen}
+        component={TeamMembersScreen}
         initialParams={{ title: "Membres de l'équipe" }}
         options={{
-          title: 'Membres',
-          headerBackTitle: 'Retour',
+          headerShown: false,
         }}
       />
     </Stack.Navigator>

@@ -8,65 +8,11 @@ import { DashboardScreen } from '../screens/dashboard';
 import { TeamsStackNavigator } from './TeamsStackNavigator';
 import { MatchesStackNavigator } from './MatchesStackNavigator';
 import { SearchStackNavigator } from './SearchStackNavigator';
-// import { ProfileStackNavigator } from './ProfileStackNavigator';
+import { ProfileStackNavigator } from './ProfileStackNavigator';
 import { useTheme } from '../hooks/useTheme';
 import { DIMENSIONS, FONTS, SHADOWS } from '../styles/theme';
-import { ProfileScreen } from './../screens/profile/ProfileScreen';
 
 const Tab = createBottomTabNavigator();
-
-// Composant pour les écrans "Coming Soon"
-const ComingSoonScreen = ({ title, description, iconName }) => {
-  const { colors: COLORS } = useTheme('auto');
-
-  return (
-    <View
-      style={[
-        styles.comingSoonContainer,
-        { backgroundColor: COLORS.BACKGROUND_LIGHT },
-      ]}
-    >
-      <View
-        style={[
-          styles.comingSoonIconContainer,
-          { backgroundColor: COLORS.PRIMARY_ULTRA_LIGHT },
-        ]}
-      >
-        <Icon name={iconName || 'package'} size={64} color={COLORS.PRIMARY} />
-      </View>
-
-      <Text style={[styles.comingSoonTitle, { color: COLORS.TEXT_PRIMARY }]}>
-        {title}
-      </Text>
-
-      <Text
-        style={[styles.comingSoonDescription, { color: COLORS.TEXT_SECONDARY }]}
-      >
-        {description || 'Cette fonctionnalité sera bientôt disponible !'}
-      </Text>
-
-      <View
-        style={[
-          styles.comingSoonBadge,
-          { backgroundColor: COLORS.WARNING_LIGHT },
-        ]}
-      >
-        <Icon name="clock" size={16} color={COLORS.WARNING} />
-        <Text style={[styles.comingSoonBadgeText, { color: COLORS.WARNING }]}>
-          En développement
-        </Text>
-      </View>
-    </View>
-  );
-};
-
-const SearchScreen = () => (
-  <ComingSoonScreen
-    title="Recherche d'équipes"
-    description="Trouvez des équipes et des adversaires près de chez vous"
-    iconName="search"
-  />
-);
 
 // Icône de Tab Bar avec badge
 const TabBarIcon = ({ focused, iconName, badgeCount }) => {
@@ -185,7 +131,7 @@ export const MainTabNavigator = () => {
       />
       <Tab.Screen
         name="Profile"
-        component={ProfileScreen}
+        component={ProfileStackNavigator}
         options={{ title: 'Profil' }}
       />
     </Tab.Navigator>

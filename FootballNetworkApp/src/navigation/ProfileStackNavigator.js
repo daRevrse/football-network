@@ -5,9 +5,10 @@ import {
   ProfileScreen,
   EditProfileScreen,
   SettingsScreen,
-  StatisticsScreen,
-} from '@screens/profile';
-import { NotificationsScreen } from '@screens/notifications';
+  PrivacyScreen,
+  HelpScreen,
+  NotificationsCenterScreen,
+} from '../screens/profile';
 import { COLORS } from '@utils/constants';
 
 const Stack = createStackNavigator();
@@ -28,27 +29,44 @@ export const ProfileStackNavigator = () => {
       <Stack.Screen
         name="Profile"
         component={ProfileScreen}
-        options={{ title: 'Mon Profil' }}
+        options={{
+          headerShown: false,
+        }}
       />
       <Stack.Screen
         name="EditProfile"
         component={EditProfileScreen}
-        options={{ title: 'Modifier le profil' }}
+        options={{
+          headerShown: false,
+        }}
       />
       <Stack.Screen
         name="Settings"
         component={SettingsScreen}
-        options={{ title: 'Paramètres' }}
+        options={{
+          headerShown: false,
+        }}
       />
       <Stack.Screen
-        name="Statistics"
-        component={StatisticsScreen}
-        options={{ title: 'Mes Statistiques' }}
+        name="Privacy"
+        component={PrivacyScreen}
+        options={{
+          headerShown: false,
+        }}
+      />
+      <Stack.Screen
+        name="Help"
+        component={HelpScreen}
+        options={{
+          headerShown: false,
+        }}
       />
       <Stack.Screen
         name="Notifications"
-        component={NotificationsScreen}
-        options={{ title: 'Notifications' }}
+        component={NotificationsCenterScreen}
+        options={{
+          headerShown: false,
+        }}
       />
     </Stack.Navigator>
   );

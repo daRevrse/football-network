@@ -228,6 +228,13 @@ export const TeamDetailScreen = ({ route, navigation }) => {
     navigation.navigate('EditTeam', { teamId: team.id });
   };
 
+  const handleViewMembers = () => {
+    navigation.navigate('TeamMembers', {
+      teamId: team.id,
+      team: team,
+    });
+  };
+
   const handleInvitePlayers = () => {
     Alert.alert('Info', 'Fonctionnalité en développement');
   };
@@ -360,13 +367,18 @@ export const TeamDetailScreen = ({ route, navigation }) => {
       >
         {/* Stats */}
         <View style={styles.statsContainer}>
-          <StatCard
-            icon="users"
-            value={`${team.currentMembers}/${team.maxPlayers}`}
-            label="Joueurs"
-            color={COLORS.PRIMARY}
-            COLORS={COLORS}
-          />
+          <TouchableOpacity
+            onPress={handleViewMembers}
+            style={[{ backgroundColor: COLORS.WHITE }]}
+          >
+            <StatCard
+              icon="users"
+              value={`${team.currentMembers}/${team.maxPlayers}`}
+              label="Joueurs"
+              color={COLORS.PRIMARY}
+              COLORS={COLORS}
+            />
+          </TouchableOpacity>
           <StatCard
             icon="calendar"
             value={team.matchesPlayed}
@@ -422,43 +434,6 @@ export const TeamDetailScreen = ({ route, navigation }) => {
             value={team.createdAt}
             COLORS={COLORS}
           />
-        </View>
-
-        {/* Membres */}
-        <View style={[styles.section, { backgroundColor: COLORS.WHITE }]}>
-          <View style={styles.sectionHeader}>
-            <Icon name="users" size={20} color={COLORS.PRIMARY} />
-            <Text style={[styles.sectionTitle, { color: COLORS.TEXT_PRIMARY }]}>
-              Membres ({team.currentMembers})
-            </Text>
-            {team.isOwner && (
-              <TouchableOpacity
-                style={[
-                  styles.inviteButton,
-                  { backgroundColor: COLORS.PRIMARY_ULTRA_LIGHT },
-                ]}
-                onPress={handleInvitePlayers}
-              >
-                <Icon name="user-plus" size={16} color={COLORS.PRIMARY} />
-                <Text
-                  style={[styles.inviteButtonText, { color: COLORS.PRIMARY }]}
-                >
-                  Inviter
-                </Text>
-              </TouchableOpacity>
-            )}
-          </View>
-
-          <View style={styles.membersList}>
-            {members.map(member => (
-              <MemberCard
-                key={member.id}
-                member={member}
-                isOwner={team.isOwner}
-                COLORS={COLORS}
-              />
-            ))}
-          </View>
         </View>
 
         {/* Bouton d'action principal */}

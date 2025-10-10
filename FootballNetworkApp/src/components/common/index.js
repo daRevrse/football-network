@@ -9,3 +9,4 @@ export { ModernInput } from './ModernInput';
 export { ModernButton } from './ModernButton';
 export { InfoBox } from './InfoBox';
 export { StepIndicator } from './StepIndicator';
+export { SectionCard } from './SectionCard';

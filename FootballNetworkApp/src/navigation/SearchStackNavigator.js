@@ -26,7 +26,8 @@ export const SearchStackNavigator = () => {
       <Stack.Screen
         name="Search"
         component={SearchScreen}
-        options={{ title: 'Rechercher des équipes' }}
+        // options={{ title: 'Rechercher des équipes' }}
+        options={{ headerShown: false }}
       />
       {/* <Stack.Screen
         name="SearchResults"

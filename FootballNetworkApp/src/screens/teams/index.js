@@ -1,4 +1,5 @@
 export * from './MyTeamsScreen';
 export * from './CreateTeamScreen';
 export * from './TeamDetailScreen';
-// export * from './EditTeamScreen';
+export * from './EditTeamScreen';
+export * from './TeamMembersScreen';

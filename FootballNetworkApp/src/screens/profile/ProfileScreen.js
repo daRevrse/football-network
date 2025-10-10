@@ -320,13 +320,37 @@ export const ProfileScreen = ({ navigation }) => {
     extrapolate: 'clamp',
   });
 
+  const avatarOpacity = scrollY.interpolate({
+    inputRange: [0, HEADER_SCROLL_DISTANCE],
+    outputRange: [1, 0],
+    extrapolate: 'clamp',
+  });
+
+  const userNameFontSize = scrollY.interpolate({
+    inputRange: [0, HEADER_SCROLL_DISTANCE],
+    outputRange: [24, 16],
+    extrapolate: 'clamp',
+  });
+
+  const userNameTranslateY = scrollY.interpolate({
+    inputRange: [0, HEADER_SCROLL_DISTANCE],
+    outputRange: [0, -120],
+    extrapolate: 'clamp',
+  });
+
+  const userInfoTranslateY = scrollY.interpolate({
+    inputRange: [0, HEADER_SCROLL_DISTANCE],
+    outputRange: [0, 20],
+    extrapolate: 'clamp',
+  });
+
   const onRefresh = useCallback(() => {
     setRefreshing(true);
     setTimeout(() => setRefreshing(false), 1000);
   }, []);
 
   const handleEditProfile = () => {
-    Alert.alert('Info', 'Fonctionnalité en développement');
+    navigation.navigate('EditProfile');
   };
 
   const handleSettings = () => {
@@ -334,15 +358,15 @@ export const ProfileScreen = ({ navigation }) => {
   };
 
   const handleNotifications = () => {
-    Alert.alert('Info', 'Fonctionnalité en développement');
+    navigation.navigate('Notifications');
   };
 
   const handlePrivacy = () => {
-    Alert.alert('Info', 'Fonctionnalité en développement');
+    navigation.navigate('Privacy');
   };
 
   const handleHelp = () => {
-    Alert.alert('Info', 'Fonctionnalité en développement');
+    navigation.navigate('Help');
   };
 
   const handleLogout = () => {
@@ -410,6 +434,7 @@ export const ProfileScreen = ({ navigation }) => {
             style={[
               styles.avatar,
               {
+                opacity: avatarOpacity,
                 transform: [
                   { scale: avatarScale },
                   { translateY: avatarTranslateY },
@@ -424,7 +449,8 @@ export const ProfileScreen = ({ navigation }) => {
             style={[
               styles.userName,
               {
-                fontSize: titleFontSize,
+                fontSize: userNameFontSize,
+                transform: [{ translateY: userNameTranslateY }],
               },
             ]}
           >
@@ -436,6 +462,7 @@ export const ProfileScreen = ({ navigation }) => {
               styles.userInfo,
               {
                 opacity: userInfoOpacity,
+                transform: [{ translateY: userInfoTranslateY }],
               },
             ]}
           >

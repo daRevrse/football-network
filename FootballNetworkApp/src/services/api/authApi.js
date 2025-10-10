@@ -2,7 +2,7 @@ import { SecureStorage } from '../storage';
 
 class AuthApiService {
   constructor() {
-    this.baseURL = 'http://localhost:5000/api'; // Changez selon votre setup
+    this.baseURL = 'http://192.168.1.70:5000/api'; // Changez selon votre setup
     this.timeout = 10000;
   }
 

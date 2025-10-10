@@ -175,35 +175,42 @@ export const MyTeamsScreen = ({ navigation }) => {
     [navigation],
   );
 
-  const handleManageTeam = useCallback(
-    team => {
-      Alert.alert(
-        "Gérer l'équipe",
-        `Que voulez-vous faire avec "${team.name}" ?`,
-        [
-          {
-            text: 'Voir les membres',
-            onPress: () =>
-              navigation.navigate('TeamMembers', { teamId: team.id }),
-          },
-          {
-            text: "Modifier l'équipe",
-            onPress: () => navigation.navigate('EditTeam', { teamId: team.id }),
-          },
-          {
-            text: 'Inviter des joueurs',
-            onPress: () =>
-              Alert.alert(
-                'Info',
-                "Fonctionnalité d'invitation en développement",
-              ),
-          },
-          { text: 'Annuler', style: 'cancel' },
-        ],
-      );
-    },
-    [navigation],
-  );
+  const handleManageTeam = team => {
+    navigation.navigate('EditTeam', {
+      teamId: team.id,
+      team: team,
+    });
+  };
+
+  // const handleManageTeam = useCallback(
+  //   team => {
+  //     Alert.alert(
+  //       "Gérer l'équipe",
+  //       `Que voulez-vous faire avec "${team.name}" ?`,
+  //       [
+  //         {
+  //           text: 'Voir les membres',
+  //           onPress: () =>
+  //             navigation.navigate('TeamMembers', { teamId: team.id }),
+  //         },
+  //         {
+  //           text: "Modifier l'équipe",
+  //           onPress: () => navigation.navigate('EditTeam', { teamId: team.id }),
+  //         },
+  //         {
+  //           text: 'Inviter des joueurs',
+  //           onPress: () =>
+  //             Alert.alert(
+  //               'Info',
+  //               "Fonctionnalité d'invitation en développement",
+  //             ),
+  //         },
+  //         { text: 'Annuler', style: 'cancel' },
+  //       ],
+  //     );
+  //   },
+  //   [navigation],
+  // );
 
   const handleCreateTeam = useCallback(() => {
     navigation.navigate('CreateTeam');

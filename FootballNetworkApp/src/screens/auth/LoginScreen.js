@@ -11,30 +11,18 @@ import {
   StatusBar,
   StyleSheet,
 } from 'react-native';
-import { useDispatch, useSelector } from 'react-redux';
 import Icon from 'react-native-vector-icons/Feather';
 import { ModernInput, ModernButton, InfoBox } from '../../components/common';
 import { COLORS, DIMENSIONS, FONTS, SHADOWS } from '../../styles/theme';
-import {
-  loginSuccess,
-  setLoading,
-  setError,
-} from '../../store/slices/authSlice';
+import { useAuthImproved } from '../../utils/hooks/useAuthImproved';
 
 export const LoginScreen = ({ navigation }) => {
   const [email, setEmail] = useState(__DEV__ ? 'test@example.com' : '');
   const [password, setPassword] = useState(__DEV__ ? 'password123' : '');
   const [errors, setErrors] = useState({});
 
-  const dispatch = useDispatch();
-  const authState = useSelector(state => {
-    if (!state || !state.auth) {
-      return { isLoading: false, error: null };
-    }
-    return state.auth;
-  });
-
-  const { isLoading, error } = authState;
+  // Utiliser le hook useAuthImproved qui gère tout
+  const { login, isLoading, error } = useAuthImproved();
 
   const handleEmailChange = useCallback(
     value => {
@@ -75,198 +63,150 @@ export const LoginScreen = ({ navigation }) => {
     return Object.keys(newErrors).length === 0;
   }, [email, password]);
 
-  const handleSimulatedLogin = useCallback(async () => {
-    if (!validateForm()) return;
-
-    try {
-      dispatch(setLoading(true));
-      await new Promise(resolve => setTimeout(resolve, 1500));
-
-      if (email.includes('error')) {
-        dispatch(setError('Email ou mot de passe incorrect'));
-        Alert.alert('Erreur', 'Email ou mot de passe incorrect');
-        return;
-      }
-
-      const mockUserData = {
-        user: {
-          id: 1,
-          firstName: 'Jean',
-          lastName: 'Dupont',
-          email: email,
-          phone: '+33 6 12 34 56 78',
-          position: 'midfielder',
-          skillLevel: 'intermediate',
-          locationCity: 'Paris',
-        },
-        token: 'mock_jwt_token_' + Date.now(),
-        refreshToken: 'mock_refresh_token_' + Date.now(),
-      };
-
-      dispatch(loginSuccess(mockUserData));
-      Alert.alert(
-        'Connexion réussie',
-        `Bienvenue ${mockUserData.user.firstName} !`,
-      );
-    } catch (error) {
-      console.error('Erreur simulation:', error);
-      dispatch(setError('Erreur de simulation'));
+  const handleLogin = useCallback(async () => {
+    if (!validateForm()) {
+      return;
     }
-  }, [email, validateForm, dispatch]);
 
-  const handleRealLogin = useCallback(async () => {
-    if (!validateForm()) return;
+    const result = await login(email, password);
 
-    try {
-      dispatch(setLoading(true));
-
-      const response = await fetch('http://localhost:5000/api/auth/login', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          email: email.toLowerCase().trim(),
-          password,
-        }),
-      });
-
-      const data = await response.json();
-
-      if (response.ok) {
-        dispatch(loginSuccess(data));
-        Alert.alert('Connexion réussie', `Bienvenue ${data.user.firstName} !`);
-      } else {
-        dispatch(setError(data.error || 'Erreur de connexion'));
-        Alert.alert('Erreur', data.error || 'Erreur de connexion');
-      }
-    } catch (error) {
-      console.error('Erreur réseau:', error);
-      dispatch(setError('Erreur réseau'));
+    if (result.success) {
+      // Navigation automatique gérée par AppNavigator
+      console.log('✅ Connexion réussie');
+    } else {
+      // Afficher l'erreur à l'utilisateur
       Alert.alert(
         'Erreur de connexion',
-        'Impossible de se connecter au serveur.\nVoulez-vous essayer le mode démo ?',
-        [
-          { text: 'Réessayer', onPress: handleRealLogin },
-          { text: 'Mode démo', onPress: handleSimulatedLogin },
-          { text: 'Annuler', style: 'cancel' },
-        ],
+        result.error || 'Une erreur est survenue',
+        [{ text: 'OK' }],
       );
     }
-  }, [email, password, validateForm, dispatch, handleSimulatedLogin]);
+  }, [email, password, validateForm, login]);
 
   return (
-    <View style={styles.container}>
-      <StatusBar
-        barStyle="dark-content"
-        backgroundColor={COLORS.BACKGROUND_LIGHT}
-      />
+    <View style={[styles.container, { backgroundColor: COLORS.PRIMARY }]}>
+      <StatusBar barStyle="light-content" backgroundColor={COLORS.PRIMARY} />
 
       <KeyboardAvoidingView
         style={styles.keyboardView}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
         <ScrollView
-          style={styles.scrollView}
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          <View style={styles.content}>
-            {/* Header */}
-            <View style={styles.header}>
-              <View style={styles.logoContainer}>
-                <Icon name="dribbble" size={56} color={COLORS.WHITE} />
-              </View>
-
-              <Text style={styles.title}>Bon retour !</Text>
-              <Text style={styles.subtitle}>
-                Connectez-vous pour organiser vos matchs
-              </Text>
+          {/* Header */}
+          <View style={styles.header}>
+            <View style={styles.logoContainer}>
+              <Icon name="activity" size={48} color={COLORS.WHITE} />
             </View>
+            <Text style={styles.title}>Football Network</Text>
+            <Text style={styles.subtitle}>Connectez-vous à votre compte</Text>
+          </View>
 
-            {/* Dev Info */}
-            {__DEV__ && (
-              <InfoBox
-                type="warning"
-                title="Mode développement"
-                message="Champs pré-remplis pour les tests"
-              />
-            )}
-
-            {/* Global Error */}
+          {/* Card de connexion */}
+          <View style={[styles.card, { backgroundColor: COLORS.WHITE }]}>
+            {/* Afficher l'erreur globale si elle existe */}
             {error && (
               <InfoBox
                 type="error"
-                title="Erreur de connexion"
                 message={error}
+                style={{ marginBottom: DIMENSIONS.SPACING_MD }}
               />
             )}
 
-            {/* Form */}
-            <View style={styles.form}>
-              <ModernInput
-                label="Adresse email"
-                value={email}
-                onChangeText={handleEmailChange}
-                placeholder="votre@email.com"
-                keyboardType="email-address"
-                autoCapitalize="none"
-                autoCorrect={false}
-                error={errors.email}
-                leftIconName="mail"
-              />
+            {/* Formulaire */}
+            <ModernInput
+              icon="mail"
+              placeholder="Email"
+              value={email}
+              onChangeText={handleEmailChange}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              autoCorrect={false}
+              error={errors.email}
+              editable={!isLoading}
+            />
 
-              <ModernInput
-                label="Mot de passe"
-                value={password}
-                onChangeText={handlePasswordChange}
-                placeholder="••••••••"
-                secureTextEntry
-                error={errors.password}
-                leftIconName="lock"
-              />
+            <ModernInput
+              icon="lock"
+              placeholder="Mot de passe"
+              value={password}
+              onChangeText={handlePasswordChange}
+              secureTextEntry
+              error={errors.password}
+              editable={!isLoading}
+            />
 
-              <TouchableOpacity
-                onPress={() => navigation.navigate('ForgotPassword')}
-                style={styles.forgotPassword}
+            {/* Mot de passe oublié */}
+            <TouchableOpacity
+              style={styles.forgotPassword}
+              onPress={() => navigation.navigate('ForgotPassword')}
+              disabled={isLoading}
+            >
+              <Text
+                style={[styles.forgotPasswordText, { color: COLORS.PRIMARY }]}
               >
-                <Text style={styles.forgotPasswordText}>
-                  Mot de passe oublié ?
-                </Text>
-              </TouchableOpacity>
+                Mot de passe oublié ?
+              </Text>
+            </TouchableOpacity>
 
-              <ModernButton
-                title="Se connecter"
-                onPress={handleRealLogin}
-                disabled={isLoading}
-                isLoading={isLoading}
-                variant="primary"
-                leftIconName="log-in"
+            {/* Bouton de connexion */}
+            <ModernButton
+              title="Se connecter"
+              onPress={handleLogin}
+              variant="primary"
+              fullWidth
+              isLoading={isLoading}
+              disabled={isLoading}
+              leftIconName="log-in"
+            />
+
+            {/* Séparateur */}
+            <View style={styles.divider}>
+              <View
+                style={[
+                  styles.dividerLine,
+                  { backgroundColor: COLORS.BORDER_LIGHT },
+                ]}
               />
-
-              <View style={styles.divider}>
-                <View style={styles.dividerLine} />
-                <Text style={styles.dividerText}>ou</Text>
-                <View style={styles.dividerLine} />
-              </View>
-
-              <ModernButton
-                title="Mode démo"
-                onPress={handleSimulatedLogin}
-                disabled={isLoading}
-                variant="outline"
-                leftIconName="play-circle"
+              <Text style={[styles.dividerText, { color: COLORS.TEXT_MUTED }]}>
+                OU
+              </Text>
+              <View
+                style={[
+                  styles.dividerLine,
+                  { backgroundColor: COLORS.BORDER_LIGHT },
+                ]}
               />
             </View>
 
-            {/* Register Link */}
-            <View style={styles.footer}>
-              <Text style={styles.footerText}>Pas encore de compte ? </Text>
-              <TouchableOpacity onPress={() => navigation.navigate('Register')}>
-                <Text style={styles.footerLink}>S'inscrire</Text>
-              </TouchableOpacity>
-            </View>
+            {/* Bouton d'inscription */}
+            <TouchableOpacity
+              style={[styles.signupButton, { borderColor: COLORS.PRIMARY }]}
+              onPress={() => navigation.navigate('Register')}
+              disabled={isLoading}
+            >
+              <Icon name="user-plus" size={20} color={COLORS.PRIMARY} />
+              <Text
+                style={[styles.signupButtonText, { color: COLORS.PRIMARY }]}
+              >
+                Créer un compte
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Footer */}
+          <View style={styles.footer}>
+            <Text style={[styles.footerText, { color: COLORS.WHITE }]}>
+              En vous connectant, vous acceptez nos
+            </Text>
+            <TouchableOpacity>
+              <Text style={[styles.footerLink, { color: COLORS.WHITE }]}>
+                Conditions d'utilisation
+              </Text>
+            </TouchableOpacity>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -277,60 +217,52 @@ export const LoginScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.BACKGROUND_LIGHT,
   },
   keyboardView: {
     flex: 1,
   },
-  scrollView: {
-    flex: 1,
-  },
   scrollContent: {
     flexGrow: 1,
-  },
-  content: {
-    flex: 1,
     paddingHorizontal: DIMENSIONS.CONTAINER_PADDING,
+    paddingTop: Platform.OS === 'ios' ? 80 : 60,
+    paddingBottom: DIMENSIONS.SPACING_XXL,
   },
   header: {
     alignItems: 'center',
-    paddingTop: DIMENSIONS.SPACING_XXXL + DIMENSIONS.SPACING_LG,
-    paddingBottom: DIMENSIONS.SPACING_XL,
+    marginBottom: DIMENSIONS.SPACING_XXL,
   },
   logoContainer: {
-    width: 120,
-    height: 120,
-    borderRadius: DIMENSIONS.BORDER_RADIUS_FULL,
-    backgroundColor: COLORS.PRIMARY,
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: DIMENSIONS.SPACING_LG,
-    ...SHADOWS.LARGE,
   },
   title: {
     fontSize: FONTS.SIZE.XXXL,
     fontWeight: FONTS.WEIGHT.BOLD,
-    color: COLORS.TEXT_PRIMARY,
-    textAlign: 'center',
-    marginBottom: DIMENSIONS.SPACING_SM,
-    letterSpacing: -0.5,
+    color: COLORS.WHITE,
+    marginBottom: DIMENSIONS.SPACING_XS,
   },
   subtitle: {
     fontSize: FONTS.SIZE.MD,
-    color: COLORS.TEXT_SECONDARY,
-    textAlign: 'center',
-    lineHeight: FONTS.SIZE.MD * FONTS.LINE_HEIGHT.RELAXED,
+    color: COLORS.WHITE,
+    opacity: 0.9,
   },
-  form: {
-    marginBottom: DIMENSIONS.SPACING_XL,
+  card: {
+    borderRadius: DIMENSIONS.BORDER_RADIUS_XL,
+    padding: DIMENSIONS.SPACING_XL,
+    ...SHADOWS.LARGE,
   },
   forgotPassword: {
     alignSelf: 'flex-end',
     marginBottom: DIMENSIONS.SPACING_LG,
+    paddingVertical: DIMENSIONS.SPACING_XS,
   },
   forgotPasswordText: {
     fontSize: FONTS.SIZE.SM,
-    color: COLORS.PRIMARY,
     fontWeight: FONTS.WEIGHT.SEMIBOLD,
   },
   divider: {
@@ -341,28 +273,37 @@ const styles = StyleSheet.create({
   dividerLine: {
     flex: 1,
     height: 1,
-    backgroundColor: COLORS.DIVIDER,
   },
   dividerText: {
     fontSize: FONTS.SIZE.SM,
-    color: COLORS.TEXT_MUTED,
-    fontWeight: FONTS.WEIGHT.MEDIUM,
+    fontWeight: FONTS.WEIGHT.SEMIBOLD,
     marginHorizontal: DIMENSIONS.SPACING_MD,
   },
-  footer: {
+  signupButton: {
     flexDirection: 'row',
-    justifyContent: 'center',
     alignItems: 'center',
-    paddingBottom: DIMENSIONS.SPACING_XL,
+    justifyContent: 'center',
+    padding: DIMENSIONS.SPACING_SM,
+    borderRadius: DIMENSIONS.BORDER_RADIUS_MD,
+    borderWidth: 2,
+    gap: DIMENSIONS.SPACING_SM,
   },
-  footerText: {
-    fontSize: FONTS.SIZE.MD,
-    color: COLORS.TEXT_SECONDARY,
-    fontWeight: FONTS.WEIGHT.REGULAR,
-  },
-  footerLink: {
+  signupButtonText: {
     fontSize: FONTS.SIZE.MD,
     fontWeight: FONTS.WEIGHT.BOLD,
-    color: COLORS.PRIMARY,
+  },
+  footer: {
+    alignItems: 'center',
+    marginTop: DIMENSIONS.SPACING_XL,
+  },
+  footerText: {
+    fontSize: FONTS.SIZE.SM,
+    opacity: 0.8,
+    marginBottom: DIMENSIONS.SPACING_XXS,
+  },
+  footerLink: {
+    fontSize: FONTS.SIZE.SM,
+    fontWeight: FONTS.WEIGHT.SEMIBOLD,
+    textDecorationLine: 'underline',
   },
 });
