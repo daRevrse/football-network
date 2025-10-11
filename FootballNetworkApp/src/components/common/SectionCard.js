@@ -8,24 +8,14 @@ export const SectionCard = ({
   title,
   description,
   icon,
+  iconColor,
   children,
   style,
-  headerStyle,
-  contentStyle,
-  iconColor,
-  backgroundColor,
 }) => {
   return (
-    <View
-      style={[
-        styles.container,
-        { backgroundColor: backgroundColor || COLORS.WHITE },
-        style,
-      ]}
-    >
-      {/* Header */}
-      {(title || icon) && (
-        <View style={[styles.header, headerStyle]}>
+    <View style={[styles.container, style]}>
+      {(title || description || icon) && (
+        <View style={styles.header}>
           {icon && (
             <View
               style={[
@@ -33,14 +23,13 @@ export const SectionCard = ({
                 {
                   backgroundColor: iconColor
                     ? `${iconColor}20`
-                    : COLORS.PRIMARY_LIGHT,
+                    : `${COLORS.PRIMARY}20`,
                 },
               ]}
             >
-              <Icon name={icon} size={20} color={iconColor || COLORS.PRIMARY} />
+              <Icon name={icon} size={18} color={iconColor || COLORS.PRIMARY} />
             </View>
           )}
-
           <View style={styles.headerText}>
             {title && (
               <Text style={[styles.title, { color: COLORS.TEXT_PRIMARY }]}>
@@ -58,28 +47,27 @@ export const SectionCard = ({
         </View>
       )}
 
-      {/* Content */}
-      <View style={[styles.content, contentStyle]}>{children}</View>
+      <View style={[styles.content, { backgroundColor: COLORS.WHITE }]}>
+        {children}
+      </View>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
-    borderRadius: DIMENSIONS.BORDER_RADIUS_LG,
+    marginHorizontal: DIMENSIONS.PADDING_LG,
     marginBottom: DIMENSIONS.SPACING_MD,
-    ...SHADOWS.SMALL,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: DIMENSIONS.SPACING_MD,
-    paddingBottom: DIMENSIONS.SPACING_SM,
+    marginBottom: DIMENSIONS.SPACING_SM,
   },
   iconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: DIMENSIONS.SPACING_SM,
@@ -88,16 +76,16 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   title: {
-    fontSize: FONTS.SIZE.MD,
-    fontWeight: FONTS.WEIGHT.BOLD,
-    marginBottom: DIMENSIONS.SPACING_XXS,
+    fontSize: FONTS.SIZE_MD,
+    fontWeight: FONTS.WEIGHT_SEMIBOLD,
+    marginBottom: 2,
   },
   description: {
-    fontSize: FONTS.SIZE.SM,
-    lineHeight: FONTS.SIZE.SM * 1.4,
+    fontSize: FONTS.SIZE_SM,
   },
   content: {
-    paddingHorizontal: DIMENSIONS.SPACING_MD,
-    paddingBottom: DIMENSIONS.SPACING_MD,
+    borderRadius: DIMENSIONS.BORDER_RADIUS_MD,
+    padding: DIMENSIONS.PADDING_MD,
+    ...SHADOWS.SMALL,
   },
 });

@@ -1,4 +1,4 @@
-// ====== src/screens/profile/SettingsScreen.js ======
+// ====== src/screens/profile/SettingsScreen.js - NOUVEAU DESIGN ======
 import React, { useState, useCallback } from 'react';
 import {
   View,
@@ -10,19 +10,89 @@ import {
   Alert,
   Platform,
   StatusBar,
-  Linking,
 } from 'react-native';
-import { useSelector, useDispatch } from 'react-redux';
+import { useSelector } from 'react-redux';
 import Icon from 'react-native-vector-icons/Feather';
-import { COLORS, DIMENSIONS, FONTS, SHADOWS } from '../../styles/theme';
-import { SectionCard } from '../../components/common/SectionCard';
+import LinearGradient from 'react-native-linear-gradient';
+import { DIMENSIONS, FONTS, SHADOWS } from '../../styles/theme';
+
+// Composant MenuItem moderne
+const MenuItem = ({ icon, label, onPress, gradient, showChevron = true }) => (
+  <TouchableOpacity
+    style={styles.menuItem}
+    onPress={onPress}
+    activeOpacity={0.7}
+  >
+    <View style={styles.menuLeft}>
+      <LinearGradient
+        colors={gradient}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.menuIconContainer}
+      >
+        <Icon name={icon} size={20} color="#FFF" />
+      </LinearGradient>
+      <Text style={styles.menuLabel}>{label}</Text>
+    </View>
+    {showChevron && <Icon name="chevron-right" size={22} color="#CBD5E1" />}
+  </TouchableOpacity>
+);
+
+// Composant SwitchItem moderne
+const SwitchItem = ({
+  icon,
+  label,
+  description,
+  value,
+  onValueChange,
+  gradient,
+}) => (
+  <View style={styles.switchItem}>
+    <View style={styles.switchLeft}>
+      <LinearGradient
+        colors={gradient}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.switchIconContainer}
+      >
+        <Icon name={icon} size={20} color="#FFF" />
+      </LinearGradient>
+      <View style={styles.switchTextContainer}>
+        <Text style={styles.switchLabel}>{label}</Text>
+        {description && (
+          <Text style={styles.switchDescription}>{description}</Text>
+        )}
+      </View>
+    </View>
+    <Switch
+      value={value}
+      onValueChange={onValueChange}
+      trackColor={{ false: '#E5E7EB', true: '#86EFAC' }}
+      thumbColor={value ? '#22C55E' : '#F3F4F6'}
+      ios_backgroundColor="#E5E7EB"
+    />
+  </View>
+);
+
+// Composant Section
+const Section = ({ title, description, icon, children }) => (
+  <View style={styles.section}>
+    <View style={styles.sectionHeader}>
+      <Icon name={icon} size={20} color="#22C55E" />
+      <View style={styles.sectionHeaderText}>
+        <Text style={styles.sectionTitle}>{title}</Text>
+        {description && (
+          <Text style={styles.sectionDescription}>{description}</Text>
+        )}
+      </View>
+    </View>
+    <View style={styles.sectionContent}>{children}</View>
+  </View>
+);
 
 export const SettingsScreen = ({ navigation }) => {
-  const dispatch = useDispatch();
   const user = useSelector(state => state.auth.user);
-  const isDark = useSelector(state => state.theme?.isDark || false);
 
-  // États des paramètres
   const [notifications, setNotifications] = useState({
     push: true,
     email: true,
@@ -33,261 +103,70 @@ export const SettingsScreen = ({ navigation }) => {
   });
 
   const [preferences, setPreferences] = useState({
-    darkMode: isDark,
-    language: 'fr',
+    darkMode: false,
     soundEffects: true,
     vibration: true,
   });
 
-  // Toggle notification
   const toggleNotification = useCallback(key => {
     setNotifications(prev => ({
       ...prev,
       [key]: !prev[key],
     }));
-    // TODO: Sauvegarder en backend
   }, []);
 
-  // Toggle préférence
   const togglePreference = useCallback(key => {
-    setPreferences(prev => {
-      const newValue = !prev[key];
-
-      // Cas spécial pour le dark mode
-      if (key === 'darkMode') {
-        // TODO: Dispatch action pour changer le thème
-        // dispatch(toggleTheme());
-      }
-
-      return {
-        ...prev,
-        [key]: newValue,
-      };
-    });
+    setPreferences(prev => ({
+      ...prev,
+      [key]: !prev[key],
+    }));
   }, []);
 
-  // Changer la langue
   const handleChangeLanguage = useCallback(() => {
-    Alert.alert('Changer la langue', 'Quelle langue préférez-vous ?', [
-      {
-        text: 'Français',
-        onPress: () => setPreferences(prev => ({ ...prev, language: 'fr' })),
-      },
-      {
-        text: 'English',
-        onPress: () => setPreferences(prev => ({ ...prev, language: 'en' })),
-      },
-      {
-        text: 'Español',
-        onPress: () => setPreferences(prev => ({ ...prev, language: 'es' })),
-      },
+    Alert.alert('Langue', 'Quelle langue préférez-vous ?', [
+      { text: 'Français', onPress: () => {} },
+      { text: 'English', onPress: () => {} },
+      { text: 'Español', onPress: () => {} },
       { text: 'Annuler', style: 'cancel' },
     ]);
   }, []);
 
-  // Vider le cache
   const handleClearCache = useCallback(() => {
-    Alert.alert(
-      'Vider le cache',
-      "Êtes-vous sûr de vouloir vider le cache de l'application ?",
-      [
-        { text: 'Annuler', style: 'cancel' },
-        {
-          text: 'Vider',
-          style: 'destructive',
-          onPress: () => {
-            // TODO: Vider le cache
-            Alert.alert('Succès', 'Cache vidé avec succès');
-          },
-        },
-      ],
-    );
-  }, []);
-
-  // Ouvrir les liens externes
-  const openURL = useCallback(url => {
-    Linking.canOpenURL(url).then(supported => {
-      if (supported) {
-        Linking.openURL(url);
-      } else {
-        Alert.alert('Erreur', "Impossible d'ouvrir ce lien");
-      }
-    });
-  }, []);
-
-  // Contacter le support
-  const handleContactSupport = useCallback(() => {
-    const email = 'support@footballnetwork.com';
-    const subject = 'Support - Football Network';
-    openURL(`mailto:${email}?subject=${encodeURIComponent(subject)}`);
-  }, [openURL]);
-
-  // Déconnexion
-  const handleLogout = useCallback(() => {
-    Alert.alert('Déconnexion', 'Êtes-vous sûr de vouloir vous déconnecter ?', [
+    Alert.alert('Vider le cache', 'Êtes-vous sûr de vouloir vider le cache ?', [
       { text: 'Annuler', style: 'cancel' },
       {
-        text: 'Déconnexion',
+        text: 'Vider',
         style: 'destructive',
-        onPress: () => {
-          // TODO: Dispatch logout action
-          // dispatch(logout());
-          Alert.alert('Info', 'Déconnexion en cours...');
-        },
+        onPress: () => Alert.alert('Succès', 'Cache vidé'),
       },
     ]);
   }, []);
-
-  // Supprimer le compte
-  const handleDeleteAccount = useCallback(() => {
-    Alert.alert(
-      'Supprimer le compte',
-      'Cette action est IRRÉVERSIBLE. Toutes vos données seront définitivement supprimées.',
-      [
-        { text: 'Annuler', style: 'cancel' },
-        {
-          text: 'Supprimer',
-          style: 'destructive',
-          onPress: () => {
-            Alert.alert(
-              'Confirmation finale',
-              'Êtes-vous VRAIMENT sûr ? Cette action ne peut pas être annulée.',
-              [
-                { text: 'Non, garder mon compte', style: 'cancel' },
-                {
-                  text: 'Oui, supprimer',
-                  style: 'destructive',
-                  onPress: () => {
-                    // TODO: Appeler API de suppression
-                    Alert.alert('Info', 'Suppression du compte...');
-                  },
-                },
-              ],
-            );
-          },
-        },
-      ],
-    );
-  }, []);
-
-  // Composant pour les items de menu
-  const MenuItem = ({
-    icon,
-    label,
-    onPress,
-    rightText,
-    showChevron = true,
-    iconColor,
-    danger = false,
-  }) => (
-    <TouchableOpacity
-      style={[styles.menuItem, { backgroundColor: COLORS.WHITE }]}
-      onPress={onPress}
-    >
-      <View style={styles.menuLeft}>
-        <View
-          style={[
-            styles.menuIcon,
-            {
-              backgroundColor: danger
-                ? COLORS.ERROR_LIGHT
-                : iconColor
-                ? `${iconColor}20`
-                : COLORS.PRIMARY_LIGHT,
-            },
-          ]}
-        >
-          <Icon
-            name={icon}
-            size={20}
-            color={danger ? COLORS.ERROR : iconColor || COLORS.PRIMARY}
-          />
-        </View>
-        <Text
-          style={[
-            styles.menuLabel,
-            { color: danger ? COLORS.ERROR : COLORS.TEXT_PRIMARY },
-          ]}
-        >
-          {label}
-        </Text>
-      </View>
-
-      <View style={styles.menuRight}>
-        {rightText && (
-          <Text style={[styles.menuValue, { color: COLORS.TEXT_MUTED }]}>
-            {rightText}
-          </Text>
-        )}
-        {showChevron && (
-          <Icon name="chevron-right" size={20} color={COLORS.TEXT_MUTED} />
-        )}
-      </View>
-    </TouchableOpacity>
-  );
-
-  // Composant pour les items avec switch
-  const SwitchItem = ({ icon, label, value, onValueChange, iconColor }) => (
-    <View style={[styles.menuItem, { backgroundColor: COLORS.WHITE }]}>
-      <View style={styles.menuLeft}>
-        <View
-          style={[
-            styles.menuIcon,
-            {
-              backgroundColor: iconColor
-                ? `${iconColor}20`
-                : COLORS.PRIMARY_LIGHT,
-            },
-          ]}
-        >
-          <Icon name={icon} size={20} color={iconColor || COLORS.PRIMARY} />
-        </View>
-        <Text style={[styles.menuLabel, { color: COLORS.TEXT_PRIMARY }]}>
-          {label}
-        </Text>
-      </View>
-
-      <Switch
-        value={value}
-        onValueChange={onValueChange}
-        trackColor={{
-          false: COLORS.BORDER_LIGHT,
-          true: COLORS.PRIMARY,
-        }}
-        thumbColor={COLORS.WHITE}
-        ios_backgroundColor={COLORS.BORDER_LIGHT}
-      />
-    </View>
-  );
-
-  const languageLabels = {
-    fr: 'Français',
-    en: 'English',
-    es: 'Español',
-  };
 
   return (
-    <View
-      style={[styles.container, { backgroundColor: COLORS.BACKGROUND_LIGHT }]}
-    >
-      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" />
 
-      {/* Header */}
-      <View style={[styles.header, { backgroundColor: COLORS.PRIMARY }]}>
+      {/* Header avec gradient */}
+      <LinearGradient
+        colors={['#22C55E', '#16A34A']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0 }}
+        style={styles.header}
+      >
         <TouchableOpacity
           style={styles.backButton}
           onPress={() => navigation.goBack()}
         >
-          <Icon name="arrow-left" size={24} color={COLORS.WHITE} />
+          <Icon name="arrow-left" size={24} color="#FFF" />
         </TouchableOpacity>
 
         <View style={styles.headerContent}>
-          <Icon name="settings" size={24} color={COLORS.WHITE} />
+          <Icon name="settings" size={24} color="#FFF" />
           <Text style={styles.headerTitle}>Paramètres</Text>
         </View>
 
         <View style={{ width: 40 }} />
-      </View>
+      </LinearGradient>
 
       <ScrollView
         style={styles.scrollView}
@@ -295,197 +174,176 @@ export const SettingsScreen = ({ navigation }) => {
         showsVerticalScrollIndicator={false}
       >
         {/* Compte */}
-        <SectionCard
+        <Section
           title="Compte"
-          description="Gérez votre compte"
+          description="Gérez votre profil et sécurité"
           icon="user"
         >
           <MenuItem
-            icon="user"
+            icon="edit-3"
             label="Modifier mon profil"
             onPress={() => navigation.navigate('EditProfile')}
+            gradient={['#22C55E', '#16A34A']}
           />
           <MenuItem
             icon="lock"
             label="Changer le mot de passe"
-            onPress={() =>
-              Alert.alert('Info', 'Fonctionnalité bientôt disponible')
-            }
+            onPress={() => Alert.alert('Info', 'Bientôt disponible')}
+            gradient={['#3B82F6', '#2563EB']}
           />
           <MenuItem
             icon="shield"
             label="Confidentialité"
             onPress={() => navigation.navigate('Privacy')}
+            gradient={['#8B5CF6', '#7C3AED']}
           />
-        </SectionCard>
+        </Section>
 
         {/* Notifications */}
-        <SectionCard
+        <Section
           title="Notifications"
-          description="Gérez vos notifications"
+          description="Configurez vos préférences"
           icon="bell"
         >
           <SwitchItem
             icon="bell"
             label="Notifications push"
+            description="Recevoir des notifications sur l'app"
             value={notifications.push}
             onValueChange={() => toggleNotification('push')}
+            gradient={['#22C55E', '#16A34A']}
           />
           <SwitchItem
             icon="mail"
             label="Notifications email"
+            description="Recevoir des emails"
             value={notifications.email}
             onValueChange={() => toggleNotification('email')}
+            gradient={['#3B82F6', '#2563EB']}
           />
           <SwitchItem
             icon="calendar"
-            label="Invitations de match"
+            label="Invitations de matchs"
+            description="Être notifié des invitations"
             value={notifications.matchInvitations}
             onValueChange={() => toggleNotification('matchInvitations')}
+            gradient={['#F59E0B', '#D97706']}
           />
           <SwitchItem
             icon="users"
             label="Mises à jour d'équipe"
+            description="Activités de vos équipes"
             value={notifications.teamUpdates}
             onValueChange={() => toggleNotification('teamUpdates')}
+            gradient={['#8B5CF6', '#7C3AED']}
           />
           <SwitchItem
             icon="message-circle"
             label="Messages"
+            description="Nouveaux messages reçus"
             value={notifications.messages}
             onValueChange={() => toggleNotification('messages')}
+            gradient={['#EC4899', '#DB2777']}
           />
           <SwitchItem
             icon="tag"
-            label="Offres et promotions"
+            label="Offres promotionnelles"
+            description="Recevoir les promotions"
             value={notifications.marketing}
             onValueChange={() => toggleNotification('marketing')}
+            gradient={['#EF4444', '#DC2626']}
           />
-        </SectionCard>
+        </Section>
 
         {/* Préférences */}
-        <SectionCard
+        <Section
           title="Préférences"
-          description="Personnalisez l'application"
+          description="Personnalisez votre expérience"
           icon="sliders"
         >
           <SwitchItem
             icon="moon"
             label="Mode sombre"
+            description="Thème sombre automatique"
             value={preferences.darkMode}
             onValueChange={() => togglePreference('darkMode')}
-            iconColor="#8B5CF6"
+            gradient={['#6B7280', '#4B5563']}
           />
           <MenuItem
             icon="globe"
             label="Langue"
-            rightText={languageLabels[preferences.language]}
             onPress={handleChangeLanguage}
-            iconColor="#3B82F6"
+            gradient={['#3B82F6', '#2563EB']}
           />
           <SwitchItem
             icon="volume-2"
             label="Effets sonores"
+            description="Sons dans l'application"
             value={preferences.soundEffects}
             onValueChange={() => togglePreference('soundEffects')}
-            iconColor="#F59E0B"
+            gradient={['#F59E0B', '#D97706']}
           />
           <SwitchItem
             icon="smartphone"
-            label="Vibrations"
+            label="Vibration"
+            description="Retour haptique"
             value={preferences.vibration}
             onValueChange={() => togglePreference('vibration')}
-            iconColor="#10B981"
+            gradient={['#8B5CF6', '#7C3AED']}
           />
-        </SectionCard>
+        </Section>
 
-        {/* Application */}
-        <SectionCard
-          title="Application"
-          description="Infos et aide"
-          icon="info"
+        {/* Données */}
+        <Section
+          title="Données et stockage"
+          description="Gérez vos données"
+          icon="database"
         >
           <MenuItem
             icon="trash-2"
             label="Vider le cache"
             onPress={handleClearCache}
-            showChevron={false}
-            iconColor="#F59E0B"
+            gradient={['#EF4444', '#DC2626']}
           />
           <MenuItem
-            icon="life-buoy"
-            label="Centre d'aide"
-            onPress={() => navigation.navigate('Help')}
-            iconColor="#3B82F6"
+            icon="download"
+            label="Télécharger mes données"
+            onPress={() => Alert.alert('Info', 'Bientôt disponible')}
+            gradient={['#3B82F6', '#2563EB']}
           />
-          <MenuItem
-            icon="mail"
-            label="Contacter le support"
-            onPress={handleContactSupport}
-            showChevron={false}
-            iconColor="#8B5CF6"
-          />
+        </Section>
+
+        {/* À propos */}
+        <Section
+          title="À propos"
+          description="Infos sur l'application"
+          icon="info"
+        >
           <MenuItem
             icon="file-text"
             label="Conditions d'utilisation"
-            onPress={() => openURL('https://footballnetwork.com/terms')}
-            iconColor="#6B7280"
+            onPress={() => {}}
+            gradient={['#6B7280', '#4B5563']}
           />
           <MenuItem
             icon="shield"
             label="Politique de confidentialité"
-            onPress={() => openURL('https://footballnetwork.com/privacy')}
-            iconColor="#6B7280"
+            onPress={() => {}}
+            gradient={['#8B5CF6', '#7C3AED']}
           />
           <MenuItem
-            icon="info"
-            label="À propos"
-            rightText="v1.0.0"
-            onPress={() =>
-              Alert.alert(
-                'Football Network',
-                'Version 1.0.0\n© 2025 Football Network',
-              )
-            }
-            iconColor="#10B981"
+            icon="help-circle"
+            label="Centre d'aide"
+            onPress={() => navigation.navigate('Help')}
+            gradient={['#F59E0B', '#D97706']}
           />
-        </SectionCard>
+          <View style={styles.versionContainer}>
+            <Text style={styles.versionLabel}>Version</Text>
+            <Text style={styles.versionValue}>1.0.0</Text>
+          </View>
+        </Section>
 
-        {/* Actions dangereuses */}
-        <SectionCard
-          title="Zone de danger"
-          description="Actions irréversibles"
-          icon="alert-triangle"
-          iconColor={COLORS.ERROR}
-        >
-          <MenuItem
-            icon="log-out"
-            label="Se déconnecter"
-            onPress={handleLogout}
-            showChevron={false}
-            danger
-          />
-          <MenuItem
-            icon="trash-2"
-            label="Supprimer mon compte"
-            onPress={handleDeleteAccount}
-            showChevron={false}
-            danger
-          />
-        </SectionCard>
-
-        {/* Info utilisateur */}
-        <View style={styles.userInfo}>
-          <Text style={[styles.userInfoText, { color: COLORS.TEXT_MUTED }]}>
-            Connecté en tant que
-          </Text>
-          <Text style={[styles.userInfoEmail, { color: COLORS.TEXT_PRIMARY }]}>
-            {user?.email || 'utilisateur@example.com'}
-          </Text>
-        </View>
-
-        {/* Espace en bas */}
-        <View style={{ height: DIMENSIONS.SPACING_XXL }} />
+        <View style={{ height: 40 }} />
       </ScrollView>
     </View>
   );
@@ -494,86 +352,144 @@ export const SettingsScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#F9FAFB',
   },
   header: {
-    paddingTop: Platform.OS === 'ios' ? 60 : 40,
-    paddingBottom: DIMENSIONS.SPACING_MD,
-    paddingHorizontal: DIMENSIONS.CONTAINER_PADDING,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    ...SHADOWS.SMALL,
+    paddingTop: Platform.OS === 'ios' ? 50 : 20,
+    paddingBottom: 16,
+    paddingHorizontal: 20,
+    ...SHADOWS.MEDIUM,
   },
   backButton: {
     width: 40,
     height: 40,
     borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.2)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   headerContent: {
-    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: DIMENSIONS.SPACING_SM,
+    gap: 10,
   },
   headerTitle: {
-    fontSize: FONTS.SIZE.LG,
-    fontWeight: FONTS.WEIGHT.BOLD,
-    color: COLORS.WHITE,
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#FFF',
   },
   scrollView: {
     flex: 1,
   },
   scrollContent: {
-    paddingHorizontal: DIMENSIONS.CONTAINER_PADDING,
-    paddingVertical: DIMENSIONS.SPACING_LG,
+    padding: 20,
+  },
+  section: {
+    marginBottom: 24,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 16,
+    gap: 10,
+  },
+  sectionHeaderText: {
+    flex: 1,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#1F2937',
+    marginBottom: 2,
+  },
+  sectionDescription: {
+    fontSize: 13,
+    color: '#6B7280',
+  },
+  sectionContent: {
+    backgroundColor: '#FFF',
+    borderRadius: 16,
+    overflow: 'hidden',
+    ...SHADOWS.SMALL,
   },
   menuItem: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: DIMENSIONS.SPACING_MD,
+    padding: 16,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.BORDER_LIGHT,
+    borderBottomColor: '#F3F4F6',
   },
   menuLeft: {
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
   },
-  menuIcon: {
+  menuIconContainer: {
     width: 40,
     height: 40,
-    borderRadius: 20,
+    borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: DIMENSIONS.SPACING_MD,
+    marginRight: 12,
   },
   menuLabel: {
-    fontSize: FONTS.SIZE.MD,
-    fontWeight: FONTS.WEIGHT.MEDIUM,
-    flex: 1,
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#1F2937',
   },
-  menuRight: {
+  switchItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: DIMENSIONS.SPACING_SM,
+    justifyContent: 'space-between',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
   },
-  menuValue: {
-    fontSize: FONTS.SIZE.SM,
-  },
-  userInfo: {
+  switchLeft: {
+    flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: DIMENSIONS.SPACING_XL,
+    flex: 1,
+    marginRight: 12,
   },
-  userInfoText: {
-    fontSize: FONTS.SIZE.SM,
-    marginBottom: DIMENSIONS.SPACING_XXS,
+  switchIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
   },
-  userInfoEmail: {
-    fontSize: FONTS.SIZE.MD,
-    fontWeight: FONTS.WEIGHT.SEMIBOLD,
+  switchTextContainer: {
+    flex: 1,
+  },
+  switchLabel: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#1F2937',
+    marginBottom: 2,
+  },
+  switchDescription: {
+    fontSize: 13,
+    color: '#6B7280',
+  },
+  versionContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+  },
+  versionLabel: {
+    fontSize: 15,
+    color: '#6B7280',
+    marginLeft: 52,
+  },
+  versionValue: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#1F2937',
   },
 });

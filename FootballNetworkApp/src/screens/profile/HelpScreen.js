@@ -1,250 +1,231 @@
-// ====== src/screens/profile/HelpScreen.js ======
+// ====== src/screens/profile/HelpScreen.js - NOUVEAU DESIGN ======
 import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
+  TextInput,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  TextInput,
   Alert,
   Platform,
   StatusBar,
   Linking,
+  Dimensions,
 } from 'react-native';
 import { useSelector } from 'react-redux';
 import Icon from 'react-native-vector-icons/Feather';
-import { COLORS, DIMENSIONS, FONTS, SHADOWS } from '../../styles/theme';
-import { SectionCard } from '../../components/common/SectionCard';
+import LinearGradient from 'react-native-linear-gradient';
+import { DIMENSIONS, FONTS, SHADOWS } from '../../styles/theme';
+
+const { width } = Dimensions.get('window');
+
+// Composant CategoryCard
+const CategoryCard = ({ icon, title, description, onPress, gradient }) => (
+  <TouchableOpacity
+    style={styles.categoryCard}
+    onPress={onPress}
+    activeOpacity={0.7}
+  >
+    <LinearGradient
+      colors={gradient}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
+      style={styles.categoryGradient}
+    >
+      <View style={styles.categoryIconContainer}>
+        <Icon name={icon} size={28} color="#FFF" />
+      </View>
+      <Text style={styles.categoryTitle}>{title}</Text>
+      <Text style={styles.categoryDescription}>{description}</Text>
+    </LinearGradient>
+  </TouchableOpacity>
+);
+
+// Composant FAQItem
+const FAQItem = ({ question, answer, isOpen, onToggle }) => (
+  <TouchableOpacity
+    style={styles.faqItem}
+    onPress={onToggle}
+    activeOpacity={0.7}
+  >
+    <View style={styles.faqHeader}>
+      <View style={styles.faqIconContainer}>
+        <Icon name="help-circle" size={20} color="#22C55E" />
+      </View>
+      <Text style={styles.faqQuestion}>{question}</Text>
+      <Icon
+        name={isOpen ? 'chevron-up' : 'chevron-down'}
+        size={20}
+        color="#6B7280"
+      />
+    </View>
+    {isOpen && (
+      <View style={styles.faqAnswerContainer}>
+        <Text style={styles.faqAnswer}>{answer}</Text>
+      </View>
+    )}
+  </TouchableOpacity>
+);
+
+// Composant ActionCard
+const ActionCard = ({ icon, title, description, onPress, gradient }) => (
+  <TouchableOpacity
+    style={styles.actionCard}
+    onPress={onPress}
+    activeOpacity={0.7}
+  >
+    <LinearGradient
+      colors={gradient}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
+      style={styles.actionGradient}
+    >
+      <View style={styles.actionIconContainer}>
+        <Icon name={icon} size={24} color="#FFF" />
+      </View>
+      <View style={styles.actionContent}>
+        <Text style={styles.actionTitle}>{title}</Text>
+        <Text style={styles.actionDescription}>{description}</Text>
+      </View>
+      <Icon name="chevron-right" size={24} color="#FFF" />
+    </LinearGradient>
+  </TouchableOpacity>
+);
 
 export const HelpScreen = ({ navigation }) => {
-  const isDark = useSelector(state => state.theme?.isDark || false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [expandedFaq, setExpandedFaq] = useState(null);
+  const [openFaqId, setOpenFaqId] = useState(null);
 
-  // Catégories d'aide
   const helpCategories = [
     {
-      id: 'getting-started',
-      title: 'Premiers pas',
-      icon: 'play-circle',
-      color: '#3B82F6',
-      description: "Découvrez comment utiliser l'application",
-    },
-    {
-      id: 'teams',
-      title: 'Équipes',
-      icon: 'users',
-      color: '#10B981',
-      description: 'Créer et gérer vos équipes',
-    },
-    {
-      id: 'matches',
-      title: 'Matchs',
-      icon: 'calendar',
-      color: '#F59E0B',
-      description: 'Organiser et participer aux matchs',
-    },
-    {
-      id: 'account',
-      title: 'Mon compte',
-      icon: 'user',
-      color: '#8B5CF6',
-      description: 'Gérer votre profil et paramètres',
-    },
-  ];
-
-  // FAQ
-  const faqData = [
-    {
       id: '1',
-      category: 'getting-started',
-      question: 'Comment créer mon premier match ?',
-      answer:
-        'Pour créer un match, allez dans l\'onglet "Matchs" et cliquez sur le bouton "+". Remplissez les informations du match (date, lieu, équipes) et envoyez les invitations. C\'est aussi simple que ça !',
+      title: 'Compte',
+      description: 'Inscription & profil',
+      icon: 'user',
+      gradient: ['#22C55E', '#16A34A'],
     },
     {
       id: '2',
-      category: 'getting-started',
-      question: 'Comment inviter des joueurs dans mon équipe ?',
-      answer:
-        'Depuis la page de votre équipe, cliquez sur "Membres" puis sur le bouton "+". Entrez l\'adresse email du joueur à inviter. Il recevra une notification et pourra accepter ou refuser l\'invitation.',
+      title: 'Équipes',
+      description: 'Créer & gérer',
+      icon: 'users',
+      gradient: ['#F59E0B', '#D97706'],
     },
     {
       id: '3',
-      category: 'teams',
-      question: "Combien d'équipes puis-je créer ?",
-      answer:
-        "Avec un compte gratuit, vous pouvez créer jusqu'à 3 équipes. Les membres premium peuvent créer un nombre illimité d'équipes.",
+      title: 'Matchs',
+      description: 'Organiser & rejoindre',
+      icon: 'calendar',
+      gradient: ['#3B82F6', '#2563EB'],
     },
     {
       id: '4',
-      category: 'teams',
-      question: 'Comment changer le logo de mon équipe ?',
-      answer:
-        "Allez dans les paramètres de votre équipe, cliquez sur le logo actuel, puis sélectionnez une nouvelle image depuis votre galerie. L'image sera automatiquement redimensionnée.",
-    },
-    {
-      id: '5',
-      category: 'teams',
-      question: "Puis-je transférer la gestion d'une équipe ?",
-      answer:
-        "Oui, en tant qu'administrateur, vous pouvez promouvoir un membre en administrateur ou lui transférer complètement la gestion de l'équipe depuis la page des membres.",
-    },
-    {
-      id: '6',
-      category: 'matches',
-      question: 'Comment annuler un match ?',
-      answer:
-        'Depuis la page du match, cliquez sur les options (⋮) et sélectionnez "Annuler le match". Tous les participants recevront une notification d\'annulation.',
-    },
-    {
-      id: '7',
-      category: 'matches',
-      question: "Que se passe-t-il si personne n'accepte mon invitation ?",
-      answer:
-        "Les invitations de match expirent après 7 jours. Si personne n'accepte dans ce délai, le match sera automatiquement annulé. Vous pouvez aussi relancer les invitations depuis la page du match.",
-    },
-    {
-      id: '8',
-      category: 'matches',
-      question: "Comment noter un match après qu'il soit terminé ?",
-      answer:
-        "Après un match, vous recevrez une notification pour noter l'expérience. Vous pouvez noter le fair-play, l'organisation et laisser un commentaire. Ces notes aident les autres équipes à trouver de bons adversaires.",
-    },
-    {
-      id: '9',
-      category: 'account',
-      question: 'Comment changer mon mot de passe ?',
-      answer:
-        'Allez dans Paramètres > Compte > Changer le mot de passe. Vous devrez entrer votre mot de passe actuel puis le nouveau mot de passe deux fois pour confirmer.',
-    },
-    {
-      id: '10',
-      category: 'account',
-      question: 'Comment supprimer mon compte ?',
-      answer:
-        'Allez dans Paramètres > Compte > Supprimer mon compte. Attention : cette action est irréversible et supprimera toutes vos données (profil, équipes, matchs, messages).',
-    },
-    {
-      id: '11',
-      category: 'account',
-      question: 'Mes données sont-elles sécurisées ?',
-      answer:
-        'Absolument ! Nous utilisons le chiffrement SSL/TLS pour toutes les communications et stockons vos mots de passe de manière sécurisée. Vos données personnelles ne sont jamais partagées sans votre consentement.',
+      title: 'Notifications',
+      description: 'Paramètres',
+      icon: 'bell',
+      gradient: ['#8B5CF6', '#7C3AED'],
     },
   ];
 
-  // Filtrer les FAQ
-  const filteredFaq = faqData.filter(
-    faq =>
-      searchQuery === '' ||
-      faq.question.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      faq.answer.toLowerCase().includes(searchQuery.toLowerCase()),
-  );
+  const [faqItems] = useState([
+    {
+      id: '1',
+      question: 'Comment créer une équipe ?',
+      answer:
+        "Allez dans l'onglet Équipes, appuyez sur '+', remplissez les informations et invitez des joueurs.",
+    },
+    {
+      id: '2',
+      question: 'Comment inviter des joueurs ?',
+      answer:
+        "Dans votre équipe, appuyez sur 'Inviter', recherchez par nom ou invitez par email.",
+    },
+    {
+      id: '3',
+      question: 'Comment organiser un match ?',
+      answer:
+        "Allez dans Matchs, appuyez sur '+', choisissez les équipes, la date et le lieu.",
+    },
+    {
+      id: '4',
+      question: 'Comment modifier mon profil ?',
+      answer:
+        "Allez dans Profil, appuyez sur 'Modifier le profil', changez vos informations.",
+    },
+    {
+      id: '5',
+      question: 'Je ne reçois pas de notifications',
+      answer:
+        'Vérifiez Paramètres > Notifications et les autorisations de votre appareil.',
+    },
+  ]);
 
-  // Toggle FAQ
-  const toggleFaq = useCallback(id => {
-    setExpandedFaq(prev => (prev === id ? null : id));
+  const filteredFaq = searchQuery
+    ? faqItems.filter(
+        item =>
+          item.question.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          item.answer.toLowerCase().includes(searchQuery.toLowerCase()),
+      )
+    : faqItems;
+
+  const handleToggleFaq = useCallback(faqId => {
+    setOpenFaqId(prev => (prev === faqId ? null : faqId));
   }, []);
 
-  // Ouvrir une catégorie
-  const handleCategoryPress = useCallback(category => {
-    setSearchQuery('');
-    // Scroll to category section
-    Alert.alert('Info', `Section "${category.title}" bientôt disponible`);
-  }, []);
-
-  // Contacter le support
   const handleContactSupport = useCallback(() => {
-    const email = 'support@footballnetwork.com';
-    const subject = 'Demande de support';
-    const body = "Bonjour,\n\nJ'ai besoin d'aide concernant...\n\n";
-
-    Linking.openURL(
-      `mailto:${email}?subject=${encodeURIComponent(
-        subject,
-      )}&body=${encodeURIComponent(body)}`,
-    );
-  }, []);
-
-  // Ouvrir la documentation
-  const handleOpenDocumentation = useCallback(() => {
-    Linking.openURL('https://footballnetwork.com/docs');
-  }, []);
-
-  // Ouvrir les tutoriels vidéo
-  const handleOpenTutorials = useCallback(() => {
-    Linking.openURL('https://youtube.com/@footballnetwork');
-  }, []);
-
-  // Rejoindre la communauté
-  const handleJoinCommunity = useCallback(() => {
     Alert.alert(
-      'Rejoindre la communauté',
-      'Où souhaitez-vous nous rejoindre ?',
+      'Contacter le support',
+      'Comment souhaitez-vous nous contacter ?',
       [
         {
-          text: 'Discord',
-          onPress: () => Linking.openURL('https://discord.gg/footballnetwork'),
+          text: 'Email',
+          onPress: () => Linking.openURL('mailto:support@app.com'),
         },
         {
-          text: 'Facebook',
-          onPress: () =>
-            Linking.openURL('https://facebook.com/footballnetwork'),
-        },
-        {
-          text: 'Twitter',
-          onPress: () => Linking.openURL('https://twitter.com/footballnetwork'),
+          text: 'Chat',
+          onPress: () => Alert.alert('Info', 'Bientôt disponible'),
         },
         { text: 'Annuler', style: 'cancel' },
       ],
     );
   }, []);
 
-  // Signaler un bug
   const handleReportBug = useCallback(() => {
-    Alert.alert(
-      'Signaler un bug',
-      "Merci de nous aider à améliorer l'application ! Décrivez le problème rencontré.",
-      [
-        { text: 'Annuler', style: 'cancel' },
-        {
-          text: 'Envoyer',
-          onPress: () => {
-            // TODO: Ouvrir un formulaire de bug report
-            Alert.alert(
-              'Merci !',
-              "Votre signalement a été envoyé. Nous allons l'examiner rapidement.",
-            );
-          },
-        },
-      ],
-    );
+    Alert.alert('Signaler un bug', 'Décrivez le problème', [
+      { text: 'Annuler', style: 'cancel' },
+      {
+        text: 'Envoyer',
+        onPress: () => Alert.alert('Merci', 'Signalement envoyé'),
+      },
+    ]);
   }, []);
 
   return (
-    <View
-      style={[styles.container, { backgroundColor: COLORS.BACKGROUND_LIGHT }]}
-    >
-      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" />
 
       {/* Header */}
-      <View style={[styles.header, { backgroundColor: COLORS.PRIMARY }]}>
+      <LinearGradient
+        colors={['#F59E0B', '#D97706']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0 }}
+        style={styles.header}
+      >
         <TouchableOpacity
           style={styles.backButton}
           onPress={() => navigation.goBack()}
         >
-          <Icon name="arrow-left" size={24} color={COLORS.WHITE} />
+          <Icon name="arrow-left" size={24} color="#FFF" />
         </TouchableOpacity>
 
         <View style={styles.headerContent}>
-          <Icon name="help-circle" size={24} color={COLORS.WHITE} />
+          <Icon name="help-circle" size={24} color="#FFF" />
           <Text style={styles.headerTitle}>Centre d'aide</Text>
         </View>
 
         <View style={{ width: 40 }} />
-      </View>
+      </LinearGradient>
 
       <ScrollView
         style={styles.scrollView}
@@ -252,276 +233,106 @@ export const HelpScreen = ({ navigation }) => {
         showsVerticalScrollIndicator={false}
       >
         {/* Barre de recherche */}
-        <View
-          style={[styles.searchContainer, { backgroundColor: COLORS.WHITE }]}
-        >
-          <Icon name="search" size={20} color={COLORS.TEXT_MUTED} />
+        <View style={styles.searchContainer}>
+          <Icon name="search" size={20} color="#9CA3AF" />
           <TextInput
-            style={[styles.searchInput, { color: COLORS.TEXT_PRIMARY }]}
+            style={styles.searchInput}
             placeholder="Rechercher dans l'aide..."
-            placeholderTextColor={COLORS.TEXT_MUTED}
+            placeholderTextColor="#9CA3AF"
             value={searchQuery}
             onChangeText={setSearchQuery}
           />
           {searchQuery !== '' && (
             <TouchableOpacity onPress={() => setSearchQuery('')}>
-              <Icon name="x" size={20} color={COLORS.TEXT_MUTED} />
+              <Icon name="x" size={20} color="#9CA3AF" />
             </TouchableOpacity>
           )}
         </View>
 
-        {/* Catégories (visibles seulement si pas de recherche) */}
+        {/* Catégories */}
         {searchQuery === '' && (
-          <View style={styles.categoriesGrid}>
-            {helpCategories.map(category => (
-              <TouchableOpacity
-                key={category.id}
-                style={[styles.categoryCard, { backgroundColor: COLORS.WHITE }]}
-                onPress={() => handleCategoryPress(category)}
-              >
-                <View
-                  style={[
-                    styles.categoryIcon,
-                    { backgroundColor: `${category.color}20` },
-                  ]}
-                >
-                  <Icon name={category.icon} size={24} color={category.color} />
-                </View>
-                <Text
-                  style={[styles.categoryTitle, { color: COLORS.TEXT_PRIMARY }]}
-                >
-                  {category.title}
-                </Text>
-                <Text
-                  style={[
-                    styles.categoryDescription,
-                    { color: COLORS.TEXT_MUTED },
-                  ]}
-                >
-                  {category.description}
-                </Text>
-              </TouchableOpacity>
-            ))}
+          <View style={styles.categoriesSection}>
+            <Text style={styles.sectionTitle}>Catégories</Text>
+            <View style={styles.categoriesGrid}>
+              {helpCategories.map(category => (
+                <CategoryCard
+                  key={category.id}
+                  icon={category.icon}
+                  title={category.title}
+                  description={category.description}
+                  onPress={() => {}}
+                  gradient={category.gradient}
+                />
+              ))}
+            </View>
           </View>
         )}
 
         {/* FAQ */}
-        <SectionCard
-          title="Questions fréquentes"
-          description={`${filteredFaq.length} question${
-            filteredFaq.length > 1 ? 's' : ''
-          }`}
-          icon="message-circle"
-        >
+        <View style={styles.faqSection}>
+          <View style={styles.sectionHeader}>
+            <Icon name="message-circle" size={20} color="#22C55E" />
+            <Text style={styles.sectionTitle}>Questions fréquentes</Text>
+          </View>
+
           {filteredFaq.length > 0 ? (
-            filteredFaq.map((faq, index) => (
-              <TouchableOpacity
-                key={faq.id}
-                style={[
-                  styles.faqItem,
-                  {
-                    borderBottomWidth: index < filteredFaq.length - 1 ? 1 : 0,
-                    borderBottomColor: COLORS.BORDER_LIGHT,
-                  },
-                ]}
-                onPress={() => toggleFaq(faq.id)}
-              >
-                <View style={styles.faqHeader}>
-                  <Text
-                    style={[styles.faqQuestion, { color: COLORS.TEXT_PRIMARY }]}
-                  >
-                    {faq.question}
-                  </Text>
-                  <Icon
-                    name={
-                      expandedFaq === faq.id ? 'chevron-up' : 'chevron-down'
-                    }
-                    size={20}
-                    color={COLORS.TEXT_MUTED}
-                  />
-                </View>
-                {expandedFaq === faq.id && (
-                  <Text
-                    style={[styles.faqAnswer, { color: COLORS.TEXT_SECONDARY }]}
-                  >
-                    {faq.answer}
-                  </Text>
-                )}
-              </TouchableOpacity>
-            ))
+            <View style={styles.faqList}>
+              {filteredFaq.map(faq => (
+                <FAQItem
+                  key={faq.id}
+                  question={faq.question}
+                  answer={faq.answer}
+                  isOpen={openFaqId === faq.id}
+                  onToggle={() => handleToggleFaq(faq.id)}
+                />
+              ))}
+            </View>
           ) : (
             <View style={styles.emptyState}>
-              <Icon name="search" size={48} color={COLORS.TEXT_MUTED} />
-              <Text style={[styles.emptyText, { color: COLORS.TEXT_MUTED }]}>
-                Aucune question trouvée pour "{searchQuery}"
-              </Text>
+              <Icon name="search" size={56} color="#CBD5E1" />
+              <Text style={styles.emptyStateText}>Aucun résultat trouvé</Text>
             </View>
           )}
-        </SectionCard>
-
-        {/* Actions rapides */}
-        <SectionCard title="Besoin de plus d'aide ?" icon="life-buoy">
-          <TouchableOpacity
-            style={styles.actionButton}
-            onPress={handleContactSupport}
-          >
-            <View style={styles.actionLeft}>
-              <View
-                style={[
-                  styles.actionIcon,
-                  { backgroundColor: COLORS.PRIMARY_LIGHT },
-                ]}
-              >
-                <Icon name="mail" size={20} color={COLORS.PRIMARY} />
-              </View>
-              <View style={styles.actionContent}>
-                <Text
-                  style={[styles.actionTitle, { color: COLORS.TEXT_PRIMARY }]}
-                >
-                  Contacter le support
-                </Text>
-                <Text
-                  style={[
-                    styles.actionDescription,
-                    { color: COLORS.TEXT_MUTED },
-                  ]}
-                >
-                  Envoyez-nous un email
-                </Text>
-              </View>
-            </View>
-            <Icon name="chevron-right" size={20} color={COLORS.TEXT_MUTED} />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.actionButton}
-            onPress={handleOpenDocumentation}
-          >
-            <View style={styles.actionLeft}>
-              <View
-                style={[styles.actionIcon, { backgroundColor: '#3B82F620' }]}
-              >
-                <Icon name="book-open" size={20} color="#3B82F6" />
-              </View>
-              <View style={styles.actionContent}>
-                <Text
-                  style={[styles.actionTitle, { color: COLORS.TEXT_PRIMARY }]}
-                >
-                  Documentation complète
-                </Text>
-                <Text
-                  style={[
-                    styles.actionDescription,
-                    { color: COLORS.TEXT_MUTED },
-                  ]}
-                >
-                  Guides détaillés et tutoriels
-                </Text>
-              </View>
-            </View>
-            <Icon name="external-link" size={20} color={COLORS.TEXT_MUTED} />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.actionButton}
-            onPress={handleOpenTutorials}
-          >
-            <View style={styles.actionLeft}>
-              <View
-                style={[styles.actionIcon, { backgroundColor: '#EF444420' }]}
-              >
-                <Icon name="video" size={20} color="#EF4444" />
-              </View>
-              <View style={styles.actionContent}>
-                <Text
-                  style={[styles.actionTitle, { color: COLORS.TEXT_PRIMARY }]}
-                >
-                  Tutoriels vidéo
-                </Text>
-                <Text
-                  style={[
-                    styles.actionDescription,
-                    { color: COLORS.TEXT_MUTED },
-                  ]}
-                >
-                  Apprenez en vidéo
-                </Text>
-              </View>
-            </View>
-            <Icon name="external-link" size={20} color={COLORS.TEXT_MUTED} />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.actionButton}
-            onPress={handleJoinCommunity}
-          >
-            <View style={styles.actionLeft}>
-              <View
-                style={[styles.actionIcon, { backgroundColor: '#8B5CF620' }]}
-              >
-                <Icon name="users" size={20} color="#8B5CF6" />
-              </View>
-              <View style={styles.actionContent}>
-                <Text
-                  style={[styles.actionTitle, { color: COLORS.TEXT_PRIMARY }]}
-                >
-                  Rejoindre la communauté
-                </Text>
-                <Text
-                  style={[
-                    styles.actionDescription,
-                    { color: COLORS.TEXT_MUTED },
-                  ]}
-                >
-                  Discord, Facebook, Twitter
-                </Text>
-              </View>
-            </View>
-            <Icon name="chevron-right" size={20} color={COLORS.TEXT_MUTED} />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.actionButton, { borderBottomWidth: 0 }]}
-            onPress={handleReportBug}
-          >
-            <View style={styles.actionLeft}>
-              <View
-                style={[styles.actionIcon, { backgroundColor: '#F59E0B20' }]}
-              >
-                <Icon name="alert-circle" size={20} color="#F59E0B" />
-              </View>
-              <View style={styles.actionContent}>
-                <Text
-                  style={[styles.actionTitle, { color: COLORS.TEXT_PRIMARY }]}
-                >
-                  Signaler un bug
-                </Text>
-                <Text
-                  style={[
-                    styles.actionDescription,
-                    { color: COLORS.TEXT_MUTED },
-                  ]}
-                >
-                  Aidez-nous à améliorer l'app
-                </Text>
-              </View>
-            </View>
-            <Icon name="chevron-right" size={20} color={COLORS.TEXT_MUTED} />
-          </TouchableOpacity>
-        </SectionCard>
-
-        {/* Info */}
-        <View
-          style={[styles.infoBox, { backgroundColor: COLORS.PRIMARY_LIGHT }]}
-        >
-          <Icon name="info" size={20} color={COLORS.PRIMARY} />
-          <Text style={[styles.infoText, { color: COLORS.PRIMARY }]}>
-            Temps de réponse moyen du support : 24h
-          </Text>
         </View>
 
-        {/* Espace en bas */}
-        <View style={{ height: DIMENSIONS.SPACING_XXL }} />
+        {/* Actions */}
+        <View style={styles.actionsSection}>
+          <View style={styles.sectionHeader}>
+            <Icon name="life-buoy" size={20} color="#22C55E" />
+            <Text style={styles.sectionTitle}>Besoin d'aide ?</Text>
+          </View>
+
+          <ActionCard
+            icon="mail"
+            title="Contacter le support"
+            description="Email, Chat, Réseaux sociaux"
+            onPress={handleContactSupport}
+            gradient={['#22C55E', '#16A34A']}
+          />
+
+          <ActionCard
+            icon="alert-circle"
+            title="Signaler un bug"
+            description="Aidez-nous à améliorer l'app"
+            onPress={handleReportBug}
+            gradient={['#F59E0B', '#D97706']}
+          />
+        </View>
+
+        {/* Info */}
+        <View style={styles.infoBox}>
+          <LinearGradient
+            colors={['#3B82F615', '#3B82F605']}
+            style={styles.infoGradient}
+          >
+            <Icon name="info" size={20} color="#3B82F6" />
+            <Text style={styles.infoText}>
+              Temps de réponse moyen du support : 24h
+            </Text>
+          </LinearGradient>
+        </View>
+
+        <View style={{ height: 40 }} />
       </ScrollView>
     </View>
   );
@@ -530,159 +341,207 @@ export const HelpScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#F9FAFB',
   },
   header: {
-    paddingTop: Platform.OS === 'ios' ? 60 : 40,
-    paddingBottom: DIMENSIONS.SPACING_MD,
-    paddingHorizontal: DIMENSIONS.CONTAINER_PADDING,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    ...SHADOWS.SMALL,
+    paddingTop: Platform.OS === 'ios' ? 50 : 20,
+    paddingBottom: 16,
+    paddingHorizontal: 20,
+    ...SHADOWS.MEDIUM,
   },
   backButton: {
     width: 40,
     height: 40,
     borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.2)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   headerContent: {
-    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: DIMENSIONS.SPACING_SM,
+    gap: 10,
   },
   headerTitle: {
-    fontSize: FONTS.SIZE.LG,
-    fontWeight: FONTS.WEIGHT.BOLD,
-    color: COLORS.WHITE,
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#FFF',
   },
   scrollView: {
     flex: 1,
   },
   scrollContent: {
-    paddingHorizontal: DIMENSIONS.CONTAINER_PADDING,
-    paddingVertical: DIMENSIONS.SPACING_LG,
+    padding: 20,
   },
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: DIMENSIONS.SPACING_MD,
-    borderRadius: DIMENSIONS.BORDER_RADIUS_MD,
-    marginBottom: DIMENSIONS.SPACING_LG,
-    gap: DIMENSIONS.SPACING_SM,
+    backgroundColor: '#FFF',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 16,
+    marginBottom: 24,
+    gap: 12,
     ...SHADOWS.SMALL,
   },
   searchInput: {
     flex: 1,
-    fontSize: FONTS.SIZE.MD,
-    padding: 0,
+    fontSize: 15,
+    color: '#1F2937',
+  },
+  categoriesSection: {
+    marginBottom: 32,
+  },
+  sectionTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#1F2937',
+    marginBottom: 16,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 16,
   },
   categoriesGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: DIMENSIONS.SPACING_SM,
-    marginBottom: DIMENSIONS.SPACING_LG,
+    gap: 12,
   },
   categoryCard: {
-    width: '48%',
-    padding: DIMENSIONS.SPACING_MD,
-    borderRadius: DIMENSIONS.BORDER_RADIUS_MD,
-    alignItems: 'center',
+    width: (width - 52) / 2,
+    height: 140,
+    borderRadius: 16,
+    overflow: 'hidden',
     ...SHADOWS.SMALL,
   },
-  categoryIcon: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+  categoryGradient: {
+    flex: 1,
+    padding: 16,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: DIMENSIONS.SPACING_SM,
+  },
+  categoryIconContainer: {
+    marginBottom: 12,
   },
   categoryTitle: {
-    fontSize: FONTS.SIZE.MD,
-    fontWeight: FONTS.WEIGHT.BOLD,
-    marginBottom: DIMENSIONS.SPACING_XXS,
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#FFF',
+    marginBottom: 4,
     textAlign: 'center',
   },
   categoryDescription: {
-    fontSize: FONTS.SIZE.XS,
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.9)',
     textAlign: 'center',
-    lineHeight: FONTS.SIZE.XS * 1.4,
+  },
+  faqSection: {
+    marginBottom: 24,
+  },
+  faqList: {
+    backgroundColor: '#FFF',
+    borderRadius: 16,
+    overflow: 'hidden',
+    ...SHADOWS.SMALL,
   },
   faqItem: {
-    paddingVertical: DIMENSIONS.SPACING_MD,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
   },
   faqHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    padding: 16,
+  },
+  faqIconContainer: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: '#22C55E15',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
   },
   faqQuestion: {
     flex: 1,
-    fontSize: FONTS.SIZE.MD,
-    fontWeight: FONTS.WEIGHT.SEMIBOLD,
-    marginRight: DIMENSIONS.SPACING_SM,
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#1F2937',
+    marginRight: 8,
+  },
+  faqAnswerContainer: {
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+    paddingLeft: 64,
   },
   faqAnswer: {
-    fontSize: FONTS.SIZE.SM,
-    lineHeight: FONTS.SIZE.SM * 1.6,
-    marginTop: DIMENSIONS.SPACING_SM,
+    fontSize: 14,
+    color: '#6B7280',
+    lineHeight: 20,
   },
   emptyState: {
     alignItems: 'center',
-    paddingVertical: DIMENSIONS.SPACING_XXL,
+    paddingVertical: 48,
   },
-  emptyText: {
-    fontSize: FONTS.SIZE.SM,
-    marginTop: DIMENSIONS.SPACING_SM,
-    textAlign: 'center',
+  emptyStateText: {
+    fontSize: 15,
+    color: '#6B7280',
+    marginTop: 16,
   },
-  actionButton: {
+  actionsSection: {
+    marginBottom: 24,
+  },
+  actionCard: {
+    borderRadius: 16,
+    overflow: 'hidden',
+    marginBottom: 12,
+    ...SHADOWS.SMALL,
+  },
+  actionGradient: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: DIMENSIONS.SPACING_MD,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.BORDER_LIGHT,
+    padding: 16,
   },
-  actionLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  actionIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+  actionIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.2)',
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: DIMENSIONS.SPACING_MD,
+    marginRight: 16,
   },
   actionContent: {
     flex: 1,
   },
   actionTitle: {
-    fontSize: FONTS.SIZE.MD,
-    fontWeight: FONTS.WEIGHT.MEDIUM,
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#FFF',
     marginBottom: 2,
   },
   actionDescription: {
-    fontSize: FONTS.SIZE.SM,
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.9)',
   },
   infoBox: {
+    borderRadius: 16,
+    overflow: 'hidden',
+  },
+  infoGradient: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: DIMENSIONS.SPACING_SM,
-    padding: DIMENSIONS.SPACING_MD,
-    borderRadius: DIMENSIONS.BORDER_RADIUS_MD,
-    marginTop: DIMENSIONS.SPACING_LG,
+    padding: 16,
+    gap: 12,
   },
   infoText: {
     flex: 1,
-    fontSize: FONTS.SIZE.SM,
-    fontWeight: FONTS.WEIGHT.MEDIUM,
+    fontSize: 13,
+    color: '#1E40AF',
+    lineHeight: 20,
   },
 });

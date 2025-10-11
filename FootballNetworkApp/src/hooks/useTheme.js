@@ -1,97 +1,101 @@
 // ====== src/hooks/useTheme.js ======
 import { useColorScheme } from 'react-native';
-import { COLORS as LIGHT_COLORS } from '../styles/theme';
+import { useMemo } from 'react';
 
-// Couleurs pour le mode sombre
-const DARK_COLORS = {
-  // Primary
+const lightColors = {
   PRIMARY: '#22C55E',
-  PRIMARY_DARK: '#16A34A',
   PRIMARY_LIGHT: '#86EFAC',
-  PRIMARY_ULTRA_LIGHT: '#22C55E20',
+  PRIMARY_ULTRA_LIGHT: '#DCFCE7',
 
-  // Secondary
-  SECONDARY: '#3B82F6',
-  SECONDARY_DARK: '#2563EB',
-  SECONDARY_LIGHT: '#93C5FD',
+  SUCCESS: '#10B981',
+  SUCCESS_LIGHT: '#D1FAE5',
 
-  // Neutral
-  WHITE: '#1F2937',
-  BLACK: '#F9FAFB',
+  WARNING: '#F59E0B',
+  WARNING_LIGHT: '#FEF3C7',
 
-  // Background
-  BACKGROUND: '#111827',
-  BACKGROUND_LIGHT: '#1F2937',
-  BACKGROUND_GRAY: '#374151',
+  ERROR: '#EF4444',
+  ERROR_LIGHT: '#FEE2E2',
 
-  // Text
+  INFO: '#3B82F6',
+  INFO_LIGHT: '#DBEAFE',
+
+  TEXT_PRIMARY: '#1F2937',
+  TEXT_SECONDARY: '#6B7280',
+  TEXT_MUTED: '#9CA3AF',
+  TEXT_ULTRA_LIGHT: '#F3F4F6',
+
+  WHITE: '#FFFFFF',
+  BLACK: '#000000',
+
+  BACKGROUND: '#FFFFFF',
+  BACKGROUND_LIGHT: '#F9FAFB',
+  BACKGROUND_DARK: '#F3F4F6',
+
+  BORDER: '#E5E7EB',
+  BORDER_LIGHT: '#F3F4F6',
+};
+
+const darkColors = {
+  PRIMARY: '#22C55E',
+  PRIMARY_LIGHT: '#166534',
+  PRIMARY_ULTRA_LIGHT: '#052e16',
+
+  SUCCESS: '#10B981',
+  SUCCESS_LIGHT: '#064e3b',
+
+  WARNING: '#F59E0B',
+  WARNING_LIGHT: '#78350f',
+
+  ERROR: '#EF4444',
+  ERROR_LIGHT: '#7f1d1d',
+
+  INFO: '#3B82F6',
+  INFO_LIGHT: '#1e3a8a',
+
   TEXT_PRIMARY: '#F9FAFB',
   TEXT_SECONDARY: '#D1D5DB',
   TEXT_MUTED: '#9CA3AF',
-  TEXT_WHITE: '#1F2937',
-  TEXT_DISABLED: '#6B7280',
+  TEXT_ULTRA_LIGHT: '#374151',
 
-  // Status
-  ERROR: '#EF4444',
-  ERROR_LIGHT: '#7F1D1D',
-  ERROR_DARK: '#FCA5A5',
-  SUCCESS: '#10B981',
-  SUCCESS_LIGHT: '#065F46',
-  WARNING: '#F59E0B',
-  WARNING_LIGHT: '#78350F',
-  WARNING_DARK: '#FCD34D',
-  INFO: '#0284C7',
-  INFO_LIGHT: '#164E63',
-  INFO_DARK: '#67E8F9',
+  WHITE: '#1F2937',
+  BLACK: '#F9FAFB',
 
-  // UI Elements
+  BACKGROUND: '#111827',
+  BACKGROUND_LIGHT: '#1F2937',
+  BACKGROUND_DARK: '#0F172A',
+
   BORDER: '#374151',
-  BORDER_FOCUS: '#22C55E',
-  DIVIDER: '#374151',
-  OVERLAY: 'rgba(0, 0, 0, 0.7)',
-  CARD_SHADOW: 'rgba(0, 0, 0, 0.3)',
-  SHADOW_DARK: 'rgba(0, 0, 0, 0.5)',
+  BORDER_LIGHT: '#4B5563',
 };
 
-// Couleurs basées sur l'heure de la journée
-const getDayTimeColors = () => {
-  const hour = new Date().getHours();
-
-  // Nuit (22h - 6h) -> Mode sombre
-  if (hour >= 22 || hour < 6) {
-    return DARK_COLORS;
-  }
-
-  // Matin/Jour (6h - 22h) -> Mode clair
-  return LIGHT_COLORS;
-};
-
+/**
+ * Hook personnalisé pour gérer le thème de l'application
+ * @param {string} mode - 'light', 'dark', ou 'auto' (défaut)
+ * @returns {Object} { colors, isDark }
+ */
 export const useTheme = (mode = 'auto') => {
   const systemColorScheme = useColorScheme();
 
-  let colors;
+  const { colors, isDark } = useMemo(() => {
+    let isDarkMode = false;
 
-  switch (mode) {
-    case 'light':
-      colors = LIGHT_COLORS;
-      break;
-    case 'dark':
-      colors = DARK_COLORS;
-      break;
-    case 'time':
-      colors = getDayTimeColors();
-      break;
-    case 'auto':
-    default:
-      colors = systemColorScheme === 'dark' ? DARK_COLORS : LIGHT_COLORS;
-      break;
-  }
+    if (mode === 'auto') {
+      isDarkMode = systemColorScheme === 'dark';
+    } else if (mode === 'dark') {
+      isDarkMode = true;
+    } else if (mode === 'light') {
+      isDarkMode = false;
+    }
 
-  return {
-    colors,
-    isDark: colors === DARK_COLORS,
-    mode: colors === DARK_COLORS ? 'dark' : 'light',
-  };
+    return {
+      colors: isDarkMode ? darkColors : lightColors,
+      isDark: isDarkMode,
+    };
+  }, [mode, systemColorScheme]);
+
+  return { colors, isDark };
 };
 
-export { DARK_COLORS, LIGHT_COLORS };
+// Export des couleurs pour utilisation directe
+export const COLORS = lightColors;
+export const DARK_COLORS = darkColors;

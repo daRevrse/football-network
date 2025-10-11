@@ -4,162 +4,188 @@ import {
   View,
   Text,
   TextInput,
-  TouchableOpacity,
   StyleSheet,
+  TouchableOpacity,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import { COLORS, DIMENSIONS, FONTS, SHADOWS } from '../../styles/theme';
 
-export const ModernInput = React.memo(
-  ({
-    label,
-    value,
-    onChangeText,
-    placeholder,
-    error,
-    leftIconName,
-    rightIconName,
-    onRightIconPress,
-    secureTextEntry,
-    ...props
-  }) => {
-    const [isFocused, setIsFocused] = useState(false);
-    const [isSecure, setIsSecure] = useState(secureTextEntry);
+export const ModernInput = ({
+  label,
+  value,
+  onChangeText,
+  placeholder,
+  error,
+  leftIcon,
+  rightIcon,
+  onRightIconPress,
+  secureTextEntry,
+  keyboardType = 'default',
+  multiline = false,
+  numberOfLines = 1,
+  editable = true,
+  maxLength,
+  autoCapitalize = 'sentences',
+  autoCorrect = true,
+  style,
+  ...props
+}) => {
+  const [isFocused, setIsFocused] = useState(false);
+  const [isPasswordVisible, setIsPasswordVisible] = useState(!secureTextEntry);
 
-    const handleToggleSecure = () => {
-      setIsSecure(!isSecure);
-    };
+  const handleTogglePassword = () => {
+    setIsPasswordVisible(!isPasswordVisible);
+  };
 
-    return (
-      <View style={styles.container}>
-        {label && <Text style={styles.label}>{label}</Text>}
+  return (
+    <View style={[styles.container, style]}>
+      {label && (
+        <Text style={[styles.label, { color: COLORS.TEXT_PRIMARY }]}>
+          {label}
+        </Text>
+      )}
 
-        <View
-          style={[
-            styles.inputWrapper,
-            isFocused && styles.inputWrapperFocused,
-            error && styles.inputWrapperError,
-          ]}
-        >
-          {leftIconName && (
-            <View style={styles.leftIconContainer}>
-              <Icon
-                name={leftIconName}
-                size={DIMENSIONS.ICON_SIZE_SM}
-                color={
-                  error
-                    ? COLORS.ERROR
-                    : isFocused
-                    ? COLORS.PRIMARY
-                    : COLORS.TEXT_MUTED
-                }
-              />
-            </View>
-          )}
-
-          <TextInput
-            style={styles.input}
-            value={value}
-            onChangeText={onChangeText}
-            placeholder={placeholder}
-            placeholderTextColor={COLORS.TEXT_MUTED}
-            onFocus={() => setIsFocused(true)}
-            onBlur={() => setIsFocused(false)}
-            secureTextEntry={isSecure}
-            {...props}
+      <View
+        style={[
+          styles.inputContainer,
+          {
+            backgroundColor: editable ? COLORS.WHITE : COLORS.BACKGROUND_LIGHT,
+            borderColor: error
+              ? COLORS.ERROR
+              : isFocused
+              ? COLORS.PRIMARY
+              : COLORS.TEXT_ULTRA_LIGHT,
+          },
+          multiline && styles.inputContainerMultiline,
+        ]}
+      >
+        {leftIcon && (
+          <Icon
+            name={leftIcon}
+            size={20}
+            color={
+              error
+                ? COLORS.ERROR
+                : isFocused
+                ? COLORS.PRIMARY
+                : COLORS.TEXT_MUTED
+            }
+            style={styles.leftIcon}
           />
+        )}
 
-          {secureTextEntry && (
-            <TouchableOpacity
-              onPress={handleToggleSecure}
-              style={styles.rightIconContainer}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            >
-              <Icon
-                name={isSecure ? 'eye-off' : 'eye'}
-                size={DIMENSIONS.ICON_SIZE_SM}
-                color={COLORS.TEXT_MUTED}
-              />
-            </TouchableOpacity>
-          )}
+        <TextInput
+          style={[
+            styles.input,
+            { color: COLORS.TEXT_PRIMARY },
+            !editable && { color: COLORS.TEXT_MUTED },
+            multiline && styles.inputMultiline,
+          ]}
+          value={value}
+          onChangeText={onChangeText}
+          placeholder={placeholder}
+          placeholderTextColor={COLORS.TEXT_MUTED}
+          secureTextEntry={secureTextEntry && !isPasswordVisible}
+          keyboardType={keyboardType}
+          multiline={multiline}
+          numberOfLines={numberOfLines}
+          editable={editable}
+          maxLength={maxLength}
+          autoCapitalize={autoCapitalize}
+          autoCorrect={autoCorrect}
+          onFocus={() => setIsFocused(true)}
+          onBlur={() => setIsFocused(false)}
+          {...props}
+        />
 
-          {!secureTextEntry && rightIconName && (
-            <TouchableOpacity
-              onPress={onRightIconPress}
-              style={styles.rightIconContainer}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            >
-              <Icon
-                name={rightIconName}
-                size={DIMENSIONS.ICON_SIZE_SM}
-                color={COLORS.TEXT_MUTED}
-              />
-            </TouchableOpacity>
-          )}
-        </View>
+        {secureTextEntry && (
+          <TouchableOpacity
+            onPress={handleTogglePassword}
+            style={styles.rightIcon}
+          >
+            <Icon
+              name={isPasswordVisible ? 'eye-off' : 'eye'}
+              size={20}
+              color={COLORS.TEXT_MUTED}
+            />
+          </TouchableOpacity>
+        )}
 
-        {error && (
-          <View style={styles.errorContainer}>
-            <Icon name="alert-circle" size={16} color={COLORS.ERROR} />
-            <Text style={styles.errorText}>{error}</Text>
-          </View>
+        {rightIcon && !secureTextEntry && (
+          <TouchableOpacity onPress={onRightIconPress} style={styles.rightIcon}>
+            <Icon name={rightIcon} size={20} color={COLORS.TEXT_MUTED} />
+          </TouchableOpacity>
         )}
       </View>
-    );
-  },
-);
+
+      {error && (
+        <View style={styles.errorContainer}>
+          <Icon name="alert-circle" size={14} color={COLORS.ERROR} />
+          <Text style={[styles.errorText, { color: COLORS.ERROR }]}>
+            {error}
+          </Text>
+        </View>
+      )}
+
+      {maxLength && !error && (
+        <Text style={[styles.helperText, { color: COLORS.TEXT_MUTED }]}>
+          {value?.length || 0}/{maxLength}
+        </Text>
+      )}
+    </View>
+  );
+};
 
 const styles = StyleSheet.create({
   container: {
     marginBottom: DIMENSIONS.SPACING_MD,
   },
   label: {
-    fontSize: FONTS.SIZE.SM,
-    fontWeight: FONTS.WEIGHT.MEDIUM,
-    color: COLORS.TEXT_PRIMARY,
-    marginBottom: DIMENSIONS.SPACING_XXS,
-    letterSpacing: 0.2,
+    fontSize: FONTS.SIZE_SM,
+    fontWeight: FONTS.WEIGHT_MEDIUM,
+    marginBottom: DIMENSIONS.SPACING_XS,
   },
-  inputWrapper: {
+  inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    height: DIMENSIONS.INPUT_HEIGHT_SM,
-    backgroundColor: COLORS.WHITE,
+    borderWidth: 1.5,
     borderRadius: DIMENSIONS.BORDER_RADIUS_MD,
-    borderWidth: DIMENSIONS.BORDER_WIDTH_MEDIUM,
-    borderColor: COLORS.BORDER,
-    paddingHorizontal: DIMENSIONS.SPACING_SM,
+    paddingHorizontal: DIMENSIONS.PADDING_MD,
     ...SHADOWS.SMALL,
   },
-  inputWrapperFocused: {
-    borderColor: COLORS.PRIMARY,
-    ...SHADOWS.FOCUS,
+  inputContainerMultiline: {
+    alignItems: 'flex-start',
+    paddingVertical: DIMENSIONS.PADDING_SM,
   },
-  inputWrapperError: {
-    borderColor: COLORS.ERROR,
-    ...SHADOWS.SMALL,
-  },
-  leftIconContainer: {
+  leftIcon: {
     marginRight: DIMENSIONS.SPACING_SM,
   },
-  rightIconContainer: {
+  rightIcon: {
     marginLeft: DIMENSIONS.SPACING_SM,
+    padding: DIMENSIONS.PADDING_XS,
   },
   input: {
     flex: 1,
-    fontSize: FONTS.SIZE.MD,
-    color: COLORS.TEXT_PRIMARY,
-    fontWeight: FONTS.WEIGHT.REGULAR,
+    fontSize: FONTS.SIZE_MD,
+    paddingVertical: DIMENSIONS.PADDING_MD,
+  },
+  inputMultiline: {
+    minHeight: 100,
+    textAlignVertical: 'top',
+    paddingTop: DIMENSIONS.PADDING_MD,
   },
   errorContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     marginTop: DIMENSIONS.SPACING_XS,
+    gap: 4,
   },
   errorText: {
-    fontSize: FONTS.SIZE.SM,
-    color: COLORS.ERROR,
-    fontWeight: FONTS.WEIGHT.MEDIUM,
-    marginLeft: DIMENSIONS.SPACING_XXS,
+    fontSize: FONTS.SIZE_SM,
+  },
+  helperText: {
+    fontSize: FONTS.SIZE_XS,
+    textAlign: 'right',
+    marginTop: DIMENSIONS.SPACING_XS,
   },
 });

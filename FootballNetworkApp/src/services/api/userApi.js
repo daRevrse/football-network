@@ -28,6 +28,12 @@ class UserApiService {
             error: 'Utilisateur introuvable',
             code: 'NOT_FOUND',
           };
+        case 400:
+          return {
+            success: false,
+            error: data.error || 'Données invalides',
+            code: 'BAD_REQUEST',
+          };
         default:
           return {
             success: false,
@@ -81,11 +87,11 @@ class UserApiService {
       const data = await response.json();
 
       // Mettre à jour le cache local
-      await SecureStorage.setUser(data.user || data);
+      await SecureStorage.setUser(data);
 
       return {
         success: true,
-        data: data.user || data,
+        data: data,
       };
     } catch (error) {
       return this.handleApiError(error);
@@ -103,13 +109,32 @@ class UserApiService {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), this.timeout);
 
+      // Préparer les données - convertir les coordonnées si présentes
+      const requestBody = {
+        firstName: userData.firstName,
+        lastName: userData.lastName,
+        phone: userData.phone,
+        bio: userData.bio,
+        position: userData.position,
+        skillLevel: userData.skillLevel,
+        locationCity: userData.locationCity,
+      };
+
+      // Ajouter les coordonnées si disponibles
+      if (userData.coordinates) {
+        requestBody.coordinates = {
+          lat: userData.coordinates.lat,
+          lng: userData.coordinates.lng,
+        };
+      }
+
       const response = await fetch(`${this.baseURL}/users/profile`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify(userData),
+        body: JSON.stringify(requestBody),
         signal: controller.signal,
       });
 
@@ -124,11 +149,11 @@ class UserApiService {
       const data = await response.json();
 
       // Mettre à jour le cache local
-      await SecureStorage.setUser(data.user || data);
+      await SecureStorage.setUser(data);
 
       return {
         success: true,
-        data: data.user || data,
+        data: data,
       };
     } catch (error) {
       return this.handleApiError(error);
@@ -158,13 +183,13 @@ class UserApiService {
       });
 
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), this.timeout * 2); // Plus de temps pour l'upload
+      const timeoutId = setTimeout(() => controller.abort(), this.timeout * 3); // Plus de temps pour l'upload
 
       const response = await fetch(`${this.baseURL}/users/avatar`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,
-          // Ne pas définir Content-Type pour FormData, il sera automatique
+          // Ne pas définir Content-Type pour FormData
         },
         body: formData,
         signal: controller.signal,
@@ -180,9 +205,10 @@ class UserApiService {
 
       const data = await response.json();
 
+      // Retourner l'URL de l'avatar
       return {
         success: true,
-        data: data.avatarUrl || data.avatar || data,
+        data: data.avatarUrl || data.avatar || data.profilePicture,
       };
     } catch (error) {
       return this.handleApiError(error);
@@ -212,6 +238,19 @@ class UserApiService {
       clearTimeout(timeoutId);
 
       if (!response.ok) {
+        // Si l'endpoint n'existe pas encore, retourner des stats par défaut
+        if (response.status === 404) {
+          return {
+            success: true,
+            data: {
+              totalMatches: 0,
+              wins: 0,
+              goals: 0,
+              assists: 0,
+            },
+          };
+        }
+
         throw {
           response: { status: response.status, data: await response.json() },
         };
@@ -221,7 +260,103 @@ class UserApiService {
 
       return {
         success: true,
-        data: data.stats || data,
+        data: data,
+      };
+    } catch (error) {
+      // En cas d'erreur, retourner des stats par défaut
+      return {
+        success: true,
+        data: {
+          totalMatches: 0,
+          wins: 0,
+          goals: 0,
+          assists: 0,
+        },
+      };
+    }
+  }
+
+  // Rechercher des utilisateurs
+  async searchUsers(query, filters = {}) {
+    try {
+      const token = await SecureStorage.getToken();
+      if (!token) {
+        return { success: false, error: 'Non authentifié' };
+      }
+
+      // Construire les paramètres de requête
+      const params = new URLSearchParams({
+        q: query,
+        ...filters,
+      });
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), this.timeout);
+
+      const response = await fetch(
+        `${this.baseURL}/users/search?${params.toString()}`,
+        {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          signal: controller.signal,
+        },
+      );
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        throw {
+          response: { status: response.status, data: await response.json() },
+        };
+      }
+
+      const data = await response.json();
+
+      return {
+        success: true,
+        data: data,
+      };
+    } catch (error) {
+      return this.handleApiError(error);
+    }
+  }
+
+  // Récupérer un utilisateur par ID
+  async getUserById(userId) {
+    try {
+      const token = await SecureStorage.getToken();
+      if (!token) {
+        return { success: false, error: 'Non authentifié' };
+      }
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), this.timeout);
+
+      const response = await fetch(`${this.baseURL}/users/${userId}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        throw {
+          response: { status: response.status, data: await response.json() },
+        };
+      }
+
+      const data = await response.json();
+
+      return {
+        success: true,
+        data: data,
       };
     } catch (error) {
       return this.handleApiError(error);
@@ -240,25 +375,30 @@ class UserApiService {
       const timeoutId = setTimeout(() => controller.abort(), this.timeout);
 
       const response = await fetch(`${this.baseURL}/users/change-password`, {
-        method: 'POST',
+        method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ currentPassword, newPassword }),
+        body: JSON.stringify({
+          currentPassword,
+          newPassword,
+        }),
         signal: controller.signal,
       });
 
       clearTimeout(timeoutId);
 
       if (!response.ok) {
+        const errorData = await response.json();
         throw {
-          response: { status: response.status, data: await response.json() },
+          response: { status: response.status, data: errorData },
         };
       }
 
       return {
         success: true,
+        message: 'Mot de passe modifié avec succès',
       };
     } catch (error) {
       return this.handleApiError(error);
@@ -289,8 +429,9 @@ class UserApiService {
       clearTimeout(timeoutId);
 
       if (!response.ok) {
+        const errorData = await response.json();
         throw {
-          response: { status: response.status, data: await response.json() },
+          response: { status: response.status, data: errorData },
         };
       }
 
@@ -299,6 +440,7 @@ class UserApiService {
 
       return {
         success: true,
+        message: 'Compte supprimé avec succès',
       };
     } catch (error) {
       return this.handleApiError(error);
@@ -306,4 +448,5 @@ class UserApiService {
   }
 }
 
-export const userApi = new UserApiService();
+// Export singleton
+export const UserApi = new UserApiService();

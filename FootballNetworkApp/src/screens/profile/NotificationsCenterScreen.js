@@ -1,4 +1,4 @@
-// ====== src/screens/profile/NotificationsCenterScreen.js ======
+// ====== src/screens/profile/NotificationsCenterScreen.js - NOUVEAU DESIGN ======
 import React, { useState, useCallback } from 'react';
 import {
   View,
@@ -13,15 +13,114 @@ import {
 } from 'react-native';
 import { useSelector } from 'react-redux';
 import Icon from 'react-native-vector-icons/Feather';
-import { COLORS, DIMENSIONS, FONTS, SHADOWS } from '../../styles/theme';
+import LinearGradient from 'react-native-linear-gradient';
+import { DIMENSIONS, FONTS, SHADOWS } from '../../styles/theme';
+
+// Helper pour formater les dates
+const formatTimestamp = timestamp => {
+  const now = new Date();
+  const date = new Date(timestamp);
+  const diffMs = now - date;
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMs / 3600000);
+  const diffDays = Math.floor(diffMs / 86400000);
+
+  if (diffMins < 1) return 'Maintenant';
+  if (diffMins < 60) return `${diffMins} min`;
+  if (diffHours < 24) return `${diffHours}h`;
+  if (diffDays < 7) return `${diffDays}j`;
+
+  return date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
+};
+
+// Helper pour les types de notifications
+const getNotificationTypeInfo = type => {
+  const types = {
+    match_invitation: { icon: 'calendar', gradient: ['#22C55E', '#16A34A'] },
+    team_invitation: { icon: 'users', gradient: ['#F59E0B', '#D97706'] },
+    match_confirmed: { icon: 'check-circle', gradient: ['#22C55E', '#16A34A'] },
+    match_cancelled: { icon: 'x-circle', gradient: ['#EF4444', '#DC2626'] },
+    team_update: { icon: 'info', gradient: ['#3B82F6', '#2563EB'] },
+    new_message: { icon: 'message-circle', gradient: ['#EC4899', '#DB2777'] },
+    system: { icon: 'bell', gradient: ['#6B7280', '#4B5563'] },
+  };
+
+  return types[type] || types.system;
+};
+
+// Composant NotificationItem
+const NotificationItem = ({ notification, onPress, onDelete }) => {
+  const typeInfo = getNotificationTypeInfo(notification.type);
+
+  return (
+    <TouchableOpacity
+      style={[
+        styles.notificationCard,
+        !notification.read && styles.notificationCardUnread,
+      ]}
+      onPress={() => onPress(notification)}
+      onLongPress={() => onDelete(notification.id)}
+      activeOpacity={0.7}
+    >
+      <LinearGradient
+        colors={typeInfo.gradient}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.notificationIcon}
+      >
+        <Icon name={typeInfo.icon} size={22} color="#FFF" />
+      </LinearGradient>
+
+      <View style={styles.notificationContent}>
+        <View style={styles.notificationHeader}>
+          <Text style={styles.notificationTitle} numberOfLines={1}>
+            {notification.title}
+          </Text>
+          {!notification.read && <View style={styles.unreadDot} />}
+        </View>
+
+        <Text style={styles.notificationMessage} numberOfLines={2}>
+          {notification.message}
+        </Text>
+
+        <Text style={styles.notificationTime}>
+          {formatTimestamp(notification.timestamp)}
+        </Text>
+      </View>
+    </TouchableOpacity>
+  );
+};
+
+// Composant FilterChip
+const FilterChip = ({ icon, label, active, onPress, gradient }) => (
+  <TouchableOpacity
+    style={[styles.filterChip, active && styles.filterChipActive]}
+    onPress={onPress}
+    activeOpacity={0.7}
+  >
+    {active ? (
+      <LinearGradient
+        colors={gradient}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0 }}
+        style={styles.filterChipGradient}
+      >
+        <Icon name={icon} size={16} color="#FFF" />
+        <Text style={styles.filterChipTextActive}>{label}</Text>
+      </LinearGradient>
+    ) : (
+      <View style={styles.filterChipContent}>
+        <Icon name={icon} size={16} color="#6B7280" />
+        <Text style={styles.filterChipText}>{label}</Text>
+      </View>
+    )}
+  </TouchableOpacity>
+);
 
 export const NotificationsCenterScreen = ({ navigation }) => {
-  const isDark = useSelector(state => state.theme?.isDark || false);
-
   const [refreshing, setRefreshing] = useState(false);
-  const [selectedFilter, setSelectedFilter] = useState('all'); // all, unread, match, team, system
+  const [selectedFilter, setSelectedFilter] = useState('all');
 
-  // Données fictives des notifications (à remplacer par des données du backend)
   const [notifications, setNotifications] = useState([
     {
       id: '1',
@@ -30,7 +129,6 @@ export const NotificationsCenterScreen = ({ navigation }) => {
       message: 'Les Tigres vous invitent à un match le 15 octobre à 18h00',
       timestamp: '2024-10-08T14:30:00',
       read: false,
-      data: { matchId: '123', teamName: 'Les Tigres' },
     },
     {
       id: '2',
@@ -39,97 +137,55 @@ export const NotificationsCenterScreen = ({ navigation }) => {
       message: 'FC Lions vous invite à rejoindre leur équipe',
       timestamp: '2024-10-08T10:15:00',
       read: false,
-      data: { teamId: '456', teamName: 'FC Lions' },
     },
     {
       id: '3',
       type: 'match_confirmed',
       title: 'Match confirmé',
-      message: 'Votre match contre Les Aigles est confirmé pour demain à 16h00',
+      message: 'Match contre Les Aigles confirmé pour demain à 16h00',
       timestamp: '2024-10-07T18:45:00',
       read: true,
-      data: { matchId: '789', teamName: 'Les Aigles' },
     },
     {
       id: '4',
-      type: 'match_cancelled',
-      title: 'Match annulé',
-      message: 'Le match du 12 octobre contre Les Panthères a été annulé',
-      timestamp: '2024-10-07T14:20:00',
-      read: true,
-      data: { matchId: '321', teamName: 'Les Panthères' },
-    },
-    {
-      id: '5',
-      type: 'team_update',
-      title: "Mise à jour d'équipe",
-      message: 'Votre équipe FC Lions a un nouveau logo',
-      timestamp: '2024-10-06T16:30:00',
-      read: true,
-      data: { teamId: '456' },
-    },
-    {
-      id: '6',
-      type: 'new_message',
-      title: 'Nouveau message',
-      message: 'Jean Dupont : "Salut, prêt pour le match de demain ?"',
-      timestamp: '2024-10-06T12:00:00',
-      read: true,
-      data: { matchId: '789', userId: '999' },
-    },
-    {
-      id: '7',
       type: 'system',
       title: 'Mise à jour disponible',
       message: "Une nouvelle version de l'application est disponible",
       timestamp: '2024-10-05T09:00:00',
       read: true,
-      data: {},
     },
   ]);
 
-  // Filtrer les notifications
   const filteredNotifications = notifications.filter(notif => {
     if (selectedFilter === 'unread') return !notif.read;
     if (selectedFilter === 'match') return notif.type.includes('match');
     if (selectedFilter === 'team') return notif.type.includes('team');
     if (selectedFilter === 'system') return notif.type === 'system';
-    return true; // all
+    return true;
   });
 
-  // Stats
   const unreadCount = notifications.filter(n => !n.read).length;
 
-  // Rafraîchir
   const onRefresh = useCallback(() => {
     setRefreshing(true);
-    // TODO: Recharger les notifications depuis l'API
     setTimeout(() => setRefreshing(false), 1000);
   }, []);
 
-  // Marquer une notification comme lue
   const markAsRead = useCallback(notificationId => {
     setNotifications(prev =>
       prev.map(notif =>
         notif.id === notificationId ? { ...notif, read: true } : notif,
       ),
     );
-    // TODO: Appeler l'API pour marquer comme lue
   }, []);
 
-  // Marquer toutes comme lues
   const markAllAsRead = useCallback(() => {
     setNotifications(prev => prev.map(notif => ({ ...notif, read: true })));
-    // TODO: Appeler l'API pour marquer toutes comme lues
-    Alert.alert(
-      'Succès',
-      'Toutes les notifications ont été marquées comme lues',
-    );
+    Alert.alert('Succès', 'Toutes les notifications sont marquées comme lues');
   }, []);
 
-  // Supprimer une notification
   const deleteNotification = useCallback(notificationId => {
-    Alert.alert('Supprimer', 'Voulez-vous supprimer cette notification ?', [
+    Alert.alert('Supprimer', 'Supprimer cette notification ?', [
       { text: 'Annuler', style: 'cancel' },
       {
         text: 'Supprimer',
@@ -138,144 +194,52 @@ export const NotificationsCenterScreen = ({ navigation }) => {
           setNotifications(prev =>
             prev.filter(notif => notif.id !== notificationId),
           );
-          // TODO: Appeler l'API pour supprimer
         },
       },
     ]);
   }, []);
 
-  // Tout supprimer
   const clearAll = useCallback(() => {
-    Alert.alert(
-      'Tout supprimer',
-      'Voulez-vous supprimer toutes les notifications ?',
-      [
-        { text: 'Annuler', style: 'cancel' },
-        {
-          text: 'Supprimer',
-          style: 'destructive',
-          onPress: () => {
-            setNotifications([]);
-            // TODO: Appeler l'API pour tout supprimer
-          },
-        },
-      ],
-    );
+    Alert.alert('Tout supprimer', 'Supprimer toutes les notifications ?', [
+      { text: 'Annuler', style: 'cancel' },
+      {
+        text: 'Supprimer',
+        style: 'destructive',
+        onPress: () => setNotifications([]),
+      },
+    ]);
   }, []);
 
-  // Gérer le clic sur une notification
   const handleNotificationPress = useCallback(
     notification => {
-      // Marquer comme lue
       if (!notification.read) {
         markAsRead(notification.id);
       }
-
       // Navigation selon le type
-      switch (notification.type) {
-        case 'match_invitation':
-        case 'match_confirmed':
-        case 'match_cancelled':
-          // TODO: Navigation vers le détail du match
-          Alert.alert(
-            'Info',
-            `Navigation vers le match ${notification.data.matchId}`,
-          );
-          // navigation.navigate('MatchDetail', { matchId: notification.data.matchId });
-          break;
-
-        case 'team_invitation':
-        case 'team_update':
-          // TODO: Navigation vers le détail de l'équipe
-          Alert.alert(
-            'Info',
-            `Navigation vers l\'équipe ${notification.data.teamId}`,
-          );
-          // navigation.navigate('TeamDetail', { teamId: notification.data.teamId });
-          break;
-
-        case 'new_message':
-          // TODO: Navigation vers le chat
-          Alert.alert('Info', 'Navigation vers le chat');
-          break;
-
-        case 'system':
-          // TODO: Action système
-          Alert.alert('Info', notification.message);
-          break;
-
-        default:
-          break;
-      }
     },
     [markAsRead],
   );
 
-  // Obtenir l'icône selon le type
-  const getNotificationIcon = type => {
-    const icons = {
-      match_invitation: 'calendar',
-      match_confirmed: 'check-circle',
-      match_cancelled: 'x-circle',
-      team_invitation: 'users',
-      team_update: 'bell',
-      new_message: 'message-circle',
-      system: 'info',
-    };
-    return icons[type] || 'bell';
-  };
-
-  // Obtenir la couleur selon le type
-  const getNotificationColor = type => {
-    const colors = {
-      match_invitation: COLORS.PRIMARY,
-      match_confirmed: COLORS.SUCCESS,
-      match_cancelled: COLORS.ERROR,
-      team_invitation: COLORS.WARNING,
-      team_update: '#3B82F6',
-      new_message: '#8B5CF6',
-      system: '#6B7280',
-    };
-    return colors[type] || COLORS.PRIMARY;
-  };
-
-  // Formater la date
-  const formatTimestamp = timestamp => {
-    const date = new Date(timestamp);
-    const now = new Date();
-    const diffMs = now - date;
-    const diffMins = Math.floor(diffMs / 60000);
-    const diffHours = Math.floor(diffMs / 3600000);
-    const diffDays = Math.floor(diffMs / 86400000);
-
-    if (diffMins < 1) return "À l'instant";
-    if (diffMins < 60) return `Il y a ${diffMins} min`;
-    if (diffHours < 24) return `Il y a ${diffHours}h`;
-    if (diffDays < 7) return `Il y a ${diffDays}j`;
-
-    return date.toLocaleDateString('fr-FR', {
-      day: 'numeric',
-      month: 'short',
-    });
-  };
-
   return (
-    <View
-      style={[styles.container, { backgroundColor: COLORS.BACKGROUND_LIGHT }]}
-    >
-      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" />
 
       {/* Header */}
-      <View style={[styles.header, { backgroundColor: COLORS.PRIMARY }]}>
+      <LinearGradient
+        colors={['#3B82F6', '#2563EB']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0 }}
+        style={styles.header}
+      >
         <TouchableOpacity
           style={styles.backButton}
           onPress={() => navigation.goBack()}
         >
-          <Icon name="arrow-left" size={24} color={COLORS.WHITE} />
+          <Icon name="arrow-left" size={24} color="#FFF" />
         </TouchableOpacity>
 
         <View style={styles.headerContent}>
-          <Icon name="bell" size={24} color={COLORS.WHITE} />
+          <Icon name="bell" size={24} color="#FFF" />
           <Text style={styles.headerTitle}>Notifications</Text>
           {unreadCount > 0 && (
             <View style={styles.badge}>
@@ -284,180 +248,57 @@ export const NotificationsCenterScreen = ({ navigation }) => {
           )}
         </View>
 
-        <TouchableOpacity
-          style={styles.moreButton}
-          onPress={() =>
-            Alert.alert('Options', 'Que voulez-vous faire ?', [
-              { text: 'Tout marquer comme lu', onPress: markAllAsRead },
-              {
-                text: 'Tout supprimer',
-                onPress: clearAll,
-                style: 'destructive',
-              },
-              { text: 'Annuler', style: 'cancel' },
-            ])
-          }
-        >
-          <Icon name="more-vertical" size={24} color={COLORS.WHITE} />
+        <TouchableOpacity style={styles.headerButton} onPress={markAllAsRead}>
+          <Icon name="check-circle" size={20} color="#FFF" />
         </TouchableOpacity>
-      </View>
+      </LinearGradient>
 
       {/* Filtres */}
       <View style={styles.filtersContainer}>
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.filtersContent}
+          contentContainerStyle={styles.filtersScroll}
         >
-          <TouchableOpacity
-            style={[
-              styles.filterChip,
-              {
-                backgroundColor:
-                  selectedFilter === 'all' ? COLORS.PRIMARY : COLORS.WHITE,
-              },
-            ]}
+          <FilterChip
+            icon="list"
+            label="Toutes"
+            active={selectedFilter === 'all'}
             onPress={() => setSelectedFilter('all')}
-          >
-            <Text
-              style={[
-                styles.filterChipText,
-                {
-                  color:
-                    selectedFilter === 'all'
-                      ? COLORS.WHITE
-                      : COLORS.TEXT_PRIMARY,
-                },
-              ]}
-            >
-              Toutes ({notifications.length})
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[
-              styles.filterChip,
-              {
-                backgroundColor:
-                  selectedFilter === 'unread' ? COLORS.ERROR : COLORS.WHITE,
-              },
-            ]}
+            gradient={['#3B82F6', '#2563EB']}
+          />
+          <FilterChip
+            icon="alert-circle"
+            label="Non lues"
+            active={selectedFilter === 'unread'}
             onPress={() => setSelectedFilter('unread')}
-          >
-            <Text
-              style={[
-                styles.filterChipText,
-                {
-                  color:
-                    selectedFilter === 'unread'
-                      ? COLORS.WHITE
-                      : COLORS.TEXT_PRIMARY,
-                },
-              ]}
-            >
-              Non lues ({unreadCount})
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[
-              styles.filterChip,
-              {
-                backgroundColor:
-                  selectedFilter === 'match' ? COLORS.SUCCESS : COLORS.WHITE,
-              },
-            ]}
+            gradient={['#EF4444', '#DC2626']}
+          />
+          <FilterChip
+            icon="calendar"
+            label="Matchs"
+            active={selectedFilter === 'match'}
             onPress={() => setSelectedFilter('match')}
-          >
-            <Icon
-              name="calendar"
-              size={16}
-              color={
-                selectedFilter === 'match' ? COLORS.WHITE : COLORS.TEXT_PRIMARY
-              }
-            />
-            <Text
-              style={[
-                styles.filterChipText,
-                {
-                  color:
-                    selectedFilter === 'match'
-                      ? COLORS.WHITE
-                      : COLORS.TEXT_PRIMARY,
-                },
-              ]}
-            >
-              Matchs
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[
-              styles.filterChip,
-              {
-                backgroundColor:
-                  selectedFilter === 'team' ? COLORS.WARNING : COLORS.WHITE,
-              },
-            ]}
+            gradient={['#22C55E', '#16A34A']}
+          />
+          <FilterChip
+            icon="users"
+            label="Équipes"
+            active={selectedFilter === 'team'}
             onPress={() => setSelectedFilter('team')}
-          >
-            <Icon
-              name="users"
-              size={16}
-              color={
-                selectedFilter === 'team' ? COLORS.WHITE : COLORS.TEXT_PRIMARY
-              }
-            />
-            <Text
-              style={[
-                styles.filterChipText,
-                {
-                  color:
-                    selectedFilter === 'team'
-                      ? COLORS.WHITE
-                      : COLORS.TEXT_PRIMARY,
-                },
-              ]}
-            >
-              Équipes
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[
-              styles.filterChip,
-              {
-                backgroundColor:
-                  selectedFilter === 'system' ? '#6B7280' : COLORS.WHITE,
-              },
-            ]}
+            gradient={['#F59E0B', '#D97706']}
+          />
+          <FilterChip
+            icon="info"
+            label="Système"
+            active={selectedFilter === 'system'}
             onPress={() => setSelectedFilter('system')}
-          >
-            <Icon
-              name="info"
-              size={16}
-              color={
-                selectedFilter === 'system' ? COLORS.WHITE : COLORS.TEXT_PRIMARY
-              }
-            />
-            <Text
-              style={[
-                styles.filterChipText,
-                {
-                  color:
-                    selectedFilter === 'system'
-                      ? COLORS.WHITE
-                      : COLORS.TEXT_PRIMARY,
-                },
-              ]}
-            >
-              Système
-            </Text>
-          </TouchableOpacity>
+            gradient={['#6B7280', '#4B5563']}
+          />
         </ScrollView>
       </View>
 
-      {/* Liste des notifications */}
+      {/* Liste */}
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
@@ -468,122 +309,43 @@ export const NotificationsCenterScreen = ({ navigation }) => {
       >
         {filteredNotifications.length > 0 ? (
           filteredNotifications.map(notification => (
-            <TouchableOpacity
+            <NotificationItem
               key={notification.id}
-              style={[
-                styles.notificationCard,
-                {
-                  backgroundColor: notification.read
-                    ? COLORS.WHITE
-                    : `${COLORS.PRIMARY}10`,
-                },
-              ]}
-              onPress={() => handleNotificationPress(notification)}
-              onLongPress={() => deleteNotification(notification.id)}
-            >
-              <View
-                style={[
-                  styles.notificationIcon,
-                  {
-                    backgroundColor: `${getNotificationColor(
-                      notification.type,
-                    )}20`,
-                  },
-                ]}
-              >
-                <Icon
-                  name={getNotificationIcon(notification.type)}
-                  size={24}
-                  color={getNotificationColor(notification.type)}
-                />
-              </View>
-
-              <View style={styles.notificationContent}>
-                <View style={styles.notificationHeader}>
-                  <Text
-                    style={[
-                      styles.notificationTitle,
-                      {
-                        color: COLORS.TEXT_PRIMARY,
-                        fontWeight: notification.read
-                          ? FONTS.WEIGHT.MEDIUM
-                          : FONTS.WEIGHT.BOLD,
-                      },
-                    ]}
-                  >
-                    {notification.title}
-                  </Text>
-                  {!notification.read && (
-                    <View
-                      style={[
-                        styles.unreadDot,
-                        { backgroundColor: COLORS.PRIMARY },
-                      ]}
-                    />
-                  )}
-                </View>
-
-                <Text
-                  style={[
-                    styles.notificationMessage,
-                    { color: COLORS.TEXT_SECONDARY },
-                  ]}
-                  numberOfLines={2}
-                >
-                  {notification.message}
-                </Text>
-
-                <View style={styles.notificationFooter}>
-                  <Icon name="clock" size={14} color={COLORS.TEXT_MUTED} />
-                  <Text
-                    style={[
-                      styles.notificationTime,
-                      { color: COLORS.TEXT_MUTED },
-                    ]}
-                  >
-                    {formatTimestamp(notification.timestamp)}
-                  </Text>
-                </View>
-              </View>
-
-              <TouchableOpacity
-                style={styles.deleteButton}
-                onPress={() => deleteNotification(notification.id)}
-              >
-                <Icon name="x" size={20} color={COLORS.TEXT_MUTED} />
-              </TouchableOpacity>
-            </TouchableOpacity>
+              notification={notification}
+              onPress={handleNotificationPress}
+              onDelete={deleteNotification}
+            />
           ))
         ) : (
           <View style={styles.emptyState}>
-            <View
-              style={[
-                styles.emptyIcon,
-                { backgroundColor: COLORS.BACKGROUND_LIGHT },
-              ]}
+            <LinearGradient
+              colors={['#F3F4F620', '#F3F4F610']}
+              style={styles.emptyGradient}
             >
-              <Icon name="bell-off" size={48} color={COLORS.TEXT_MUTED} />
-            </View>
-            <Text style={[styles.emptyTitle, { color: COLORS.TEXT_PRIMARY }]}>
-              Aucune notification
-            </Text>
-            <Text
-              style={[
-                styles.emptyDescription,
-                { color: COLORS.TEXT_SECONDARY },
-              ]}
-            >
-              {selectedFilter === 'all'
-                ? 'Vous êtes à jour !'
-                : `Aucune notification ${
-                    selectedFilter === 'unread' ? 'non lue' : selectedFilter
-                  }`}
-            </Text>
+              <Icon name="bell-off" size={64} color="#CBD5E1" />
+              <Text style={styles.emptyStateText}>Aucune notification</Text>
+              <Text style={styles.emptyStateSubtext}>
+                {selectedFilter === 'all'
+                  ? 'Vous êtes à jour !'
+                  : 'Aucune dans cette catégorie'}
+              </Text>
+            </LinearGradient>
           </View>
         )}
 
-        {/* Espace en bas */}
-        <View style={{ height: DIMENSIONS.SPACING_XXL }} />
+        {notifications.length > 0 && (
+          <TouchableOpacity style={styles.clearAllButton} onPress={clearAll}>
+            <LinearGradient
+              colors={['#EF444415', '#EF444405']}
+              style={styles.clearAllGradient}
+            >
+              <Icon name="trash-2" size={18} color="#EF4444" />
+              <Text style={styles.clearAllText}>Tout supprimer</Text>
+            </LinearGradient>
+          </TouchableOpacity>
+        )}
+
+        <View style={{ height: 40 }} />
       </ScrollView>
     </View>
   );
@@ -592,99 +354,122 @@ export const NotificationsCenterScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#F9FAFB',
   },
   header: {
-    paddingTop: Platform.OS === 'ios' ? 60 : 40,
-    paddingBottom: DIMENSIONS.SPACING_MD,
-    paddingHorizontal: DIMENSIONS.CONTAINER_PADDING,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    ...SHADOWS.SMALL,
+    paddingTop: Platform.OS === 'ios' ? 50 : 20,
+    paddingBottom: 16,
+    paddingHorizontal: 20,
+    ...SHADOWS.MEDIUM,
   },
   backButton: {
     width: 40,
     height: 40,
     borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.2)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   headerContent: {
-    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: DIMENSIONS.SPACING_SM,
+    gap: 10,
   },
   headerTitle: {
-    fontSize: FONTS.SIZE.LG,
-    fontWeight: FONTS.WEIGHT.BOLD,
-    color: COLORS.WHITE,
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#FFF',
   },
   badge: {
-    backgroundColor: COLORS.ERROR,
-    paddingHorizontal: DIMENSIONS.SPACING_SM,
+    backgroundColor: '#EF4444',
+    borderRadius: 12,
+    paddingHorizontal: 8,
     paddingVertical: 2,
-    borderRadius: DIMENSIONS.BORDER_RADIUS_FULL,
     minWidth: 24,
     alignItems: 'center',
   },
   badgeText: {
-    fontSize: FONTS.SIZE.XS,
-    fontWeight: FONTS.WEIGHT.BOLD,
-    color: COLORS.WHITE,
+    color: '#FFF',
+    fontSize: 12,
+    fontWeight: '700',
   },
-  moreButton: {
+  headerButton: {
     width: 40,
     height: 40,
     borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.2)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   filtersContainer: {
-    backgroundColor: COLORS.WHITE,
-    paddingVertical: DIMENSIONS.SPACING_SM,
+    backgroundColor: '#FFF',
+    paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.BORDER_LIGHT,
+    borderBottomColor: '#F3F4F6',
   },
-  filtersContent: {
-    paddingHorizontal: DIMENSIONS.CONTAINER_PADDING,
-    gap: DIMENSIONS.SPACING_SM,
+  filtersScroll: {
+    paddingHorizontal: 20,
+    gap: 8,
   },
   filterChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: DIMENSIONS.SPACING_MD,
-    paddingVertical: DIMENSIONS.SPACING_SM,
-    borderRadius: DIMENSIONS.BORDER_RADIUS_FULL,
-    gap: DIMENSIONS.SPACING_XXS,
+    borderRadius: 20,
+    overflow: 'hidden',
+  },
+  filterChipActive: {
     ...SHADOWS.SMALL,
   },
+  filterChipGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    gap: 6,
+  },
+  filterChipContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    gap: 6,
+    backgroundColor: '#F3F4F6',
+  },
   filterChipText: {
-    fontSize: FONTS.SIZE.SM,
-    fontWeight: FONTS.WEIGHT.SEMIBOLD,
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#6B7280',
+  },
+  filterChipTextActive: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#FFF',
   },
   scrollView: {
     flex: 1,
   },
   scrollContent: {
-    paddingHorizontal: DIMENSIONS.CONTAINER_PADDING,
-    paddingVertical: DIMENSIONS.SPACING_MD,
+    padding: 20,
   },
   notificationCard: {
     flexDirection: 'row',
-    padding: DIMENSIONS.SPACING_MD,
-    borderRadius: DIMENSIONS.BORDER_RADIUS_MD,
-    marginBottom: DIMENSIONS.SPACING_SM,
+    backgroundColor: '#FFF',
+    padding: 16,
+    borderRadius: 16,
+    marginBottom: 12,
     ...SHADOWS.SMALL,
+  },
+  notificationCardUnread: {
+    backgroundColor: '#DBEAFE',
   },
   notificationIcon: {
     width: 48,
     height: 48,
-    borderRadius: 24,
+    borderRadius: 14,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: DIMENSIONS.SPACING_MD,
+    marginRight: 12,
   },
   notificationContent: {
     flex: 1,
@@ -692,53 +477,67 @@ const styles = StyleSheet.create({
   notificationHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: DIMENSIONS.SPACING_SM,
-    marginBottom: DIMENSIONS.SPACING_XXS,
+    marginBottom: 4,
   },
   notificationTitle: {
     flex: 1,
-    fontSize: FONTS.SIZE.MD,
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#1F2937',
+    marginRight: 8,
   },
   unreadDot: {
     width: 8,
     height: 8,
     borderRadius: 4,
+    backgroundColor: '#3B82F6',
   },
   notificationMessage: {
-    fontSize: FONTS.SIZE.SM,
-    lineHeight: FONTS.SIZE.SM * 1.4,
-    marginBottom: DIMENSIONS.SPACING_XS,
-  },
-  notificationFooter: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: DIMENSIONS.SPACING_XXS,
+    fontSize: 14,
+    color: '#6B7280',
+    lineHeight: 20,
+    marginBottom: 6,
   },
   notificationTime: {
-    fontSize: FONTS.SIZE.XS,
-  },
-  deleteButton: {
-    padding: DIMENSIONS.SPACING_XS,
+    fontSize: 12,
+    color: '#9CA3AF',
   },
   emptyState: {
-    alignItems: 'center',
-    paddingVertical: DIMENSIONS.SPACING_XXL * 2,
+    marginTop: 60,
+    borderRadius: 16,
+    overflow: 'hidden',
   },
-  emptyIcon: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
+  emptyGradient: {
+    alignItems: 'center',
+    paddingVertical: 48,
+    paddingHorizontal: 24,
+  },
+  emptyStateText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#6B7280',
+    marginTop: 16,
+    marginBottom: 4,
+  },
+  emptyStateSubtext: {
+    fontSize: 14,
+    color: '#9CA3AF',
+  },
+  clearAllButton: {
+    marginTop: 8,
+    borderRadius: 16,
+    overflow: 'hidden',
+  },
+  clearAllGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: DIMENSIONS.SPACING_LG,
+    paddingVertical: 16,
+    gap: 8,
   },
-  emptyTitle: {
-    fontSize: FONTS.SIZE.XL,
-    fontWeight: FONTS.WEIGHT.BOLD,
-    marginBottom: DIMENSIONS.SPACING_SM,
-  },
-  emptyDescription: {
-    fontSize: FONTS.SIZE.MD,
-    textAlign: 'center',
+  clearAllText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#EF4444',
   },
 });

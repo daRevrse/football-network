@@ -1,5 +1,5 @@
-// ====== src/screens/profile/ProfileScreen.js ======
-import React, { useState, useCallback, useRef } from 'react';
+// ====== src/screens/profile/ProfileScreen.js - NOUVEAU DESIGN ======
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -11,482 +11,275 @@ import {
   RefreshControl,
   Animated,
   Platform,
+  Image,
+  Dimensions,
 } from 'react-native';
+import { useSelector, useDispatch } from 'react-redux';
 import Icon from 'react-native-vector-icons/Feather';
+import LinearGradient from 'react-native-linear-gradient';
 import { useTheme } from '../../hooks/useTheme';
 import { DIMENSIONS, FONTS, SHADOWS } from '../../styles/theme';
+import { UserApi } from '../../services/api';
 
-// Constantes pour l'animation
-const HEADER_MAX_HEIGHT = 340;
-const HEADER_MIN_HEIGHT = Platform.OS === 'ios' ? 100 : 80;
-const HEADER_SCROLL_DISTANCE = HEADER_MAX_HEIGHT - HEADER_MIN_HEIGHT;
+const { width } = Dimensions.get('window');
+const HEADER_HEIGHT = 280;
 
-// Composant StatCard
-const StatCard = ({ icon, value, label, color, COLORS }) => (
-  <View style={[styles.statCard, { backgroundColor: COLORS.WHITE }]}>
-    <View style={[styles.statIcon, { backgroundColor: color + '20' }]}>
-      <Icon name={icon} size={18} color={color} />
-    </View>
-    <Text style={[styles.statValue, { color: COLORS.TEXT_PRIMARY }]}>
-      {value}
-    </Text>
-    <Text style={[styles.statLabel, { color: COLORS.TEXT_SECONDARY }]}>
-      {label}
-    </Text>
+// Composant StatCard moderne
+const StatCard = ({ icon, value, label, gradient, COLORS }) => (
+  <View style={styles.statCard}>
+    <LinearGradient
+      colors={gradient}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
+      style={styles.statGradient}
+    >
+      <View style={styles.statIconContainer}>
+        <Icon name={icon} size={22} color="#FFF" />
+      </View>
+      <Text style={styles.statValue}>{value}</Text>
+      <Text style={styles.statLabel}>{label}</Text>
+    </LinearGradient>
   </View>
 );
 
-// Composant TeamCard
+// Composant TeamCard moderne
 const TeamCard = ({ team, onPress, COLORS }) => (
   <TouchableOpacity
     style={[styles.teamCard, { backgroundColor: COLORS.WHITE }]}
     onPress={onPress}
+    activeOpacity={0.7}
   >
-    <View
-      style={[styles.teamIcon, { backgroundColor: COLORS.PRIMARY_ULTRA_LIGHT }]}
+    <LinearGradient
+      colors={['#22C55E15', '#22C55E05']}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
+      style={styles.teamGradientBg}
     >
-      <Icon name="dribbble" size={24} color={COLORS.PRIMARY} />
-    </View>
-    <View style={styles.teamInfo}>
-      <Text style={[styles.teamName, { color: COLORS.TEXT_PRIMARY }]}>
-        {team.name}
-      </Text>
-      <View style={styles.teamMeta}>
-        <View style={styles.teamMetaItem}>
-          <Icon name="users" size={12} color={COLORS.TEXT_MUTED} />
-          <Text style={[styles.teamMetaText, { color: COLORS.TEXT_SECONDARY }]}>
-            {team.members} membres
-          </Text>
-        </View>
-        {team.role && (
-          <View
-            style={[
-              styles.roleBadge,
-              {
-                backgroundColor:
-                  team.role === 'owner'
-                    ? COLORS.PRIMARY_LIGHT
-                    : COLORS.WARNING_LIGHT,
-              },
-            ]}
-          >
-            <Icon
-              name={team.role === 'owner' ? 'star' : 'award'}
-              size={10}
-              color={team.role === 'owner' ? COLORS.PRIMARY : COLORS.WARNING}
-            />
+      <View style={styles.teamIconContainer}>
+        <Icon name="shield" size={28} color="#22C55E" />
+      </View>
+      <View style={styles.teamInfo}>
+        <Text style={[styles.teamName, { color: COLORS.TEXT_PRIMARY }]}>
+          {team.name}
+        </Text>
+        <View style={styles.teamMeta}>
+          <View style={styles.teamMetaItem}>
+            <Icon name="users" size={14} color={COLORS.TEXT_MUTED} />
             <Text
-              style={[
-                styles.roleText,
-                {
-                  color:
-                    team.role === 'owner' ? COLORS.PRIMARY : COLORS.WARNING,
-                },
-              ]}
+              style={[styles.teamMetaText, { color: COLORS.TEXT_SECONDARY }]}
             >
-              {team.role === 'owner' ? 'Propriétaire' : 'Capitaine'}
+              {team.members} membres
             </Text>
           </View>
-        )}
+          {team.role && (
+            <View style={styles.roleBadge}>
+              <Icon
+                name={team.role === 'owner' ? 'crown' : 'award'}
+                size={12}
+                color="#F59E0B"
+              />
+              <Text style={styles.roleText}>
+                {team.role === 'owner' ? 'Capitaine' : 'Membre'}
+              </Text>
+            </View>
+          )}
+        </View>
       </View>
-    </View>
-    <Icon name="chevron-right" size={20} color={COLORS.TEXT_MUTED} />
+      <Icon name="chevron-right" size={24} color={COLORS.TEXT_MUTED} />
+    </LinearGradient>
   </TouchableOpacity>
 );
 
-// Composant MatchCard
-const MatchCard = ({ match, COLORS }) => (
-  <View style={[styles.matchCard, { backgroundColor: COLORS.WHITE }]}>
-    <View style={styles.matchHeader}>
-      <View style={styles.matchTeams}>
-        <Text style={[styles.matchTeamName, { color: COLORS.TEXT_PRIMARY }]}>
-          {match.homeTeam}
-        </Text>
-        <View style={styles.matchScore}>
-          <Text style={[styles.matchScoreText, { color: COLORS.TEXT_PRIMARY }]}>
-            {match.homeScore}
-          </Text>
-          <Text style={[styles.matchSeparator, { color: COLORS.TEXT_MUTED }]}>
-            -
-          </Text>
-          <Text style={[styles.matchScoreText, { color: COLORS.TEXT_PRIMARY }]}>
-            {match.awayScore}
-          </Text>
-        </View>
-        <Text style={[styles.matchTeamName, { color: COLORS.TEXT_PRIMARY }]}>
-          {match.awayTeam}
-        </Text>
-      </View>
-      <View
-        style={[
-          styles.matchResult,
-          {
-            backgroundColor:
-              match.result === 'win'
-                ? COLORS.SUCCESS_LIGHT
-                : match.result === 'loss'
-                ? COLORS.ERROR_LIGHT
-                : COLORS.TEXT_MUTED + '20',
-          },
-        ]}
-      >
-        <Text
-          style={[
-            styles.matchResultText,
-            {
-              color:
-                match.result === 'win'
-                  ? COLORS.SUCCESS
-                  : match.result === 'loss'
-                  ? COLORS.ERROR
-                  : COLORS.TEXT_MUTED,
-            },
-          ]}
-        >
-          {match.result === 'win' ? 'V' : match.result === 'loss' ? 'D' : 'N'}
-        </Text>
-      </View>
-    </View>
-    <View style={styles.matchFooter}>
-      <View style={styles.matchMetaItem}>
-        <Icon name="calendar" size={12} color={COLORS.TEXT_MUTED} />
-        <Text style={[styles.matchMetaText, { color: COLORS.TEXT_SECONDARY }]}>
-          {match.date}
-        </Text>
-      </View>
-      <View style={styles.matchMetaItem}>
-        <Icon name="map-pin" size={12} color={COLORS.TEXT_MUTED} />
-        <Text style={[styles.matchMetaText, { color: COLORS.TEXT_SECONDARY }]}>
-          {match.location}
-        </Text>
-      </View>
-    </View>
-  </View>
-);
-
-// Composant MenuItem
-const MenuItem = ({
-  icon,
-  label,
-  value,
-  onPress,
-  showChevron = true,
-  danger = false,
-  COLORS,
-}) => (
-  <TouchableOpacity style={styles.menuItem} onPress={onPress}>
-    <View style={styles.menuLeft}>
-      <View
-        style={[
-          styles.menuIcon,
-          {
-            backgroundColor: danger
-              ? COLORS.ERROR_LIGHT
-              : COLORS.PRIMARY_ULTRA_LIGHT,
-          },
-        ]}
-      >
-        <Icon
-          name={icon}
-          size={18}
-          color={danger ? COLORS.ERROR : COLORS.PRIMARY}
-        />
-      </View>
-      <Text
-        style={[
-          styles.menuLabel,
-          { color: danger ? COLORS.ERROR : COLORS.TEXT_PRIMARY },
-        ]}
-      >
-        {label}
-      </Text>
-    </View>
-    {value && (
-      <Text style={[styles.menuValue, { color: COLORS.TEXT_SECONDARY }]}>
-        {value}
-      </Text>
-    )}
-    {showChevron && (
-      <Icon name="chevron-right" size={20} color={COLORS.TEXT_MUTED} />
-    )}
+// Composant QuickAction
+const QuickAction = ({ icon, label, onPress, gradient }) => (
+  <TouchableOpacity
+    style={styles.quickAction}
+    onPress={onPress}
+    activeOpacity={0.7}
+  >
+    <LinearGradient
+      colors={gradient}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
+      style={styles.quickActionGradient}
+    >
+      <Icon name={icon} size={20} color="#FFF" />
+    </LinearGradient>
+    <Text style={styles.quickActionLabel}>{label}</Text>
   </TouchableOpacity>
 );
 
 export const ProfileScreen = ({ navigation }) => {
-  const { colors: COLORS, isDark } = useTheme('auto');
+  const { colors: COLORS } = useTheme('auto');
+  const dispatch = useDispatch();
   const [refreshing, setRefreshing] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState(null);
+  const [teams, setTeams] = useState([]);
+  const [stats, setStats] = useState({
+    totalMatches: 0,
+    wins: 0,
+    goals: 0,
+    assists: 0,
+  });
 
-  // Animation du scroll
   const scrollY = useRef(new Animated.Value(0)).current;
 
-  // Données mockées (à remplacer par API)
-  const [user] = useState({
-    id: 1,
-    name: 'Jean Dupont',
-    email: 'jean.dupont@email.com',
-    phone: '+33 6 12 34 56 78',
-    position: 'Milieu de terrain',
-    skillLevel: 'intermediate',
-    city: 'Paris',
-    joinedDate: 'Janvier 2024',
-    totalMatches: 47,
-    wins: 28,
-    goals: 12,
-    assists: 18,
-  });
-
-  const [teams] = useState([
-    {
-      id: 1,
-      name: 'Les Tigres de Paris',
-      members: 11,
-      role: 'owner',
-    },
-    {
-      id: 2,
-      name: 'FC Montmartre',
-      members: 9,
-      role: 'captain',
-    },
-    {
-      id: 3,
-      name: 'Racing Club 75',
-      members: 15,
-      role: null,
-    },
-  ]);
-
-  const [recentMatches] = useState([
-    {
-      id: 1,
-      homeTeam: 'Les Tigres',
-      awayTeam: 'FC Olympique',
-      homeScore: 3,
-      awayScore: 2,
-      result: 'win',
-      date: '15 Mar 2024',
-      location: 'Paris 15e',
-    },
-    {
-      id: 2,
-      homeTeam: 'Racing Club',
-      awayTeam: 'Les Tigres',
-      homeScore: 1,
-      awayScore: 1,
-      result: 'draw',
-      date: '08 Mar 2024',
-      location: 'Paris 18e',
-    },
-    {
-      id: 3,
-      homeTeam: 'Les Tigres',
-      awayTeam: 'AS Montparnasse',
-      homeScore: 0,
-      awayScore: 2,
-      result: 'loss',
-      date: '01 Mar 2024',
-      location: 'Paris 14e',
-    },
-  ]);
-
-  // Animations du header
-  const headerHeight = scrollY.interpolate({
-    inputRange: [0, HEADER_SCROLL_DISTANCE],
-    outputRange: [HEADER_MAX_HEIGHT, HEADER_MIN_HEIGHT],
-    extrapolate: 'clamp',
-  });
-
-  const avatarScale = scrollY.interpolate({
-    inputRange: [0, HEADER_SCROLL_DISTANCE],
-    outputRange: [1, 0.6],
-    extrapolate: 'clamp',
-  });
-
-  const avatarTranslateY = scrollY.interpolate({
-    inputRange: [0, HEADER_SCROLL_DISTANCE],
-    outputRange: [0, -20],
-    extrapolate: 'clamp',
-  });
-
-  const userInfoOpacity = scrollY.interpolate({
-    inputRange: [0, HEADER_SCROLL_DISTANCE / 2],
-    outputRange: [1, 0],
-    extrapolate: 'clamp',
-  });
-
-  const titleFontSize = scrollY.interpolate({
-    inputRange: [0, HEADER_SCROLL_DISTANCE],
-    outputRange: [24, 16],
-    extrapolate: 'clamp',
-  });
-
-  const avatarOpacity = scrollY.interpolate({
-    inputRange: [0, HEADER_SCROLL_DISTANCE],
-    outputRange: [1, 0],
-    extrapolate: 'clamp',
-  });
-
-  const userNameFontSize = scrollY.interpolate({
-    inputRange: [0, HEADER_SCROLL_DISTANCE],
-    outputRange: [24, 16],
-    extrapolate: 'clamp',
-  });
-
-  const userNameTranslateY = scrollY.interpolate({
-    inputRange: [0, HEADER_SCROLL_DISTANCE],
-    outputRange: [0, -120],
-    extrapolate: 'clamp',
-  });
-
-  const userInfoTranslateY = scrollY.interpolate({
-    inputRange: [0, HEADER_SCROLL_DISTANCE],
-    outputRange: [0, 20],
-    extrapolate: 'clamp',
-  });
-
-  const onRefresh = useCallback(() => {
-    setRefreshing(true);
-    setTimeout(() => setRefreshing(false), 1000);
+  useEffect(() => {
+    loadProfileData();
   }, []);
 
-  const handleEditProfile = () => {
-    navigation.navigate('EditProfile');
+  const loadProfileData = async () => {
+    try {
+      setLoading(true);
+      const profileResult = await UserApi.getProfile();
+      if (profileResult.success) {
+        setUser(profileResult.data);
+      }
+
+      const statsResult = await UserApi.getStats();
+      if (statsResult.success) {
+        setStats(statsResult.data);
+      }
+    } catch (error) {
+      console.error('Error loading profile:', error);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleSettings = () => {
-    navigation.navigate('Settings');
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await loadProfileData();
+    setRefreshing(false);
+  }, []);
+
+  const headerOpacity = scrollY.interpolate({
+    inputRange: [0, HEADER_HEIGHT - 100],
+    outputRange: [1, 0],
+    extrapolate: 'clamp',
+  });
+
+  const headerScale = scrollY.interpolate({
+    inputRange: [-100, 0],
+    outputRange: [1.2, 1],
+    extrapolate: 'clamp',
+  });
+
+  const getPositionLabel = position => {
+    const positions = {
+      goalkeeper: 'Gardien',
+      defender: 'Défenseur',
+      midfielder: 'Milieu',
+      forward: 'Attaquant',
+      any: 'Polyvalent',
+    };
+    return positions[position] || position;
   };
 
-  const handleNotifications = () => {
-    navigation.navigate('Notifications');
-  };
-
-  const handlePrivacy = () => {
-    navigation.navigate('Privacy');
-  };
-
-  const handleHelp = () => {
-    navigation.navigate('Help');
-  };
-
-  const handleLogout = () => {
-    Alert.alert('Déconnexion', 'Êtes-vous sûr de vouloir vous déconnecter ?', [
-      { text: 'Annuler', style: 'cancel' },
-      { text: 'Déconnexion', style: 'destructive', onPress: () => {} },
-    ]);
-  };
-
-  const getSkillLevelLabel = () => {
-    const labels = {
+  const getSkillLevelLabel = level => {
+    const levels = {
       beginner: 'Débutant',
       amateur: 'Amateur',
       intermediate: 'Intermédiaire',
       advanced: 'Avancé',
-      expert: 'Expert',
+      semi_pro: 'Semi-pro',
     };
-    return labels[user.skillLevel] || 'Non défini';
+    return levels[level] || level;
   };
 
-  const getSkillLevelColor = () => {
-    const colors = {
-      beginner: '#94A3B8',
-      amateur: '#3B82F6',
-      intermediate: '#F59E0B',
-      advanced: '#EF4444',
-      expert: '#8B5CF6',
-    };
-    return colors[user.skillLevel] || '#6B7280';
-  };
+  if (loading && !user) {
+    return (
+      <View style={[styles.container, styles.centerContent]}>
+        <Text style={styles.loadingText}>Chargement...</Text>
+      </View>
+    );
+  }
 
   return (
-    <View
-      style={[styles.container, { backgroundColor: COLORS.BACKGROUND_LIGHT }]}
-    >
-      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" />
 
-      {/* Header Animé */}
+      {/* Header avec Gradient */}
       <Animated.View
         style={[
           styles.header,
           {
-            backgroundColor: COLORS.PRIMARY,
-            height: headerHeight,
+            opacity: headerOpacity,
+            transform: [{ scale: headerScale }],
           },
         ]}
       >
-        <View style={styles.headerTop}>
-          <TouchableOpacity
-            style={styles.headerButton}
-            onPress={handleSettings}
-          >
-            <Icon name="settings" size={20} color={COLORS.WHITE} />
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.headerButton}
-            onPress={handleEditProfile}
-          >
-            <Icon name="edit-2" size={20} color={COLORS.WHITE} />
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.headerContent}>
-          <Animated.View
-            style={[
-              styles.avatar,
-              {
-                opacity: avatarOpacity,
-                transform: [
-                  { scale: avatarScale },
-                  { translateY: avatarTranslateY },
-                ],
-              },
-            ]}
-          >
-            <Icon name="user" size={40} color={COLORS.WHITE} />
-          </Animated.View>
-
-          <Animated.Text
-            style={[
-              styles.userName,
-              {
-                fontSize: userNameFontSize,
-                transform: [{ translateY: userNameTranslateY }],
-              },
-            ]}
-          >
-            {user.name}
-          </Animated.Text>
-
-          <Animated.View
-            style={[
-              styles.userInfo,
-              {
-                opacity: userInfoOpacity,
-                transform: [{ translateY: userInfoTranslateY }],
-              },
-            ]}
-          >
-            <View style={styles.userInfoRow}>
-              <Icon name="target" size={14} color={COLORS.WHITE} />
-              <Text style={styles.userInfoText}>{user.position}</Text>
-            </View>
-            <View style={styles.userInfoRow}>
-              <Icon name="map-pin" size={14} color={COLORS.WHITE} />
-              <Text style={styles.userInfoText}>{user.city}</Text>
-            </View>
-            <View
-              style={[
-                styles.skillBadge,
-                { backgroundColor: getSkillLevelColor() },
-              ]}
+        <LinearGradient
+          colors={['#22C55E', '#16A34A', '#15803D']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.headerGradient}
+        >
+          <View style={styles.headerTop}>
+            <TouchableOpacity
+              style={styles.headerIconButton}
+              onPress={() => navigation.navigate('Settings')}
             >
-              <Icon name="star" size={12} color="#FFFFFF" />
-              <Text style={styles.skillBadgeText}>{getSkillLevelLabel()}</Text>
+              <Icon name="settings" size={22} color="#FFF" />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.headerIconButton}
+              onPress={() => navigation.navigate('Notifications')}
+            >
+              <Icon name="bell" size={22} color="#FFF" />
+              <View style={styles.notificationBadge}>
+                <Text style={styles.notificationBadgeText}>3</Text>
+              </View>
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.avatarContainer}>
+            {user?.profilePicture || user?.avatar ? (
+              <Image
+                source={{ uri: user.profilePicture || user.avatar }}
+                style={styles.avatar}
+              />
+            ) : (
+              <View style={styles.avatarPlaceholder}>
+                <Icon name="user" size={48} color="#FFF" />
+              </View>
+            )}
+            <TouchableOpacity
+              style={styles.editAvatarButton}
+              onPress={() => navigation.navigate('EditProfile')}
+            >
+              <Icon name="camera" size={16} color="#FFF" />
+            </TouchableOpacity>
+          </View>
+
+          <Text style={styles.userName}>
+            {user?.firstName} {user?.lastName}
+          </Text>
+          <Text style={styles.userEmail}>{user?.email}</Text>
+
+          {user?.position && (
+            <View style={styles.badgesContainer}>
+              <View style={styles.badge}>
+                <Icon name="target" size={12} color="#FFF" />
+                <Text style={styles.badgeText}>
+                  {getPositionLabel(user.position)}
+                </Text>
+              </View>
+              {user?.skillLevel && (
+                <View style={styles.badge}>
+                  <Icon name="award" size={12} color="#FFF" />
+                  <Text style={styles.badgeText}>
+                    {getSkillLevelLabel(user.skillLevel)}
+                  </Text>
+                </View>
+              )}
             </View>
-          </Animated.View>
-        </View>
+          )}
+        </LinearGradient>
       </Animated.View>
 
+      {/* Contenu scrollable */}
       <Animated.ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
@@ -500,143 +293,145 @@ export const ProfileScreen = ({ navigation }) => {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            progressViewOffset={HEADER_MAX_HEIGHT}
+            tintColor="#22C55E"
           />
         }
       >
-        {/* Stats */}
-        <View style={styles.statsContainer}>
-          <StatCard
-            icon="calendar"
-            value={user.totalMatches}
-            label="Matchs"
-            color={COLORS.PRIMARY}
-            COLORS={COLORS}
-          />
-          <StatCard
-            icon="award"
-            value={user.wins}
-            label="Victoires"
-            color={COLORS.SUCCESS}
-            COLORS={COLORS}
-          />
+        {/* Statistiques */}
+        <View style={styles.statsSection}>
           <StatCard
             icon="target"
-            value={user.goals}
-            label="Buts"
-            color={COLORS.SECONDARY}
+            value={stats.totalMatches}
+            label="Matchs"
+            gradient={['#8B5CF6', '#7C3AED']}
+            COLORS={COLORS}
+          />
+          <StatCard
+            icon="trophy"
+            value={stats.wins}
+            label="Victoires"
+            gradient={['#22C55E', '#16A34A']}
             COLORS={COLORS}
           />
           <StatCard
             icon="zap"
-            value={user.assists}
+            value={stats.goals}
+            label="Buts"
+            gradient={['#F59E0B', '#D97706']}
+            COLORS={COLORS}
+          />
+          <StatCard
+            icon="award"
+            value={stats.assists}
             label="Passes D."
-            color={COLORS.WARNING}
+            gradient={['#3B82F6', '#2563EB']}
             COLORS={COLORS}
           />
         </View>
 
-        {/* Mes Équipes */}
-        <View style={[styles.section, { backgroundColor: COLORS.WHITE }]}>
+        {/* Actions rapides */}
+        <View style={styles.quickActionsSection}>
+          <QuickAction
+            icon="edit-3"
+            label="Modifier"
+            onPress={() => navigation.navigate('EditProfile')}
+            gradient={['#22C55E', '#16A34A']}
+          />
+          <QuickAction
+            icon="shield"
+            label="Confidentialité"
+            onPress={() => navigation.navigate('Privacy')}
+            gradient={['#3B82F6', '#2563EB']}
+          />
+          <QuickAction
+            icon="help-circle"
+            label="Aide"
+            onPress={() => navigation.navigate('Help')}
+            gradient={['#F59E0B', '#D97706']}
+          />
+          <QuickAction
+            icon="log-out"
+            label="Déconnexion"
+            onPress={() => {
+              Alert.alert(
+                'Déconnexion',
+                'Voulez-vous vraiment vous déconnecter ?',
+                [
+                  { text: 'Annuler', style: 'cancel' },
+                  {
+                    text: 'Déconnexion',
+                    style: 'destructive',
+                    onPress: () => navigation.navigate('Auth'),
+                  },
+                ],
+              );
+            }}
+            gradient={['#EF4444', '#DC2626']}
+          />
+        </View>
+
+        {/* Section Mes équipes */}
+        <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Icon name="users" size={20} color={COLORS.PRIMARY} />
             <Text style={[styles.sectionTitle, { color: COLORS.TEXT_PRIMARY }]}>
-              Mes Équipes
+              Mes équipes
             </Text>
-            <TouchableOpacity
-              style={[
-                styles.addButton,
-                { backgroundColor: COLORS.PRIMARY_ULTRA_LIGHT },
-              ]}
-              onPress={() => navigation.navigate('CreateTeam')}
-            >
-              <Icon name="plus" size={16} color={COLORS.PRIMARY} />
+            <TouchableOpacity onPress={() => navigation.navigate('Teams')}>
+              <Text style={styles.seeAllText}>Voir tout</Text>
             </TouchableOpacity>
           </View>
 
-          <View style={styles.teamsList}>
-            {teams.map(team => (
+          {teams.length > 0 ? (
+            teams.map(team => (
               <TeamCard
                 key={team.id}
                 team={team}
                 onPress={() =>
-                  navigation.navigate('TeamDetail', {
-                    teamId: team.id,
-                    teamName: team.name,
+                  navigation.navigate('Teams', {
+                    screen: 'TeamDetail',
+                    params: { teamId: team.id },
                   })
                 }
                 COLORS={COLORS}
               />
-            ))}
-          </View>
+            ))
+          ) : (
+            <View style={styles.emptyState}>
+              <LinearGradient
+                colors={['#F3F4F620', '#F3F4F610']}
+                style={styles.emptyStateGradient}
+              >
+                <Icon name="users" size={56} color="#CBD5E1" />
+                <Text
+                  style={[
+                    styles.emptyStateText,
+                    { color: COLORS.TEXT_SECONDARY },
+                  ]}
+                >
+                  Aucune équipe pour le moment
+                </Text>
+                <TouchableOpacity
+                  style={styles.emptyStateButton}
+                  onPress={() => navigation.navigate('Teams')}
+                >
+                  <LinearGradient
+                    colors={['#22C55E', '#16A34A']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                    style={styles.emptyStateButtonGradient}
+                  >
+                    <Icon name="plus" size={18} color="#FFF" />
+                    <Text style={styles.emptyStateButtonText}>
+                      Rejoindre une équipe
+                    </Text>
+                  </LinearGradient>
+                </TouchableOpacity>
+              </LinearGradient>
+            </View>
+          )}
         </View>
 
-        {/* Matchs Récents */}
-        <View style={[styles.section, { backgroundColor: COLORS.WHITE }]}>
-          <View style={styles.sectionHeader}>
-            <Icon name="activity" size={20} color={COLORS.PRIMARY} />
-            <Text style={[styles.sectionTitle, { color: COLORS.TEXT_PRIMARY }]}>
-              Matchs Récents
-            </Text>
-            <TouchableOpacity>
-              <Text style={[styles.seeAllText, { color: COLORS.PRIMARY }]}>
-                Voir tout
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          <View style={styles.matchesList}>
-            {recentMatches.map(match => (
-              <MatchCard key={match.id} match={match} COLORS={COLORS} />
-            ))}
-          </View>
-        </View>
-
-        {/* Paramètres */}
-        <View style={[styles.section, { backgroundColor: COLORS.WHITE }]}>
-          <View style={styles.sectionHeader}>
-            <Icon name="settings" size={20} color={COLORS.PRIMARY} />
-            <Text style={[styles.sectionTitle, { color: COLORS.TEXT_PRIMARY }]}>
-              Paramètres
-            </Text>
-          </View>
-
-          <View style={styles.menuList}>
-            <MenuItem
-              icon="bell"
-              label="Notifications"
-              onPress={handleNotifications}
-              COLORS={COLORS}
-            />
-            <MenuItem
-              icon="lock"
-              label="Confidentialité"
-              onPress={handlePrivacy}
-              COLORS={COLORS}
-            />
-            <MenuItem
-              icon="help-circle"
-              label="Aide & Support"
-              onPress={handleHelp}
-              COLORS={COLORS}
-            />
-            <MenuItem
-              icon="info"
-              label="À propos"
-              value="v1.0.0"
-              showChevron={false}
-              COLORS={COLORS}
-            />
-            <MenuItem
-              icon="log-out"
-              label="Déconnexion"
-              onPress={handleLogout}
-              danger={true}
-              showChevron={false}
-              COLORS={COLORS}
-            />
-          </View>
-        </View>
+        <View style={{ height: 40 }} />
       </Animated.ScrollView>
     </View>
   );
@@ -645,290 +440,294 @@ export const ProfileScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#F9FAFB',
+  },
+  centerContent: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    fontSize: 16,
+    color: '#6B7280',
   },
   header: {
+    height: HEADER_HEIGHT,
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
     zIndex: 10,
-    paddingTop: Platform.OS === 'ios' ? 50 : 20,
-    paddingBottom: DIMENSIONS.SPACING_LG,
-    ...SHADOWS.LARGE,
+  },
+  headerGradient: {
+    flex: 1,
+    paddingTop: Platform.OS === 'ios' ? 50 : 30,
+    paddingHorizontal: 20,
+    paddingBottom: 20,
+    alignItems: 'center',
   },
   headerTop: {
+    width: '100%',
     flexDirection: 'row',
-    justifyContent: 'flex-end',
-    alignItems: 'center',
-    paddingHorizontal: DIMENSIONS.CONTAINER_PADDING,
-    marginBottom: DIMENSIONS.SPACING_MD,
-    gap: DIMENSIONS.SPACING_SM,
+    justifyContent: 'space-between',
+    marginBottom: 20,
   },
-  headerButton: {
+  headerIconButton: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    backgroundColor: 'rgba(255,255,255,0.2)',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  headerContent: {
+  notificationBadge: {
+    position: 'absolute',
+    top: -2,
+    right: -2,
+    backgroundColor: '#EF4444',
+    borderRadius: 10,
+    width: 18,
+    height: 18,
+    justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: DIMENSIONS.CONTAINER_PADDING,
+    borderWidth: 2,
+    borderColor: '#22C55E',
+  },
+  notificationBadgeText: {
+    color: '#FFF',
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  avatarContainer: {
+    position: 'relative',
+    marginBottom: 12,
   },
   avatar: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    borderWidth: 4,
+    borderColor: 'rgba(255,255,255,0.3)',
+  },
+  avatarPlaceholder: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: 'rgba(255,255,255,0.2)',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: DIMENSIONS.SPACING_SM,
+    borderWidth: 4,
+    borderColor: 'rgba(255,255,255,0.3)',
+  },
+  editAvatarButton: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: '#F59E0B',
+    justifyContent: 'center',
+    alignItems: 'center',
     borderWidth: 3,
-    borderColor: 'rgba(255, 255, 255, 0.3)',
+    borderColor: '#22C55E',
   },
   userName: {
-    fontWeight: FONTS.WEIGHT.BOLD,
-    color: '#FFFFFF',
-    textAlign: 'center',
-    marginBottom: DIMENSIONS.SPACING_XS,
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#FFF',
+    marginBottom: 4,
   },
-  userInfo: {
-    alignItems: 'center',
-    gap: DIMENSIONS.SPACING_XS,
+  userEmail: {
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.8)',
+    marginBottom: 12,
   },
-  userInfoRow: {
+  badgesContainer: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  badge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: DIMENSIONS.SPACING_XS,
+    backgroundColor: 'rgba(255,255,255,0.25)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    gap: 6,
   },
-  userInfoText: {
-    fontSize: FONTS.SIZE.SM,
-    color: 'rgba(255, 255, 255, 0.9)',
-  },
-  skillBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: DIMENSIONS.SPACING_MD,
-    paddingVertical: DIMENSIONS.SPACING_XS,
-    borderRadius: DIMENSIONS.BORDER_RADIUS_FULL,
-    gap: DIMENSIONS.SPACING_XS,
-    marginTop: DIMENSIONS.SPACING_XS,
-  },
-  skillBadgeText: {
-    fontSize: FONTS.SIZE.XS,
-    fontWeight: FONTS.WEIGHT.SEMIBOLD,
-    color: '#FFFFFF',
+  badgeText: {
+    fontSize: 12,
+    color: '#FFF',
+    fontWeight: '600',
   },
   scrollView: {
     flex: 1,
+    marginTop: HEADER_HEIGHT - 40,
   },
   scrollContent: {
-    paddingTop: HEADER_MAX_HEIGHT + DIMENSIONS.SPACING_SM,
-    padding: DIMENSIONS.CONTAINER_PADDING,
-    paddingBottom: DIMENSIONS.SPACING_XXL,
+    paddingTop: 20,
   },
-  statsContainer: {
+  statsSection: {
     flexDirection: 'row',
-    gap: DIMENSIONS.SPACING_SM,
-    marginBottom: DIMENSIONS.SPACING_LG,
+    flexWrap: 'wrap',
+    paddingHorizontal: 16,
+    gap: 12,
+    marginBottom: 20,
   },
   statCard: {
-    flex: 1,
-    padding: DIMENSIONS.SPACING_SM,
-    borderRadius: DIMENSIONS.BORDER_RADIUS_MD,
-    alignItems: 'center',
-    ...SHADOWS.SMALL,
+    width: (width - 44) / 2,
+    height: 120,
+    borderRadius: 16,
+    overflow: 'hidden',
+    ...SHADOWS.MEDIUM,
   },
-  statIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    justifyContent: 'center',
+  statGradient: {
+    flex: 1,
+    padding: 16,
     alignItems: 'center',
-    marginBottom: DIMENSIONS.SPACING_XS,
+    justifyContent: 'center',
+  },
+  statIconContainer: {
+    marginBottom: 8,
   },
   statValue: {
-    fontSize: FONTS.SIZE.LG,
-    fontWeight: FONTS.WEIGHT.BOLD,
+    fontSize: 28,
+    fontWeight: '700',
+    color: '#FFF',
     marginBottom: 2,
   },
   statLabel: {
-    fontSize: FONTS.SIZE.XXS,
-    fontWeight: FONTS.WEIGHT.MEDIUM,
-    textAlign: 'center',
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.9)',
+    fontWeight: '500',
   },
-  section: {
-    padding: DIMENSIONS.SPACING_LG,
-    borderRadius: DIMENSIONS.BORDER_RADIUS_MD,
-    marginBottom: DIMENSIONS.SPACING_LG,
-    ...SHADOWS.SMALL,
-  },
-  sectionHeader: {
+  quickActionsSection: {
     flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: DIMENSIONS.SPACING_MD,
+    paddingHorizontal: 16,
+    gap: 12,
+    marginBottom: 24,
   },
-  sectionTitle: {
-    fontSize: FONTS.SIZE.LG,
-    fontWeight: FONTS.WEIGHT.BOLD,
-    marginLeft: DIMENSIONS.SPACING_SM,
+  quickAction: {
     flex: 1,
+    alignItems: 'center',
   },
-  addButton: {
-    width: 32,
-    height: 32,
+  quickActionGradient: {
+    width: 56,
+    height: 56,
     borderRadius: 16,
     justifyContent: 'center',
     alignItems: 'center',
+    marginBottom: 8,
+    ...SHADOWS.SMALL,
+  },
+  quickActionLabel: {
+    fontSize: 11,
+    color: '#6B7280',
+    fontWeight: '600',
+  },
+  section: {
+    paddingHorizontal: 16,
+    marginBottom: 24,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  sectionTitle: {
+    fontSize: 20,
+    fontWeight: '700',
   },
   seeAllText: {
-    fontSize: FONTS.SIZE.SM,
-    fontWeight: FONTS.WEIGHT.SEMIBOLD,
-  },
-  teamsList: {
-    gap: DIMENSIONS.SPACING_SM,
+    fontSize: 14,
+    color: '#22C55E',
+    fontWeight: '600',
   },
   teamCard: {
+    borderRadius: 16,
+    marginBottom: 12,
+    overflow: 'hidden',
+    ...SHADOWS.SMALL,
+  },
+  teamGradientBg: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: DIMENSIONS.SPACING_MD,
-    borderRadius: DIMENSIONS.BORDER_RADIUS_MD,
-    borderWidth: 1,
-    borderColor: 'rgba(0,0,0,0.05)',
+    padding: 16,
   },
-  teamIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+  teamIconContainer: {
+    width: 56,
+    height: 56,
+    borderRadius: 16,
+    backgroundColor: '#22C55E15',
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: DIMENSIONS.SPACING_MD,
+    marginRight: 16,
   },
   teamInfo: {
     flex: 1,
   },
   teamName: {
-    fontSize: FONTS.SIZE.MD,
-    fontWeight: FONTS.WEIGHT.SEMIBOLD,
-    marginBottom: DIMENSIONS.SPACING_XXS,
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 6,
   },
   teamMeta: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: DIMENSIONS.SPACING_SM,
+    gap: 12,
   },
   teamMetaItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: DIMENSIONS.SPACING_XXS,
+    gap: 4,
   },
   teamMetaText: {
-    fontSize: FONTS.SIZE.XS,
+    fontSize: 13,
   },
   roleBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: DIMENSIONS.SPACING_SM,
-    paddingVertical: 2,
-    borderRadius: DIMENSIONS.BORDER_RADIUS_FULL,
-    gap: DIMENSIONS.SPACING_XXS,
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 12,
+    gap: 4,
   },
   roleText: {
-    fontSize: FONTS.SIZE.XXS,
-    fontWeight: FONTS.WEIGHT.BOLD,
+    fontSize: 11,
+    color: '#F59E0B',
+    fontWeight: '600',
   },
-  matchesList: {
-    gap: DIMENSIONS.SPACING_SM,
-  },
-  matchCard: {
-    padding: DIMENSIONS.SPACING_MD,
-    borderRadius: DIMENSIONS.BORDER_RADIUS_MD,
-    borderWidth: 1,
-    borderColor: 'rgba(0,0,0,0.05)',
-  },
-  matchHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: DIMENSIONS.SPACING_SM,
-  },
-  matchTeams: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  matchTeamName: {
-    fontSize: FONTS.SIZE.SM,
-    fontWeight: FONTS.WEIGHT.SEMIBOLD,
-    textAlign: 'center',
-  },
-  matchScore: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: DIMENSIONS.SPACING_SM,
-    marginVertical: DIMENSIONS.SPACING_XS,
-  },
-  matchScoreText: {
-    fontSize: FONTS.SIZE.XL,
-    fontWeight: FONTS.WEIGHT.BOLD,
-  },
-  matchSeparator: {
-    fontSize: FONTS.SIZE.MD,
-    fontWeight: FONTS.WEIGHT.BOLD,
-  },
-  matchResult: {
-    width: 32,
-    height: 32,
+  emptyState: {
     borderRadius: 16,
-    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  emptyStateGradient: {
     alignItems: 'center',
+    paddingVertical: 48,
+    paddingHorizontal: 24,
   },
-  matchResultText: {
-    fontSize: FONTS.SIZE.SM,
-    fontWeight: FONTS.WEIGHT.BOLD,
+  emptyStateText: {
+    fontSize: 15,
+    textAlign: 'center',
+    marginTop: 16,
+    marginBottom: 20,
   },
-  matchFooter: {
-    flexDirection: 'row',
-    gap: DIMENSIONS.SPACING_MD,
-    paddingTop: DIMENSIONS.SPACING_SM,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(0,0,0,0.05)',
+  emptyStateButton: {
+    borderRadius: 12,
+    overflow: 'hidden',
   },
-  matchMetaItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: DIMENSIONS.SPACING_XXS,
-  },
-  matchMetaText: {
-    fontSize: FONTS.SIZE.XS,
-  },
-  menuList: {
-    gap: 1,
-  },
-  menuItem: {
+  emptyStateButtonGradient: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: DIMENSIONS.SPACING_MD,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    gap: 8,
   },
-  menuLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  menuIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: DIMENSIONS.SPACING_MD,
-  },
-  menuLabel: {
-    fontSize: FONTS.SIZE.MD,
-    fontWeight: FONTS.WEIGHT.MEDIUM,
-  },
-  menuValue: {
-    fontSize: FONTS.SIZE.SM,
-    marginRight: DIMENSIONS.SPACING_SM,
+  emptyStateButtonText: {
+    color: '#FFF',
+    fontSize: 14,
+    fontWeight: '600',
   },
 });

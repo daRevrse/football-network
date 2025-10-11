@@ -1,4 +1,4 @@
-// ====== src/screens/profile/PrivacyScreen.js ======
+// ====== src/screens/profile/PrivacyScreen.js - NOUVEAU DESIGN ======
 import React, { useState, useCallback } from 'react';
 import {
   View,
@@ -13,534 +13,392 @@ import {
 } from 'react-native';
 import { useSelector } from 'react-redux';
 import Icon from 'react-native-vector-icons/Feather';
-import { COLORS, DIMENSIONS, FONTS, SHADOWS } from '../../styles/theme';
-import { SectionCard } from '../../components/common/SectionCard';
+import LinearGradient from 'react-native-linear-gradient';
+import { DIMENSIONS, FONTS, SHADOWS } from '../../styles/theme';
+
+// Composant SwitchItem
+const SwitchItem = ({
+  icon,
+  label,
+  description,
+  value,
+  onValueChange,
+  gradient,
+}) => (
+  <View style={styles.switchItem}>
+    <View style={styles.switchLeft}>
+      <LinearGradient
+        colors={gradient}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.iconContainer}
+      >
+        <Icon name={icon} size={20} color="#FFF" />
+      </LinearGradient>
+      <View style={styles.textContainer}>
+        <Text style={styles.label}>{label}</Text>
+        {description && <Text style={styles.description}>{description}</Text>}
+      </View>
+    </View>
+    <Switch
+      value={value}
+      onValueChange={onValueChange}
+      trackColor={{ false: '#E5E7EB', true: '#86EFAC' }}
+      thumbColor={value ? '#22C55E' : '#F3F4F6'}
+      ios_backgroundColor="#E5E7EB"
+    />
+  </View>
+);
+
+// Composant SelectItem
+const SelectItem = ({ icon, label, value, onPress, gradient }) => (
+  <TouchableOpacity
+    style={styles.selectItem}
+    onPress={onPress}
+    activeOpacity={0.7}
+  >
+    <View style={styles.selectLeft}>
+      <LinearGradient
+        colors={gradient}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.iconContainer}
+      >
+        <Icon name={icon} size={20} color="#FFF" />
+      </LinearGradient>
+      <View style={styles.textContainer}>
+        <Text style={styles.label}>{label}</Text>
+        <Text style={styles.value}>{value}</Text>
+      </View>
+    </View>
+    <Icon name="chevron-right" size={22} color="#CBD5E1" />
+  </TouchableOpacity>
+);
+
+// Composant ActionButton
+const ActionButton = ({
+  icon,
+  label,
+  description,
+  onPress,
+  gradient,
+  danger,
+}) => (
+  <TouchableOpacity
+    style={styles.actionButton}
+    onPress={onPress}
+    activeOpacity={0.7}
+  >
+    <View style={styles.actionLeft}>
+      <LinearGradient
+        colors={gradient}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.iconContainer}
+      >
+        <Icon name={icon} size={20} color="#FFF" />
+      </LinearGradient>
+      <View style={styles.textContainer}>
+        <Text style={[styles.label, danger && { color: '#EF4444' }]}>
+          {label}
+        </Text>
+        {description && <Text style={styles.description}>{description}</Text>}
+      </View>
+    </View>
+    <Icon
+      name="chevron-right"
+      size={22}
+      color={danger ? '#EF4444' : '#CBD5E1'}
+    />
+  </TouchableOpacity>
+);
+
+// Composant Section
+const Section = ({ title, icon, children }) => (
+  <View style={styles.section}>
+    <View style={styles.sectionHeader}>
+      <Icon name={icon} size={20} color="#22C55E" />
+      <Text style={styles.sectionTitle}>{title}</Text>
+    </View>
+    <View style={styles.sectionContent}>{children}</View>
+  </View>
+);
 
 export const PrivacyScreen = ({ navigation }) => {
-  const isDark = useSelector(state => state.theme?.isDark || false);
-
-  // États des paramètres de confidentialité
   const [privacy, setPrivacy] = useState({
-    profileVisibility: 'public', // public, friends, private
+    profileVisibility: 'public',
     showEmail: false,
     showPhone: false,
     showLocation: true,
     showStats: true,
     allowMatchInvites: true,
     allowTeamInvites: true,
-    allowMessages: 'everyone', // everyone, friends, nobody
+    allowMessages: 'everyone',
     showOnlineStatus: true,
     showLastSeen: false,
   });
 
   const [blockedUsers] = useState([
-    { id: '1', name: 'John Blocked', email: 'blocked@example.com' },
+    { id: '1', name: 'Utilisateur Bloqué', email: 'blocked@example.com' },
   ]);
 
-  // Toggle paramètre
   const togglePrivacy = useCallback(key => {
-    setPrivacy(prev => ({
-      ...prev,
-      [key]: !prev[key],
-    }));
-    // TODO: Sauvegarder en backend
+    setPrivacy(prev => ({ ...prev, [key]: !prev[key] }));
   }, []);
 
-  // Changer la visibilité du profil
   const handleChangeVisibility = useCallback(() => {
-    Alert.alert(
-      'Visibilité du profil',
-      'Qui peut voir votre profil complet ?',
-      [
-        {
-          text: 'Public',
-          onPress: () =>
-            setPrivacy(prev => ({ ...prev, profileVisibility: 'public' })),
-        },
-        {
-          text: 'Amis uniquement',
-          onPress: () =>
-            setPrivacy(prev => ({ ...prev, profileVisibility: 'friends' })),
-        },
-        {
-          text: 'Privé',
-          onPress: () =>
-            setPrivacy(prev => ({ ...prev, profileVisibility: 'private' })),
-        },
-        { text: 'Annuler', style: 'cancel' },
-      ],
-    );
-  }, []);
-
-  // Changer qui peut envoyer des messages
-  const handleChangeMessaging = useCallback(() => {
-    Alert.alert('Messagerie', 'Qui peut vous envoyer des messages ?', [
+    Alert.alert('Visibilité du profil', 'Qui peut voir votre profil ?', [
       {
-        text: 'Tout le monde',
-        onPress: () =>
-          setPrivacy(prev => ({ ...prev, allowMessages: 'everyone' })),
+        text: 'Public',
+        onPress: () => setPrivacy(p => ({ ...p, profileVisibility: 'public' })),
       },
       {
         text: 'Amis uniquement',
         onPress: () =>
-          setPrivacy(prev => ({ ...prev, allowMessages: 'friends' })),
+          setPrivacy(p => ({ ...p, profileVisibility: 'friends' })),
+      },
+      {
+        text: 'Privé',
+        onPress: () =>
+          setPrivacy(p => ({ ...p, profileVisibility: 'private' })),
+      },
+      { text: 'Annuler', style: 'cancel' },
+    ]);
+  }, []);
+
+  const handleChangeMessaging = useCallback(() => {
+    Alert.alert('Messagerie', 'Qui peut vous envoyer des messages ?', [
+      {
+        text: 'Tout le monde',
+        onPress: () => setPrivacy(p => ({ ...p, allowMessages: 'everyone' })),
+      },
+      {
+        text: 'Amis uniquement',
+        onPress: () => setPrivacy(p => ({ ...p, allowMessages: 'friends' })),
       },
       {
         text: 'Personne',
-        onPress: () =>
-          setPrivacy(prev => ({ ...prev, allowMessages: 'nobody' })),
+        onPress: () => setPrivacy(p => ({ ...p, allowMessages: 'nobody' })),
       },
       { text: 'Annuler', style: 'cancel' },
     ]);
   }, []);
 
-  // Bloquer un utilisateur
-  const handleBlockUser = useCallback(() => {
-    Alert.prompt(
-      'Bloquer un utilisateur',
-      "Entrez l'email ou le nom de l'utilisateur à bloquer",
-      [
-        { text: 'Annuler', style: 'cancel' },
-        {
-          text: 'Bloquer',
-          style: 'destructive',
-          onPress: value => {
-            if (value && value.trim()) {
-              // TODO: Appeler l'API pour bloquer l'utilisateur
-              Alert.alert('Succès', 'Utilisateur bloqué');
-            }
-          },
-        },
-      ],
-      'plain-text',
-    );
-  }, []);
-
-  // Débloquer un utilisateur
-  const handleUnblockUser = useCallback(user => {
-    Alert.alert('Débloquer', `Voulez-vous débloquer ${user.name} ?`, [
-      { text: 'Annuler', style: 'cancel' },
-      {
-        text: 'Débloquer',
-        onPress: () => {
-          // TODO: Appeler l'API pour débloquer l'utilisateur
-          Alert.alert('Succès', 'Utilisateur débloqué');
-        },
-      },
-    ]);
-  }, []);
-
-  // Télécharger les données
-  const handleDownloadData = useCallback(() => {
+  const handleExportData = useCallback(() => {
     Alert.alert(
-      'Télécharger mes données',
-      'Vous allez recevoir un email avec un lien pour télécharger toutes vos données (profil, équipes, matchs, messages). Cette opération peut prendre quelques minutes.',
+      'Exporter mes données',
+      'Vous recevrez un email avec vos données dans 48h',
       [
         { text: 'Annuler', style: 'cancel' },
         {
           text: 'Confirmer',
-          onPress: () => {
-            // TODO: Appeler l'API pour générer l'export
-            Alert.alert(
-              'Demande envoyée',
-              'Vous recevrez un email sous peu avec le lien de téléchargement.',
-            );
-          },
+          onPress: () => Alert.alert('Succès', 'Demande enregistrée'),
         },
       ],
     );
   }, []);
 
-  // Supprimer les données
-  const handleDeleteData = useCallback(() => {
+  const handleDeleteAccount = useCallback(() => {
     Alert.alert(
-      'Supprimer mes données',
-      'Cette action supprimera DÉFINITIVEMENT toutes vos données personnelles. Cette action est IRRÉVERSIBLE.',
+      '⚠️ Supprimer mon compte',
+      'Cette action est irréversible. Toutes vos données seront supprimées.',
       [
         { text: 'Annuler', style: 'cancel' },
         {
           text: 'Supprimer',
           style: 'destructive',
           onPress: () => {
-            Alert.alert(
-              'Confirmation finale',
-              'Êtes-vous VRAIMENT sûr ? Toutes vos données seront perdues pour toujours.',
-              [
-                { text: 'Non, garder mes données', style: 'cancel' },
-                {
-                  text: 'Oui, supprimer tout',
-                  style: 'destructive',
-                  onPress: () => {
-                    // TODO: Appeler l'API pour supprimer les données
-                    Alert.alert('Info', 'Suppression en cours...');
-                  },
-                },
-              ],
-            );
+            Alert.alert('Confirmer', 'Êtes-vous vraiment sûr ?', [
+              { text: 'Non', style: 'cancel' },
+              { text: 'Oui, supprimer', style: 'destructive' },
+            ]);
           },
         },
       ],
     );
   }, []);
 
-  // Obtenir le label de visibilité
-  const getVisibilityLabel = () => {
+  const getVisibilityLabel = value => {
     const labels = {
       public: 'Public',
       friends: 'Amis uniquement',
       private: 'Privé',
     };
-    return labels[privacy.profileVisibility] || 'Public';
+    return labels[value] || value;
   };
 
-  // Obtenir le label de messagerie
-  const getMessagingLabel = () => {
+  const getMessagingLabel = value => {
     const labels = {
       everyone: 'Tout le monde',
       friends: 'Amis uniquement',
       nobody: 'Personne',
     };
-    return labels[privacy.allowMessages] || 'Tout le monde';
+    return labels[value] || value;
   };
 
-  // Composant Switch Item
-  const SwitchItem = ({
-    icon,
-    label,
-    description,
-    value,
-    onValueChange,
-    iconColor,
-  }) => (
-    <View style={styles.switchItem}>
-      <View style={styles.switchLeft}>
-        <View
-          style={[
-            styles.switchIcon,
-            {
-              backgroundColor: iconColor
-                ? `${iconColor}20`
-                : COLORS.PRIMARY_LIGHT,
-            },
-          ]}
-        >
-          <Icon name={icon} size={20} color={iconColor || COLORS.PRIMARY} />
-        </View>
-        <View style={styles.switchContent}>
-          <Text style={[styles.switchLabel, { color: COLORS.TEXT_PRIMARY }]}>
-            {label}
-          </Text>
-          {description && (
-            <Text
-              style={[styles.switchDescription, { color: COLORS.TEXT_MUTED }]}
-            >
-              {description}
-            </Text>
-          )}
-        </View>
-      </View>
-      <Switch
-        value={value}
-        onValueChange={onValueChange}
-        trackColor={{
-          false: COLORS.BORDER_LIGHT,
-          true: COLORS.PRIMARY,
-        }}
-        thumbColor={COLORS.WHITE}
-        ios_backgroundColor={COLORS.BORDER_LIGHT}
-      />
-    </View>
-  );
-
-  // Composant Menu Item
-  const MenuItem = ({
-    icon,
-    label,
-    value,
-    onPress,
-    iconColor,
-    danger = false,
-  }) => (
-    <TouchableOpacity style={styles.menuItem} onPress={onPress}>
-      <View style={styles.menuLeft}>
-        <View
-          style={[
-            styles.menuIcon,
-            {
-              backgroundColor: danger
-                ? COLORS.ERROR_LIGHT
-                : iconColor
-                ? `${iconColor}20`
-                : COLORS.PRIMARY_LIGHT,
-            },
-          ]}
-        >
-          <Icon
-            name={icon}
-            size={20}
-            color={danger ? COLORS.ERROR : iconColor || COLORS.PRIMARY}
-          />
-        </View>
-        <Text
-          style={[
-            styles.menuLabel,
-            { color: danger ? COLORS.ERROR : COLORS.TEXT_PRIMARY },
-          ]}
-        >
-          {label}
-        </Text>
-      </View>
-      <View style={styles.menuRight}>
-        {value && (
-          <Text style={[styles.menuValue, { color: COLORS.TEXT_MUTED }]}>
-            {value}
-          </Text>
-        )}
-        <Icon name="chevron-right" size={20} color={COLORS.TEXT_MUTED} />
-      </View>
-    </TouchableOpacity>
-  );
-
   return (
-    <View
-      style={[styles.container, { backgroundColor: COLORS.BACKGROUND_LIGHT }]}
-    >
-      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" />
 
       {/* Header */}
-      <View style={[styles.header, { backgroundColor: COLORS.PRIMARY }]}>
+      <LinearGradient
+        colors={['#8B5CF6', '#7C3AED']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0 }}
+        style={styles.header}
+      >
         <TouchableOpacity
           style={styles.backButton}
           onPress={() => navigation.goBack()}
         >
-          <Icon name="arrow-left" size={24} color={COLORS.WHITE} />
+          <Icon name="arrow-left" size={24} color="#FFF" />
         </TouchableOpacity>
 
         <View style={styles.headerContent}>
-          <Icon name="shield" size={24} color={COLORS.WHITE} />
+          <Icon name="shield" size={24} color="#FFF" />
           <Text style={styles.headerTitle}>Confidentialité</Text>
         </View>
 
         <View style={{ width: 40 }} />
-      </View>
+      </LinearGradient>
 
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Visibilité du profil */}
-        <SectionCard
-          title="Visibilité du profil"
-          description="Contrôlez qui peut voir vos informations"
-          icon="eye"
-        >
-          <MenuItem
-            icon="globe"
-            label="Visibilité du profil"
-            value={getVisibilityLabel()}
+        {/* Visibilité */}
+        <Section title="Visibilité du profil" icon="eye">
+          <SelectItem
+            icon="users"
+            label="Qui peut voir mon profil"
+            value={getVisibilityLabel(privacy.profileVisibility)}
             onPress={handleChangeVisibility}
+            gradient={['#8B5CF6', '#7C3AED']}
           />
 
           <SwitchItem
             icon="mail"
             label="Afficher mon email"
+            description="Visible sur votre profil public"
             value={privacy.showEmail}
             onValueChange={() => togglePrivacy('showEmail')}
-            iconColor="#3B82F6"
+            gradient={['#3B82F6', '#2563EB']}
           />
 
           <SwitchItem
             icon="phone"
             label="Afficher mon téléphone"
+            description="Visible sur votre profil public"
             value={privacy.showPhone}
             onValueChange={() => togglePrivacy('showPhone')}
-            iconColor="#10B981"
+            gradient={['#22C55E', '#16A34A']}
           />
 
           <SwitchItem
             icon="map-pin"
             label="Afficher ma localisation"
+            description="Ville visible sur votre profil"
             value={privacy.showLocation}
             onValueChange={() => togglePrivacy('showLocation')}
-            iconColor="#F59E0B"
+            gradient={['#F59E0B', '#D97706']}
           />
 
           <SwitchItem
             icon="bar-chart-2"
             label="Afficher mes statistiques"
+            description="Matchs, buts, passes décisives"
             value={privacy.showStats}
             onValueChange={() => togglePrivacy('showStats')}
-            iconColor="#8B5CF6"
+            gradient={['#EC4899', '#DB2777']}
           />
-        </SectionCard>
+        </Section>
 
-        {/* Interactions */}
-        <SectionCard
-          title="Interactions"
-          description="Gérez qui peut interagir avec vous"
-          icon="users"
-        >
+        {/* Invitations */}
+        <Section title="Invitations" icon="send">
           <SwitchItem
             icon="calendar"
-            label="Recevoir des invitations de match"
-            description="Autoriser les autres équipes à vous inviter"
+            label="Invitations de matchs"
+            description="Autoriser les invitations"
             value={privacy.allowMatchInvites}
             onValueChange={() => togglePrivacy('allowMatchInvites')}
+            gradient={['#22C55E', '#16A34A']}
           />
 
           <SwitchItem
-            icon="user-plus"
-            label="Recevoir des invitations d'équipe"
-            description="Autoriser les équipes à vous recruter"
+            icon="users"
+            label="Invitations d'équipes"
+            description="Autoriser à rejoindre des équipes"
             value={privacy.allowTeamInvites}
             onValueChange={() => togglePrivacy('allowTeamInvites')}
+            gradient={['#F59E0B', '#D97706']}
           />
+        </Section>
 
-          <MenuItem
-            icon="message-circle"
-            label="Messagerie"
-            value={getMessagingLabel()}
+        {/* Communication */}
+        <Section title="Communication" icon="message-circle">
+          <SelectItem
+            icon="message-square"
+            label="Qui peut m'envoyer des messages"
+            value={getMessagingLabel(privacy.allowMessages)}
             onPress={handleChangeMessaging}
-            iconColor="#3B82F6"
+            gradient={['#3B82F6', '#2563EB']}
           />
-        </SectionCard>
 
-        {/* Présence */}
-        <SectionCard
-          title="Présence"
-          description="Contrôlez votre visibilité en ligne"
-          icon="activity"
-        >
           <SwitchItem
-            icon="circle"
+            icon="activity"
             label="Afficher mon statut en ligne"
-            description="Les autres peuvent voir si vous êtes en ligne"
+            description="Les autres voient quand vous êtes connecté"
             value={privacy.showOnlineStatus}
             onValueChange={() => togglePrivacy('showOnlineStatus')}
-            iconColor="#10B981"
+            gradient={['#22C55E', '#16A34A']}
           />
 
           <SwitchItem
             icon="clock"
             label="Afficher ma dernière connexion"
-            description="Les autres peuvent voir quand vous étiez en ligne"
+            description="Visible par les autres utilisateurs"
             value={privacy.showLastSeen}
             onValueChange={() => togglePrivacy('showLastSeen')}
-            iconColor="#F59E0B"
+            gradient={['#8B5CF6', '#7C3AED']}
           />
-        </SectionCard>
+        </Section>
 
-        {/* Utilisateurs bloqués */}
-        <SectionCard
-          title="Utilisateurs bloqués"
-          description={`${blockedUsers.length} utilisateur${
-            blockedUsers.length > 1 ? 's' : ''
-          } bloqué${blockedUsers.length > 1 ? 's' : ''}`}
-          icon="slash"
-          iconColor={COLORS.ERROR}
-        >
-          {blockedUsers.length > 0 ? (
-            blockedUsers.map(user => (
-              <View key={user.id} style={styles.blockedUser}>
-                <View style={styles.blockedUserLeft}>
-                  <View
-                    style={[
-                      styles.blockedUserAvatar,
-                      { backgroundColor: COLORS.ERROR_LIGHT },
-                    ]}
-                  >
-                    <Icon name="user-x" size={20} color={COLORS.ERROR} />
-                  </View>
-                  <View>
-                    <Text
-                      style={[
-                        styles.blockedUserName,
-                        { color: COLORS.TEXT_PRIMARY },
-                      ]}
-                    >
-                      {user.name}
-                    </Text>
-                    <Text
-                      style={[
-                        styles.blockedUserEmail,
-                        { color: COLORS.TEXT_MUTED },
-                      ]}
-                    >
-                      {user.email}
-                    </Text>
-                  </View>
-                </View>
-                <TouchableOpacity
-                  style={[
-                    styles.unblockButton,
-                    { backgroundColor: COLORS.PRIMARY_LIGHT },
-                  ]}
-                  onPress={() => handleUnblockUser(user)}
-                >
-                  <Text
-                    style={[
-                      styles.unblockButtonText,
-                      { color: COLORS.PRIMARY },
-                    ]}
-                  >
-                    Débloquer
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            ))
-          ) : (
-            <Text style={[styles.noBlockedUsers, { color: COLORS.TEXT_MUTED }]}>
-              Aucun utilisateur bloqué
-            </Text>
-          )}
-
-          <TouchableOpacity
-            style={[
-              styles.blockButton,
-              { backgroundColor: COLORS.ERROR_LIGHT },
-            ]}
-            onPress={handleBlockUser}
-          >
-            <Icon name="user-x" size={20} color={COLORS.ERROR} />
-            <Text style={[styles.blockButtonText, { color: COLORS.ERROR }]}>
-              Bloquer un utilisateur
-            </Text>
-          </TouchableOpacity>
-        </SectionCard>
-
-        {/* Données personnelles */}
-        <SectionCard
-          title="Mes données"
-          description="RGPD - Gérez vos données personnelles"
-          icon="database"
-        >
-          <MenuItem
+        {/* Données */}
+        <Section title="Mes données" icon="database">
+          <ActionButton
             icon="download"
-            label="Télécharger mes données"
-            onPress={handleDownloadData}
-            iconColor="#3B82F6"
+            label="Exporter mes données"
+            description="Recevez une copie de vos données"
+            onPress={handleExportData}
+            gradient={['#3B82F6', '#2563EB']}
           />
 
-          <MenuItem
+          <ActionButton
             icon="trash-2"
-            label="Supprimer toutes mes données"
-            onPress={handleDeleteData}
+            label="Supprimer mon compte"
+            description="Action irréversible"
+            onPress={handleDeleteAccount}
+            gradient={['#EF4444', '#DC2626']}
             danger
           />
-        </SectionCard>
+        </Section>
 
-        {/* Informations légales */}
-        <View style={styles.legalInfo}>
-          <Icon name="info" size={16} color={COLORS.TEXT_MUTED} />
-          <Text style={[styles.legalText, { color: COLORS.TEXT_MUTED }]}>
-            Conformément au RGPD, vous avez le droit d'accéder, de modifier et
-            de supprimer vos données personnelles.
-          </Text>
+        {/* Avertissement */}
+        <View style={styles.warningBox}>
+          <LinearGradient
+            colors={['#F59E0B15', '#F59E0B05']}
+            style={styles.warningGradient}
+          >
+            <Icon name="info" size={20} color="#F59E0B" />
+            <Text style={styles.warningText}>
+              Les paramètres de confidentialité peuvent affecter votre
+              visibilité et les invitations reçues
+            </Text>
+          </LinearGradient>
         </View>
 
-        {/* Espace en bas */}
-        <View style={{ height: DIMENSIONS.SPACING_XXL }} />
+        <View style={{ height: 40 }} />
       </ScrollView>
     </View>
   );
@@ -549,176 +407,140 @@ export const PrivacyScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#F9FAFB',
   },
   header: {
-    paddingTop: Platform.OS === 'ios' ? 60 : 40,
-    paddingBottom: DIMENSIONS.SPACING_MD,
-    paddingHorizontal: DIMENSIONS.CONTAINER_PADDING,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    ...SHADOWS.SMALL,
+    paddingTop: Platform.OS === 'ios' ? 50 : 20,
+    paddingBottom: 16,
+    paddingHorizontal: 20,
+    ...SHADOWS.MEDIUM,
   },
   backButton: {
     width: 40,
     height: 40,
     borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.2)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   headerContent: {
-    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: DIMENSIONS.SPACING_SM,
+    gap: 10,
   },
   headerTitle: {
-    fontSize: FONTS.SIZE.LG,
-    fontWeight: FONTS.WEIGHT.BOLD,
-    color: COLORS.WHITE,
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#FFF',
   },
   scrollView: {
     flex: 1,
   },
   scrollContent: {
-    paddingHorizontal: DIMENSIONS.CONTAINER_PADDING,
-    paddingVertical: DIMENSIONS.SPACING_LG,
+    padding: 20,
+  },
+  section: {
+    marginBottom: 24,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+    gap: 10,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#1F2937',
+  },
+  sectionContent: {
+    backgroundColor: '#FFF',
+    borderRadius: 16,
+    overflow: 'hidden',
+    ...SHADOWS.SMALL,
   },
   switchItem: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: DIMENSIONS.SPACING_MD,
+    padding: 16,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.BORDER_LIGHT,
+    borderBottomColor: '#F3F4F6',
+  },
+  selectItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+  },
+  actionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
   },
   switchLeft: {
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
-    marginRight: DIMENSIONS.SPACING_MD,
+    marginRight: 12,
   },
-  switchIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    justifyContent: 'center',
+  selectLeft: {
+    flexDirection: 'row',
     alignItems: 'center',
-    marginRight: DIMENSIONS.SPACING_MD,
-  },
-  switchContent: {
     flex: 1,
   },
-  switchLabel: {
-    fontSize: FONTS.SIZE.MD,
-    fontWeight: FONTS.WEIGHT.MEDIUM,
+  actionLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  iconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  textContainer: {
+    flex: 1,
+  },
+  label: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#1F2937',
     marginBottom: 2,
   },
-  switchDescription: {
-    fontSize: FONTS.SIZE.SM,
-    lineHeight: FONTS.SIZE.SM * 1.3,
+  description: {
+    fontSize: 13,
+    color: '#6B7280',
   },
-  menuItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: DIMENSIONS.SPACING_MD,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.BORDER_LIGHT,
+  value: {
+    fontSize: 14,
+    color: '#22C55E',
+    fontWeight: '600',
   },
-  menuLeft: {
+  warningBox: {
+    borderRadius: 16,
+    overflow: 'hidden',
+  },
+  warningGradient: {
     flexDirection: 'row',
-    alignItems: 'center',
+    padding: 16,
+    gap: 12,
+  },
+  warningText: {
     flex: 1,
-  },
-  menuIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: DIMENSIONS.SPACING_MD,
-  },
-  menuLabel: {
-    fontSize: FONTS.SIZE.MD,
-    fontWeight: FONTS.WEIGHT.MEDIUM,
-    flex: 1,
-  },
-  menuRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: DIMENSIONS.SPACING_SM,
-  },
-  menuValue: {
-    fontSize: FONTS.SIZE.SM,
-  },
-  blockedUser: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: DIMENSIONS.SPACING_MD,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.BORDER_LIGHT,
-  },
-  blockedUserLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  blockedUserAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: DIMENSIONS.SPACING_MD,
-  },
-  blockedUserName: {
-    fontSize: FONTS.SIZE.MD,
-    fontWeight: FONTS.WEIGHT.MEDIUM,
-  },
-  blockedUserEmail: {
-    fontSize: FONTS.SIZE.SM,
-  },
-  unblockButton: {
-    paddingHorizontal: DIMENSIONS.SPACING_MD,
-    paddingVertical: DIMENSIONS.SPACING_SM,
-    borderRadius: DIMENSIONS.BORDER_RADIUS_MD,
-  },
-  unblockButtonText: {
-    fontSize: FONTS.SIZE.SM,
-    fontWeight: FONTS.WEIGHT.SEMIBOLD,
-  },
-  noBlockedUsers: {
-    fontSize: FONTS.SIZE.SM,
-    textAlign: 'center',
-    paddingVertical: DIMENSIONS.SPACING_MD,
-  },
-  blockButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: DIMENSIONS.SPACING_MD,
-    borderRadius: DIMENSIONS.BORDER_RADIUS_MD,
-    marginTop: DIMENSIONS.SPACING_SM,
-    gap: DIMENSIONS.SPACING_SM,
-  },
-  blockButtonText: {
-    fontSize: FONTS.SIZE.MD,
-    fontWeight: FONTS.WEIGHT.SEMIBOLD,
-  },
-  legalInfo: {
-    flexDirection: 'row',
-    gap: DIMENSIONS.SPACING_SM,
-    padding: DIMENSIONS.SPACING_MD,
-    backgroundColor: COLORS.WHITE,
-    borderRadius: DIMENSIONS.BORDER_RADIUS_MD,
-    marginTop: DIMENSIONS.SPACING_LG,
-  },
-  legalText: {
-    flex: 1,
-    fontSize: FONTS.SIZE.SM,
-    lineHeight: FONTS.SIZE.SM * 1.5,
+    fontSize: 13,
+    color: '#92400E',
+    lineHeight: 20,
   },
 });
