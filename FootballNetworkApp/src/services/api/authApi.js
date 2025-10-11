@@ -1,9 +1,10 @@
 import { SecureStorage } from '../storage';
+import { API_CONFIG } from './../../utils/constants/api';
 
 class AuthApiService {
   constructor() {
-    this.baseURL = 'http://192.168.1.70:5000/api'; // Changez selon votre setup
-    this.timeout = 10000;
+    this.baseURL = API_CONFIG.BASE_URL;
+    this.timeout = API_CONFIG.TIMEOUT;
   }
 
   // Gestion des erreurs API
