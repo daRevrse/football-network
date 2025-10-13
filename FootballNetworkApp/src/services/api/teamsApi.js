@@ -1,4 +1,4 @@
-// ====== src/services/api/teamsApi.js ======
+// ====== src/services/api/teamsApi.js - SERVICE API COMPLET ======
 import { SecureStorage } from '../storage';
 import { API_CONFIG } from '../../utils/constants';
 
@@ -8,9 +8,17 @@ class TeamsApiService {
     this.timeout = API_CONFIG.TIMEOUT;
   }
 
-  // Gestion des erreurs API
+  // ==================== GESTION DES ERREURS ====================
   handleApiError(error) {
     console.error('Teams API Error:', error);
+
+    if (error.name === 'AbortError') {
+      return {
+        success: false,
+        error: "Délai d'attente dépassé",
+        code: 'TIMEOUT',
+      };
+    }
 
     if (error.response) {
       const status = error.response.status;
@@ -23,17 +31,30 @@ class TeamsApiService {
             error: 'Session expirée, veuillez vous reconnecter',
             code: 'UNAUTHORIZED',
           };
+        case 403:
+          return {
+            success: false,
+            error: "Vous n'avez pas les droits pour cette action",
+            code: 'FORBIDDEN',
+          };
         case 404:
           return {
             success: false,
             error: 'Équipe introuvable',
             code: 'NOT_FOUND',
           };
-        case 403:
+        case 409:
           return {
             success: false,
-            error: "Vous n'avez pas les droits pour cette action",
-            code: 'FORBIDDEN',
+            error: data.error || 'Conflit de données',
+            code: 'CONFLICT',
+          };
+        case 422:
+          return {
+            success: false,
+            error: data.error || 'Données invalides',
+            code: 'VALIDATION_ERROR',
+            details: data.details,
           };
         default:
           return {
@@ -45,7 +66,7 @@ class TeamsApiService {
     } else if (error.request) {
       return {
         success: false,
-        error: 'Problème de connexion',
+        error: 'Problème de connexion au serveur',
         code: 'NETWORK_ERROR',
       };
     } else {
@@ -57,7 +78,11 @@ class TeamsApiService {
     }
   }
 
-  // Récupérer mes équipes
+  // ==================== RÉCUPÉRATION DES ÉQUIPES ====================
+
+  /**
+   * Récupérer mes équipes
+   */
   async getMyTeams() {
     try {
       const token = await SecureStorage.getToken();
@@ -68,7 +93,7 @@ class TeamsApiService {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), this.timeout);
 
-      const response = await fetch(`${this.baseURL}/teams/my-teams`, {
+      const response = await fetch(`${this.baseURL}/teams/my`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -96,7 +121,52 @@ class TeamsApiService {
     }
   }
 
-  // Créer une équipe
+  /**
+   * Récupérer les détails d'une équipe
+   */
+  async getTeamById(teamId) {
+    try {
+      const token = await SecureStorage.getToken();
+      if (!token) {
+        return { success: false, error: 'Non authentifié' };
+      }
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), this.timeout);
+
+      const response = await fetch(`${this.baseURL}/teams/${teamId}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        throw {
+          response: { status: response.status, data: await response.json() },
+        };
+      }
+
+      const data = await response.json();
+
+      return {
+        success: true,
+        data: data.team || data,
+      };
+    } catch (error) {
+      return this.handleApiError(error);
+    }
+  }
+
+  // ==================== CRÉATION ET MODIFICATION ====================
+
+  /**
+   * Créer une équipe
+   */
   async createTeam(teamData) {
     try {
       const token = await SecureStorage.getToken();
@@ -136,46 +206,9 @@ class TeamsApiService {
     }
   }
 
-  // Récupérer les détails d'une équipe
-  async getTeamById(teamId) {
-    try {
-      const token = await SecureStorage.getToken();
-      if (!token) {
-        return { success: false, error: 'Non authentifié' };
-      }
-
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), this.timeout);
-
-      const response = await fetch(`${this.baseURL}/teams/${teamId}`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        signal: controller.signal,
-      });
-
-      clearTimeout(timeoutId);
-
-      if (!response.ok) {
-        throw {
-          response: { status: response.status, data: await response.json() },
-        };
-      }
-
-      const data = await response.json();
-
-      return {
-        success: true,
-        data: data.team || data,
-      };
-    } catch (error) {
-      return this.handleApiError(error);
-    }
-  }
-
-  // Mettre à jour une équipe
+  /**
+   * Mettre à jour une équipe
+   */
   async updateTeam(teamId, teamData) {
     try {
       const token = await SecureStorage.getToken();
@@ -215,7 +248,9 @@ class TeamsApiService {
     }
   }
 
-  // Supprimer une équipe
+  /**
+   * Supprimer une équipe
+   */
   async deleteTeam(teamId) {
     try {
       const token = await SecureStorage.getToken();
@@ -251,7 +286,11 @@ class TeamsApiService {
     }
   }
 
-  // Récupérer les membres d'une équipe
+  // ==================== GESTION DES MEMBRES ====================
+
+  /**
+   * Récupérer les membres d'une équipe
+   */
   async getTeamMembers(teamId) {
     try {
       const token = await SecureStorage.getToken();
@@ -262,7 +301,7 @@ class TeamsApiService {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), this.timeout);
 
-      const response = await fetch(`${this.baseURL}/teams/${teamId}/members`, {
+      const response = await fetch(`${this.baseURL}/teams/${teamId}`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -290,8 +329,10 @@ class TeamsApiService {
     }
   }
 
-  // Inviter un joueur dans une équipe
-  async invitePlayer(teamId, email) {
+  /**
+   * Inviter un joueur dans l'équipe
+   */
+  async invitePlayer(teamId, playerId, message) {
     try {
       const token = await SecureStorage.getToken();
       if (!token) {
@@ -301,13 +342,13 @@ class TeamsApiService {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), this.timeout);
 
-      const response = await fetch(`${this.baseURL}/player-invitations`, {
+      const response = await fetch(`${this.baseURL}/teams/${teamId}/invite`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ teamId, email }),
+        body: JSON.stringify({ playerId, message }),
         signal: controller.signal,
       });
 
@@ -330,7 +371,9 @@ class TeamsApiService {
     }
   }
 
-  // Retirer un membre d'une équipe
+  /**
+   * Retirer un membre de l'équipe
+   */
   async removeMember(teamId, userId) {
     try {
       const token = await SecureStorage.getToken();
@@ -369,7 +412,9 @@ class TeamsApiService {
     }
   }
 
-  // Changer le rôle d'un membre
+  /**
+   * Modifier le rôle d'un membre
+   */
   async updateMemberRole(teamId, userId, role) {
     try {
       const token = await SecureStorage.getToken();
@@ -412,7 +457,90 @@ class TeamsApiService {
     }
   }
 
-  // Rechercher des équipes
+  /**
+   * Quitter une équipe
+   */
+  async leaveTeam(teamId) {
+    try {
+      const token = await SecureStorage.getToken();
+      if (!token) {
+        return { success: false, error: 'Non authentifié' };
+      }
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), this.timeout);
+
+      const response = await fetch(`${this.baseURL}/teams/${teamId}/leave`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        throw {
+          response: { status: response.status, data: await response.json() },
+        };
+      }
+
+      return {
+        success: true,
+      };
+    } catch (error) {
+      return this.handleApiError(error);
+    }
+  }
+
+  /**
+   * Rejoindre une équipe
+   */
+  async joinTeam(teamId) {
+    try {
+      const token = await SecureStorage.getToken();
+      if (!token) {
+        return { success: false, error: 'Non authentifié' };
+      }
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), this.timeout);
+
+      const response = await fetch(`${this.baseURL}/teams/${teamId}/join`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        throw {
+          response: { status: response.status, data: await response.json() },
+        };
+      }
+
+      const data = await response.json();
+
+      return {
+        success: true,
+        data: data,
+      };
+    } catch (error) {
+      return this.handleApiError(error);
+    }
+  }
+
+  // ==================== RECHERCHE ====================
+
+  /**
+   * Rechercher des équipes
+   */
   async searchTeams(filters = {}) {
     try {
       const token = await SecureStorage.getToken();
@@ -427,6 +555,8 @@ class TeamsApiService {
       if (filters.distance) queryParams.append('distance', filters.distance);
       if (filters.locationCity)
         queryParams.append('city', filters.locationCity);
+      if (filters.limit) queryParams.append('limit', filters.limit);
+      if (filters.offset) queryParams.append('offset', filters.offset);
 
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), this.timeout);
@@ -461,6 +591,51 @@ class TeamsApiService {
       return this.handleApiError(error);
     }
   }
+
+  /**
+   * Rechercher des joueurs
+   */
+  async searchPlayers(query) {
+    try {
+      const token = await SecureStorage.getToken();
+      if (!token) {
+        return { success: false, error: 'Non authentifié' };
+      }
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), this.timeout);
+
+      const response = await fetch(
+        `${this.baseURL}/users/search?q=${encodeURIComponent(query)}`,
+        {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          signal: controller.signal,
+        },
+      );
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        throw {
+          response: { status: response.status, data: await response.json() },
+        };
+      }
+
+      const data = await response.json();
+
+      return {
+        success: true,
+        data: data.users || data,
+      };
+    } catch (error) {
+      return this.handleApiError(error);
+    }
+  }
 }
 
+// Export une instance unique (singleton)
 export const teamsApi = new TeamsApiService();

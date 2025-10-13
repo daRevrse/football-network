@@ -1,588 +1,506 @@
-// ====== src/screens/matches/MatchesScreen.js ======
-import React, { useState, useCallback } from 'react';
+// ====== src/screens/matches/MatchesScreen.js - NOUVEAU DESIGN + BACKEND ======
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
+  StyleSheet,
   ScrollView,
   TouchableOpacity,
   Alert,
-  StyleSheet,
+  Platform,
   StatusBar,
   RefreshControl,
-  Platform,
+  Dimensions,
+  ActivityIndicator,
 } from 'react-native';
+import { useSelector } from 'react-redux';
 import Icon from 'react-native-vector-icons/Feather';
-import { useTheme } from '../../hooks/useTheme';
+import LinearGradient from 'react-native-linear-gradient';
+import { useFocusEffect } from '@react-navigation/native';
 import { DIMENSIONS, FONTS, SHADOWS } from '../../styles/theme';
+import { matchesApi } from '../../services/api';
 
-// Composant TabButton
-const TabButton = ({ label, active, onPress, COLORS }) => (
-  <TouchableOpacity
-    style={[styles.tabButton, active && { backgroundColor: COLORS.PRIMARY }]}
-    onPress={onPress}
-  >
-    <Text
-      style={[
-        styles.tabButtonText,
-        { color: active ? COLORS.WHITE : COLORS.TEXT_SECONDARY },
-      ]}
+const { width } = Dimensions.get('window');
+
+// Helper pour formater les dates
+const formatDate = dateString => {
+  const date = new Date(dateString);
+  const today = new Date();
+  const tomorrow = new Date(today);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+
+  if (date.toDateString() === today.toDateString()) {
+    return `Aujourd'hui à ${date.toLocaleTimeString('fr-FR', {
+      hour: '2-digit',
+      minute: '2-digit',
+    })}`;
+  } else if (date.toDateString() === tomorrow.toDateString()) {
+    return `Demain à ${date.toLocaleTimeString('fr-FR', {
+      hour: '2-digit',
+      minute: '2-digit',
+    })}`;
+  } else {
+    return date.toLocaleDateString('fr-FR', {
+      day: 'numeric',
+      month: 'short',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  }
+};
+
+// Helper pour statut du match
+const getMatchStatus = match => {
+  const now = new Date();
+  const matchDate = new Date(match.matchDate);
+
+  if (match.status === 'completed') {
+    return { label: 'Terminé', color: '#6B7280', icon: 'check-circle' };
+  } else if (match.status === 'cancelled') {
+    return { label: 'Annulé', color: '#EF4444', icon: 'x-circle' };
+  } else if (match.status === 'in_progress') {
+    return { label: 'En cours', color: '#22C55E', icon: 'play-circle' };
+  } else if (matchDate < now) {
+    return { label: 'Passé', color: '#9CA3AF', icon: 'clock' };
+  } else {
+    return { label: 'À venir', color: '#3B82F6', icon: 'calendar' };
+  }
+};
+
+// Composant MatchCard
+const MatchCard = ({ match, onPress }) => {
+  const status = getMatchStatus(match);
+
+  return (
+    <TouchableOpacity
+      style={styles.matchCard}
+      onPress={onPress}
+      activeOpacity={0.7}
     >
-      {label}
-    </Text>
-  </TouchableOpacity>
-);
-
-// Composant UpcomingMatchCard
-const UpcomingMatchCard = ({ match, onPress, COLORS }) => (
-  <TouchableOpacity
-    style={[styles.matchCard, { backgroundColor: COLORS.WHITE }]}
-    onPress={onPress}
-  >
-    {/* Badge Status */}
-    <View style={styles.matchStatus}>
-      <View
-        style={[
-          styles.statusBadge,
-          {
-            backgroundColor:
-              match.status === 'confirmed'
-                ? COLORS.SUCCESS_LIGHT
-                : COLORS.WARNING_LIGHT,
-          },
-        ]}
+      <LinearGradient
+        colors={['#FFFFFF', '#F9FAFB']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 0, y: 1 }}
+        style={styles.matchCardGradient}
       >
+        {/* Header avec statut */}
+        <View style={styles.matchHeader}>
+          <View
+            style={[
+              styles.statusBadge,
+              { backgroundColor: status.color + '20' },
+            ]}
+          >
+            <Icon name={status.icon} size={12} color={status.color} />
+            <Text style={[styles.statusText, { color: status.color }]}>
+              {status.label}
+            </Text>
+          </View>
+          <Text style={styles.matchDate}>{formatDate(match.matchDate)}</Text>
+        </View>
+
+        {/* Équipes */}
+        <View style={styles.teamsContainer}>
+          {/* Équipe 1 */}
+          <View style={styles.teamSection}>
+            <View style={styles.teamIconContainer}>
+              <LinearGradient
+                colors={['#22C55E', '#16A34A']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.teamIcon}
+              >
+                <Icon name="shield" size={24} color="#FFF" />
+              </LinearGradient>
+            </View>
+            <Text style={styles.teamName} numberOfLines={1}>
+              {match.homeTeam.name}
+            </Text>
+            {match.score.home !== null && (
+              <View style={styles.scoreContainer}>
+                <Text style={styles.scoreText}>{match.score.home}</Text>
+              </View>
+            )}
+          </View>
+
+          {/* VS */}
+          <View style={styles.vsContainer}>
+            <Text style={styles.vsText}>VS</Text>
+          </View>
+
+          {/* Équipe 2 */}
+          <View style={styles.teamSection}>
+            <View style={styles.teamIconContainer}>
+              <LinearGradient
+                colors={['#3B82F6', '#2563EB']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.teamIcon}
+              >
+                <Icon name="shield" size={24} color="#FFF" />
+              </LinearGradient>
+            </View>
+            <Text style={styles.teamName} numberOfLines={1}>
+              {match.awayTeam.name}
+            </Text>
+            {match.score.away !== null && (
+              <View style={styles.scoreContainer}>
+                <Text style={styles.scoreText}>{match.score.away}</Text>
+              </View>
+            )}
+          </View>
+        </View>
+
+        {/* Footer avec lieu */}
+        {match.location && (
+          <View style={styles.matchFooter}>
+            <Icon name="map-pin" size={14} color="#6B7280" />
+            <Text style={styles.locationText}>
+              {match.location.name || 'Lieu à confirmer'}
+            </Text>
+          </View>
+        )}
+
+        {/* Flèche */}
         <Icon
-          name={match.status === 'confirmed' ? 'check-circle' : 'clock'}
-          size={12}
-          color={match.status === 'confirmed' ? COLORS.SUCCESS : COLORS.WARNING}
+          name="chevron-right"
+          size={24}
+          color="#CBD5E1"
+          style={styles.chevron}
         />
-        <Text
-          style={[
-            styles.statusText,
-            {
-              color:
-                match.status === 'confirmed' ? COLORS.SUCCESS : COLORS.WARNING,
-            },
-          ]}
-        >
-          {match.status === 'confirmed' ? 'Confirmé' : 'En attente'}
-        </Text>
-      </View>
-    </View>
+      </LinearGradient>
+    </TouchableOpacity>
+  );
+};
 
-    {/* Équipes */}
-    <View style={styles.teamsContainer}>
-      <View style={styles.teamSection}>
-        <View
-          style={[
-            styles.teamLogo,
-            { backgroundColor: COLORS.PRIMARY_ULTRA_LIGHT },
-          ]}
-        >
-          <Icon name="dribbble" size={24} color={COLORS.PRIMARY} />
-        </View>
-        <Text style={[styles.teamName, { color: COLORS.TEXT_PRIMARY }]}>
-          {match.homeTeam}
-        </Text>
-      </View>
-
-      <View style={styles.vsContainer}>
-        <Text style={[styles.vsText, { color: COLORS.TEXT_MUTED }]}>VS</Text>
-        <View style={styles.timeContainer}>
-          <Icon name="clock" size={14} color={COLORS.PRIMARY} />
-          <Text style={[styles.timeText, { color: COLORS.PRIMARY }]}>
-            {match.time}
-          </Text>
-        </View>
-      </View>
-
-      <View style={styles.teamSection}>
-        <View
-          style={[styles.teamLogo, { backgroundColor: COLORS.SECONDARY_LIGHT }]}
-        >
-          <Icon name="dribbble" size={24} color={COLORS.SECONDARY} />
-        </View>
-        <Text style={[styles.teamName, { color: COLORS.TEXT_PRIMARY }]}>
-          {match.awayTeam}
-        </Text>
-      </View>
-    </View>
-
-    {/* Infos */}
-    <View style={styles.matchInfo}>
-      <View style={styles.infoItem}>
-        <Icon name="calendar" size={14} color={COLORS.TEXT_MUTED} />
-        <Text style={[styles.infoText, { color: COLORS.TEXT_SECONDARY }]}>
-          {match.date}
-        </Text>
-      </View>
-      <View style={styles.infoItem}>
-        <Icon name="map-pin" size={14} color={COLORS.TEXT_MUTED} />
-        <Text style={[styles.infoText, { color: COLORS.TEXT_SECONDARY }]}>
-          {match.location}
-        </Text>
-      </View>
-    </View>
-
-    {/* Footer */}
-    <View style={styles.matchFooter}>
-      <View style={styles.playersInfo}>
-        <Icon name="users" size={14} color={COLORS.TEXT_MUTED} />
-        <Text style={[styles.playersText, { color: COLORS.TEXT_SECONDARY }]}>
-          {match.confirmedPlayers}/{match.totalPlayers} joueurs
-        </Text>
-      </View>
-      <Icon name="chevron-right" size={20} color={COLORS.TEXT_MUTED} />
-    </View>
-  </TouchableOpacity>
-);
-
-// Composant PastMatchCard
-const PastMatchCard = ({ match, onPress, COLORS }) => (
-  <TouchableOpacity
-    style={[styles.matchCard, { backgroundColor: COLORS.WHITE }]}
-    onPress={onPress}
-  >
-    {/* Badge Résultat */}
-    <View style={styles.matchStatus}>
-      <View
-        style={[
-          styles.resultBadge,
-          {
-            backgroundColor:
-              match.result === 'win'
-                ? COLORS.SUCCESS_LIGHT
-                : match.result === 'loss'
-                ? COLORS.ERROR_LIGHT
-                : COLORS.TEXT_MUTED + '20',
-          },
-        ]}
-      >
-        <Text
-          style={[
-            styles.resultText,
-            {
-              color:
-                match.result === 'win'
-                  ? COLORS.SUCCESS
-                  : match.result === 'loss'
-                  ? COLORS.ERROR
-                  : COLORS.TEXT_MUTED,
-            },
-          ]}
-        >
-          {match.result === 'win'
-            ? 'Victoire'
-            : match.result === 'loss'
-            ? 'Défaite'
-            : 'Match Nul'}
-        </Text>
-      </View>
-    </View>
-
-    {/* Score */}
-    <View style={styles.scoreContainer}>
-      <View style={styles.scoreTeam}>
-        <View
-          style={[
-            styles.teamLogoSmall,
-            { backgroundColor: COLORS.PRIMARY_ULTRA_LIGHT },
-          ]}
-        >
-          <Icon name="dribbble" size={20} color={COLORS.PRIMARY} />
-        </View>
-        <Text style={[styles.scoreTeamName, { color: COLORS.TEXT_PRIMARY }]}>
-          {match.homeTeam}
-        </Text>
-      </View>
-
-      <View style={styles.scoreBox}>
-        <Text style={[styles.scoreNumber, { color: COLORS.TEXT_PRIMARY }]}>
-          {match.homeScore}
-        </Text>
-        <Text style={[styles.scoreSeparator, { color: COLORS.TEXT_MUTED }]}>
-          -
-        </Text>
-        <Text style={[styles.scoreNumber, { color: COLORS.TEXT_PRIMARY }]}>
-          {match.awayScore}
-        </Text>
-      </View>
-
-      <View style={styles.scoreTeam}>
-        <View
-          style={[
-            styles.teamLogoSmall,
-            { backgroundColor: COLORS.SECONDARY_LIGHT },
-          ]}
-        >
-          <Icon name="dribbble" size={20} color={COLORS.SECONDARY} />
-        </View>
-        <Text style={[styles.scoreTeamName, { color: COLORS.TEXT_PRIMARY }]}>
-          {match.awayTeam}
-        </Text>
-      </View>
-    </View>
-
-    {/* Infos */}
-    <View style={styles.matchInfo}>
-      <View style={styles.infoItem}>
-        <Icon name="calendar" size={14} color={COLORS.TEXT_MUTED} />
-        <Text style={[styles.infoText, { color: COLORS.TEXT_SECONDARY }]}>
-          {match.date}
-        </Text>
-      </View>
-      <View style={styles.infoItem}>
-        <Icon name="map-pin" size={14} color={COLORS.TEXT_MUTED} />
-        <Text style={[styles.infoText, { color: COLORS.TEXT_SECONDARY }]}>
-          {match.location}
-        </Text>
-      </View>
-    </View>
-
-    {/* Stats rapides */}
-    {match.stats && (
-      <View style={styles.quickStats}>
-        {match.stats.goals > 0 && (
-          <View
-            style={[
-              styles.statBadge,
-              { backgroundColor: COLORS.SUCCESS_LIGHT },
-            ]}
-          >
-            <Icon name="target" size={12} color={COLORS.SUCCESS} />
-            <Text style={[styles.statText, { color: COLORS.SUCCESS }]}>
-              {match.stats.goals} {match.stats.goals > 1 ? 'buts' : 'but'}
-            </Text>
-          </View>
-        )}
-        {match.stats.assists > 0 && (
-          <View
-            style={[
-              styles.statBadge,
-              { backgroundColor: COLORS.PRIMARY_LIGHT },
-            ]}
-          >
-            <Icon name="zap" size={12} color={COLORS.PRIMARY} />
-            <Text style={[styles.statText, { color: COLORS.PRIMARY }]}>
-              {match.stats.assists}{' '}
-              {match.stats.assists > 1 ? 'passes D.' : 'passe D.'}
-            </Text>
-          </View>
-        )}
-      </View>
-    )}
-  </TouchableOpacity>
+// Composant QuickStat
+const QuickStat = ({ icon, value, label, gradient }) => (
+  <View style={styles.quickStat}>
+    <LinearGradient
+      colors={gradient}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
+      style={styles.quickStatGradient}
+    >
+      <Icon name={icon} size={20} color="#FFF" />
+      <Text style={styles.quickStatValue}>{value}</Text>
+      <Text style={styles.quickStatLabel}>{label}</Text>
+    </LinearGradient>
+  </View>
 );
 
 // Composant EmptyState
-const EmptyState = ({ icon, title, message, actionText, onAction, COLORS }) => (
+const EmptyState = ({ activeTab, onCreateMatch }) => (
   <View style={styles.emptyState}>
-    <View
-      style={[
-        styles.emptyIcon,
-        { backgroundColor: COLORS.PRIMARY_ULTRA_LIGHT },
-      ]}
+    <LinearGradient
+      colors={['#22C55E20', '#22C55E10']}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 0, y: 1 }}
+      style={styles.emptyStateGradient}
     >
-      <Icon name={icon} size={48} color={COLORS.PRIMARY} />
-    </View>
-    <Text style={[styles.emptyTitle, { color: COLORS.TEXT_PRIMARY }]}>
-      {title}
-    </Text>
-    <Text style={[styles.emptyMessage, { color: COLORS.TEXT_SECONDARY }]}>
-      {message}
-    </Text>
-    {actionText && onAction && (
-      <TouchableOpacity
-        style={[styles.emptyButton, { backgroundColor: COLORS.PRIMARY }]}
-        onPress={onAction}
-      >
-        <Text style={styles.emptyButtonText}>{actionText}</Text>
-      </TouchableOpacity>
-    )}
+      <View style={styles.emptyIconContainer}>
+        <Icon name="calendar" size={48} color="#22C55E" />
+      </View>
+      <Text style={styles.emptyTitle}>
+        {activeTab === 'upcoming' ? 'Aucun match à venir' : 'Aucun match'}
+      </Text>
+      <Text style={styles.emptyDescription}>
+        {activeTab === 'upcoming'
+          ? 'Créez un nouveau match ou attendez une invitation'
+          : 'Pas de matchs dans cette catégorie'}
+      </Text>
+      {activeTab === 'upcoming' && (
+        <TouchableOpacity
+          style={styles.emptyButton}
+          onPress={onCreateMatch}
+          activeOpacity={0.8}
+        >
+          <LinearGradient
+            colors={['#22C55E', '#16A34A']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.emptyButtonGradient}
+          >
+            <Icon name="plus" size={20} color="#FFF" />
+            <Text style={styles.emptyButtonText}>Créer un match</Text>
+          </LinearGradient>
+        </TouchableOpacity>
+      )}
+    </LinearGradient>
   </View>
 );
 
 export const MatchesScreen = ({ navigation }) => {
-  const { colors: COLORS, isDark } = useTheme('auto');
   const [refreshing, setRefreshing] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [matches, setMatches] = useState([]);
   const [activeTab, setActiveTab] = useState('upcoming'); // upcoming, past, all
+  const [stats, setStats] = useState({
+    totalMatches: 0,
+    upcomingMatches: 0,
+    completedMatches: 0,
+  });
 
-  // Données mockées (à remplacer par API)
-  const [upcomingMatches] = useState([
-    {
-      id: 1,
-      homeTeam: 'Les Tigres de Paris',
-      awayTeam: 'FC Olympique',
-      date: 'Sam 20 Avril',
-      time: '15:00',
-      location: 'Stade Municipal, Paris 15e',
-      status: 'confirmed',
-      confirmedPlayers: 18,
-      totalPlayers: 22,
-    },
-    {
-      id: 2,
-      homeTeam: 'Racing Club 75',
-      awayTeam: 'Les Tigres de Paris',
-      date: 'Dim 28 Avril',
-      time: '10:30',
-      location: 'Terrain Synthétique, Paris 18e',
-      status: 'pending',
-      confirmedPlayers: 12,
-      totalPlayers: 22,
-    },
-    {
-      id: 3,
-      homeTeam: 'Les Tigres de Paris',
-      awayTeam: 'AS Montparnasse',
-      date: 'Sam 04 Mai',
-      time: '14:00',
-      location: 'Parc des Sports, Paris 14e',
-      status: 'pending',
-      confirmedPlayers: 8,
-      totalPlayers: 22,
-    },
-  ]);
+  // Charger les matchs au focus
+  useFocusEffect(
+    useCallback(() => {
+      loadMatches();
+    }, []),
+  );
 
-  const [pastMatches] = useState([
-    {
-      id: 4,
-      homeTeam: 'Les Tigres de Paris',
-      awayTeam: 'FC Olympique',
-      homeScore: 3,
-      awayScore: 2,
-      result: 'win',
-      date: '15 Mars 2024',
-      location: 'Stade Municipal, Paris 15e',
-      stats: {
-        goals: 2,
-        assists: 1,
-      },
-    },
-    {
-      id: 5,
-      homeTeam: 'Racing Club',
-      awayTeam: 'Les Tigres de Paris',
-      homeScore: 1,
-      awayScore: 1,
-      result: 'draw',
-      date: '08 Mars 2024',
-      location: 'Terrain Synthétique, Paris 18e',
-      stats: {
-        goals: 0,
-        assists: 1,
-      },
-    },
-    {
-      id: 6,
-      homeTeam: 'Les Tigres de Paris',
-      awayTeam: 'AS Montparnasse',
-      homeScore: 0,
-      awayScore: 2,
-      result: 'loss',
-      date: '01 Mars 2024',
-      location: 'Parc des Sports, Paris 14e',
-      stats: {
-        goals: 0,
-        assists: 0,
-      },
-    },
-    {
-      id: 7,
-      homeTeam: 'Les Tigres de Paris',
-      awayTeam: 'FC Saint-Germain',
-      homeScore: 4,
-      awayScore: 1,
-      result: 'win',
-      date: '22 Fév 2024',
-      location: 'Stade Municipal, Paris 15e',
-      stats: {
-        goals: 1,
-        assists: 2,
-      },
-    },
-  ]);
+  const loadMatches = async () => {
+    try {
+      setLoading(true);
+      const result = await matchesApi.getMyMatches();
 
-  const onRefresh = useCallback(() => {
+      console.log('result', result);
+
+      if (result.success) {
+        setMatches(result.data);
+
+        // Calculer les stats
+        const now = new Date();
+        const upcoming = result.data.filter(
+          m =>
+            new Date(m.matchDate) > now &&
+            // m.status !== 'cancelled' &&
+            // m.status !== 'completed',
+            m.status === 'confirmed',
+        ).length;
+        const completed = result.data.filter(
+          m => m.status === 'completed',
+        ).length;
+
+        setStats({
+          totalMatches: result.data.length,
+          upcomingMatches: upcoming,
+          completedMatches: completed,
+        });
+      } else {
+        Alert.alert(
+          'Erreur',
+          result.error || 'Impossible de charger les matchs',
+        );
+      }
+    } catch (error) {
+      console.error('Load matches error:', error);
+      Alert.alert('Erreur', 'Une erreur est survenue');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRefresh = useCallback(async () => {
     setRefreshing(true);
-    setTimeout(() => setRefreshing(false), 1000);
+    await loadMatches();
+    setRefreshing(false);
   }, []);
 
+  const handleMatchPress = match => {
+    navigation.navigate('MatchDetail', {
+      matchId: match.id,
+    });
+  };
+
   const handleCreateMatch = () => {
-    // Alert.alert('Info', 'Fonctionnalité en développement');
     navigation.navigate('CreateMatch');
   };
 
   const handleInvitations = () => {
-    // Alert.alert('Info', 'Fonctionnalité en développement');
     navigation.navigate('Invitations');
   };
 
-  const handleMatchPress = matchId => {
-    navigation.navigate('MatchDetail', { matchId });
-  };
+  // Filtrer les matchs selon l'onglet actif
+  const filteredMatches = matches.filter(match => {
+    const now = new Date();
+    const matchDate = new Date(match.matchDate);
 
-  const getMatches = () => {
-    if (activeTab === 'upcoming') return upcomingMatches;
-    if (activeTab === 'past') return pastMatches;
-    return [...upcomingMatches, ...pastMatches];
-  };
+    if (activeTab === 'upcoming') {
+      return (
+        matchDate > now &&
+        // match.status !== 'cancelled' &&
+        // match.status !== 'completed'
+        match.status === 'confirmed'
+      );
+    } else if (activeTab === 'past') {
+      return matchDate < now || match.status === 'completed';
+    }
+    return true; // all
+  });
 
-  const matches = getMatches();
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#22C55E" />
+        <Text style={styles.loadingText}>Chargement...</Text>
+      </View>
+    );
+  }
 
   return (
-    <View
-      style={[styles.container, { backgroundColor: COLORS.BACKGROUND_LIGHT }]}
-    >
-      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" />
 
-      {/* Header */}
-      <View style={[styles.header, { backgroundColor: COLORS.WHITE }]}>
+      {/* Header avec gradient */}
+      <LinearGradient
+        colors={['#22C55E', '#16A34A', '#15803D']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.header}
+      >
         <View style={styles.headerTop}>
-          <Text style={[styles.headerTitle, { color: COLORS.TEXT_PRIMARY }]}>
-            Mes Matchs
-          </Text>
-          <View style={styles.headerActions}>
-            <TouchableOpacity
-              style={[styles.createButton, { backgroundColor: COLORS.PRIMARY }]}
-              onPress={handleCreateMatch}
-            >
-              <Icon name="plus" size={20} color={COLORS.WHITE} />
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.createButton, { backgroundColor: COLORS.PRIMARY }]}
-              onPress={handleInvitations}
-            >
-              <Icon name="inbox" size={20} color={COLORS.WHITE} />
-            </TouchableOpacity>
+          <View>
+            <Text style={styles.headerTitle}>Mes Matchs</Text>
+            <Text style={styles.headerSubtitle}>
+              {matches.length} {matches.length > 1 ? 'matchs' : 'match'}
+            </Text>
           </View>
+          <TouchableOpacity
+            style={styles.invitationButton}
+            onPress={handleInvitations}
+          >
+            <Icon name="mail" size={20} color="#FFF" />
+            {/* Badge notification (si invitations en attente) */}
+            <View style={styles.notificationBadge}>
+              <Text style={styles.notificationBadgeText}>2</Text>
+            </View>
+          </TouchableOpacity>
         </View>
 
-        {/* Tabs */}
-        <View
-          style={[styles.tabs, { backgroundColor: COLORS.BACKGROUND_LIGHT }]}
-        >
-          <TabButton
+        {/* Quick Stats */}
+        <View style={styles.quickStatsContainer}>
+          <QuickStat
+            icon="calendar"
+            value={stats.totalMatches}
+            label="Total"
+            gradient={['rgba(255,255,255,0.25)', 'rgba(255,255,255,0.15)']}
+          />
+          <QuickStat
+            icon="clock"
+            value={stats.upcomingMatches}
             label="À venir"
-            active={activeTab === 'upcoming'}
-            onPress={() => setActiveTab('upcoming')}
-            COLORS={COLORS}
+            gradient={['rgba(255,255,255,0.25)', 'rgba(255,255,255,0.15)']}
           />
-          <TabButton
-            label="Passés"
-            active={activeTab === 'past'}
-            onPress={() => setActiveTab('past')}
-            COLORS={COLORS}
-          />
-          <TabButton
-            label="Tous"
-            active={activeTab === 'all'}
-            onPress={() => setActiveTab('all')}
-            COLORS={COLORS}
+          <QuickStat
+            icon="check-circle"
+            value={stats.completedMatches}
+            label="Joués"
+            gradient={['rgba(255,255,255,0.25)', 'rgba(255,255,255,0.15)']}
           />
         </View>
+      </LinearGradient>
+
+      {/* Tabs */}
+      <View style={styles.tabsContainer}>
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'upcoming' && styles.tabActive]}
+          onPress={() => setActiveTab('upcoming')}
+        >
+          {activeTab === 'upcoming' ? (
+            <LinearGradient
+              colors={['#22C55E', '#16A34A']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.tabGradient}
+            >
+              <Icon name="clock" size={16} color="#FFF" />
+              <Text style={styles.tabTextActive}>À venir</Text>
+            </LinearGradient>
+          ) : (
+            <View style={styles.tabContent}>
+              <Icon name="clock" size={16} color="#6B7280" />
+              <Text style={styles.tabText}>À venir</Text>
+            </View>
+          )}
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'past' && styles.tabActive]}
+          onPress={() => setActiveTab('past')}
+        >
+          {activeTab === 'past' ? (
+            <LinearGradient
+              colors={['#22C55E', '#16A34A']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.tabGradient}
+            >
+              <Icon name="check-circle" size={16} color="#FFF" />
+              <Text style={styles.tabTextActive}>Passés</Text>
+            </LinearGradient>
+          ) : (
+            <View style={styles.tabContent}>
+              <Icon name="check-circle" size={16} color="#6B7280" />
+              <Text style={styles.tabText}>Passés</Text>
+            </View>
+          )}
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'all' && styles.tabActive]}
+          onPress={() => setActiveTab('all')}
+        >
+          {activeTab === 'all' ? (
+            <LinearGradient
+              colors={['#22C55E', '#16A34A']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.tabGradient}
+            >
+              <Icon name="list" size={16} color="#FFF" />
+              <Text style={styles.tabTextActive}>Tous</Text>
+            </LinearGradient>
+          ) : (
+            <View style={styles.tabContent}>
+              <Icon name="list" size={16} color="#6B7280" />
+              <Text style={styles.tabText}>Tous</Text>
+            </View>
+          )}
+        </TouchableOpacity>
       </View>
 
-      {/* Content */}
+      {/* Liste des matchs */}
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-        }
-      >
-        {matches.length === 0 ? (
-          <EmptyState
-            icon="calendar"
-            title="Aucun match"
-            message={
-              activeTab === 'upcoming'
-                ? "Vous n'avez aucun match à venir pour le moment"
-                : 'Aucun historique de match disponible'
-            }
-            actionText={activeTab === 'upcoming' ? 'Créer un match' : null}
-            onAction={activeTab === 'upcoming' ? handleCreateMatch : null}
-            COLORS={COLORS}
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            colors={['#22C55E']}
+            tintColor="#22C55E"
           />
+        }
+        showsVerticalScrollIndicator={false}
+      >
+        {filteredMatches.length === 0 ? (
+          <EmptyState activeTab={activeTab} onCreateMatch={handleCreateMatch} />
         ) : (
-          <View style={styles.matchesList}>
-            {activeTab === 'upcoming' &&
-              upcomingMatches.map(match => (
-                <UpcomingMatchCard
-                  key={match.id}
-                  match={match}
-                  onPress={() => handleMatchPress(match.id)}
-                  COLORS={COLORS}
-                />
-              ))}
-
-            {activeTab === 'past' &&
-              pastMatches.map(match => (
-                <PastMatchCard
-                  key={match.id}
-                  match={match}
-                  onPress={() => handleMatchPress(match.id)}
-                  COLORS={COLORS}
-                />
-              ))}
-
-            {activeTab === 'all' && (
-              <>
-                {/* À venir */}
-                {upcomingMatches.length > 0 && (
-                  <>
-                    <View style={styles.sectionHeader}>
-                      <Icon name="calendar" size={18} color={COLORS.PRIMARY} />
-                      <Text
-                        style={[
-                          styles.sectionTitle,
-                          { color: COLORS.TEXT_PRIMARY },
-                        ]}
-                      >
-                        Matchs à venir
-                      </Text>
-                    </View>
-                    {upcomingMatches.map(match => (
-                      <UpcomingMatchCard
-                        key={match.id}
-                        match={match}
-                        onPress={() => handleMatchPress(match.id)}
-                        COLORS={COLORS}
-                      />
-                    ))}
-                  </>
-                )}
-
-                {/* Passés */}
-                {pastMatches.length > 0 && (
-                  <>
-                    <View style={styles.sectionHeader}>
-                      <Icon name="clock" size={18} color={COLORS.TEXT_MUTED} />
-                      <Text
-                        style={[
-                          styles.sectionTitle,
-                          { color: COLORS.TEXT_PRIMARY },
-                        ]}
-                      >
-                        Matchs passés
-                      </Text>
-                    </View>
-                    {pastMatches.map(match => (
-                      <PastMatchCard
-                        key={match.id}
-                        match={match}
-                        onPress={() => handleMatchPress(match.id)}
-                        COLORS={COLORS}
-                      />
-                    ))}
-                  </>
-                )}
-              </>
-            )}
-          </View>
+          filteredMatches.map(match => (
+            <MatchCard
+              key={match.id}
+              match={match}
+              onPress={() => handleMatchPress(match)}
+            />
+          ))
         )}
       </ScrollView>
+
+      {/* Bouton FAB Créer */}
+      <TouchableOpacity
+        style={styles.fabButton}
+        onPress={handleCreateMatch}
+        activeOpacity={0.8}
+      >
+        <LinearGradient
+          colors={['#22C55E', '#16A34A']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.fabGradient}
+        >
+          <Icon name="plus" size={28} color="#FFF" />
+        </LinearGradient>
+      </TouchableOpacity>
     </View>
   );
 };
@@ -590,266 +508,288 @@ export const MatchesScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#F8FAFC',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 14,
+    color: '#6B7280',
   },
   header: {
     paddingTop: Platform.OS === 'ios' ? 60 : 20,
-    paddingBottom: DIMENSIONS.SPACING_MD,
-    ...SHADOWS.SMALL,
+    paddingBottom: 20,
+    paddingHorizontal: 20,
+    ...SHADOWS.MEDIUM,
   },
   headerTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: DIMENSIONS.CONTAINER_PADDING,
-    marginBottom: DIMENSIONS.SPACING_MD,
+    alignItems: 'flex-start',
+    marginBottom: 20,
   },
   headerTitle: {
-    fontSize: FONTS.SIZE.XXL,
-    fontWeight: FONTS.WEIGHT.BOLD,
+    fontSize: 28,
+    fontWeight: '700',
+    color: '#FFF',
+    marginBottom: 4,
   },
-  headerActions: {
-    flexDirection: 'row',
-    gap: DIMENSIONS.SPACING_MD,
+  headerSubtitle: {
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.9)',
   },
-  createButton: {
+  invitationButton: {
     width: 44,
     height: 44,
     borderRadius: 22,
+    backgroundColor: 'rgba(255,255,255,0.2)',
     justifyContent: 'center',
     alignItems: 'center',
-    ...SHADOWS.MEDIUM,
+    position: 'relative',
   },
-  tabs: {
+  notificationBadge: {
+    position: 'absolute',
+    top: -2,
+    right: -2,
+    backgroundColor: '#EF4444',
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#22C55E',
+  },
+  notificationBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#FFF',
+  },
+  quickStatsContainer: {
     flexDirection: 'row',
-    marginHorizontal: DIMENSIONS.CONTAINER_PADDING,
-    padding: 4,
-    borderRadius: DIMENSIONS.BORDER_RADIUS_MD,
-    gap: 4,
+    gap: 12,
   },
-  tabButton: {
+  quickStat: {
     flex: 1,
-    paddingVertical: DIMENSIONS.SPACING_SM,
-    borderRadius: DIMENSIONS.BORDER_RADIUS_SM,
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  quickStatGradient: {
+    padding: 12,
     alignItems: 'center',
   },
-  tabButtonText: {
-    fontSize: FONTS.SIZE.SM,
-    fontWeight: FONTS.WEIGHT.SEMIBOLD,
+  quickStatValue: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#FFF',
+    marginTop: 4,
+  },
+  quickStatLabel: {
+    fontSize: 11,
+    color: 'rgba(255,255,255,0.9)',
+    marginTop: 2,
+  },
+  tabsContainer: {
+    flexDirection: 'row',
+    backgroundColor: '#FFF',
+    padding: 8,
+    gap: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+  },
+  tab: {
+    flex: 1,
+    borderRadius: 10,
+    overflow: 'hidden',
+  },
+  tabActive: {
+    ...SHADOWS.SMALL,
+  },
+  tabGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    gap: 6,
+  },
+  tabContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    gap: 6,
+    backgroundColor: '#F3F4F6',
+  },
+  tabText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#6B7280',
+  },
+  tabTextActive: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#FFF',
   },
   scrollView: {
     flex: 1,
   },
   scrollContent: {
-    padding: DIMENSIONS.CONTAINER_PADDING,
-    paddingBottom: DIMENSIONS.SPACING_XXL,
-  },
-  matchesList: {
-    gap: DIMENSIONS.SPACING_MD,
+    padding: 20,
   },
   matchCard: {
-    padding: DIMENSIONS.SPACING_LG,
-    borderRadius: DIMENSIONS.BORDER_RADIUS_LG,
+    borderRadius: 16,
+    marginBottom: 16,
+    overflow: 'hidden',
     ...SHADOWS.MEDIUM,
   },
-  matchStatus: {
-    marginBottom: DIMENSIONS.SPACING_MD,
+  matchCardGradient: {
+    padding: 16,
+  },
+  matchHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
   },
   statusBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    alignSelf: 'flex-start',
-    paddingHorizontal: DIMENSIONS.SPACING_SM,
-    paddingVertical: DIMENSIONS.SPACING_XXS,
-    borderRadius: DIMENSIONS.BORDER_RADIUS_FULL,
-    gap: DIMENSIONS.SPACING_XXS,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    gap: 4,
   },
   statusText: {
-    fontSize: FONTS.SIZE.XS,
-    fontWeight: FONTS.WEIGHT.SEMIBOLD,
+    fontSize: 12,
+    fontWeight: '600',
   },
-  resultBadge: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: DIMENSIONS.SPACING_MD,
-    paddingVertical: DIMENSIONS.SPACING_XS,
-    borderRadius: DIMENSIONS.BORDER_RADIUS_FULL,
-  },
-  resultText: {
-    fontSize: FONTS.SIZE.SM,
-    fontWeight: FONTS.WEIGHT.BOLD,
+  matchDate: {
+    fontSize: 13,
+    color: '#6B7280',
+    fontWeight: '500',
   },
   teamsContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: DIMENSIONS.SPACING_MD,
+    marginBottom: 12,
   },
   teamSection: {
     flex: 1,
     alignItems: 'center',
   },
-  teamLogo: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+  teamIconContainer: {
+    marginBottom: 8,
+  },
+  teamIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: DIMENSIONS.SPACING_SM,
   },
   teamName: {
-    fontSize: FONTS.SIZE.SM,
-    fontWeight: FONTS.WEIGHT.SEMIBOLD,
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1F2937',
     textAlign: 'center',
-  },
-  vsContainer: {
-    alignItems: 'center',
-    paddingHorizontal: DIMENSIONS.SPACING_MD,
-  },
-  vsText: {
-    fontSize: FONTS.SIZE.LG,
-    fontWeight: FONTS.WEIGHT.BOLD,
-    marginBottom: DIMENSIONS.SPACING_XS,
-  },
-  timeContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: DIMENSIONS.SPACING_XXS,
-  },
-  timeText: {
-    fontSize: FONTS.SIZE.MD,
-    fontWeight: FONTS.WEIGHT.BOLD,
+    marginBottom: 4,
   },
   scoreContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: DIMENSIONS.SPACING_MD,
+    backgroundColor: '#F3F4F6',
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 8,
   },
-  scoreTeam: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: DIMENSIONS.SPACING_SM,
+  scoreText: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#1F2937',
   },
-  teamLogoSmall: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
+  vsContainer: {
+    paddingHorizontal: 16,
   },
-  scoreTeamName: {
-    fontSize: FONTS.SIZE.SM,
-    fontWeight: FONTS.WEIGHT.SEMIBOLD,
-    flex: 1,
-  },
-  scoreBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: DIMENSIONS.SPACING_SM,
-    paddingHorizontal: DIMENSIONS.SPACING_MD,
-  },
-  scoreNumber: {
-    fontSize: FONTS.SIZE.XXL,
-    fontWeight: FONTS.WEIGHT.BOLD,
-  },
-  scoreSeparator: {
-    fontSize: FONTS.SIZE.LG,
-    fontWeight: FONTS.WEIGHT.BOLD,
-  },
-  matchInfo: {
-    flexDirection: 'row',
-    gap: DIMENSIONS.SPACING_LG,
-    paddingTop: DIMENSIONS.SPACING_MD,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(0,0,0,0.05)',
-  },
-  infoItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: DIMENSIONS.SPACING_XS,
-  },
-  infoText: {
-    fontSize: FONTS.SIZE.SM,
+  vsText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#9CA3AF',
   },
   matchFooter: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: DIMENSIONS.SPACING_MD,
-    paddingTop: DIMENSIONS.SPACING_MD,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(0,0,0,0.05)',
+    gap: 6,
   },
-  playersInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: DIMENSIONS.SPACING_XS,
+  locationText: {
+    fontSize: 13,
+    color: '#6B7280',
   },
-  playersText: {
-    fontSize: FONTS.SIZE.SM,
-    fontWeight: FONTS.WEIGHT.MEDIUM,
-  },
-  quickStats: {
-    flexDirection: 'row',
-    gap: DIMENSIONS.SPACING_SM,
-    marginTop: DIMENSIONS.SPACING_MD,
-  },
-  statBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: DIMENSIONS.SPACING_SM,
-    paddingVertical: DIMENSIONS.SPACING_XXS,
-    borderRadius: DIMENSIONS.BORDER_RADIUS_FULL,
-    gap: DIMENSIONS.SPACING_XXS,
-  },
-  statText: {
-    fontSize: FONTS.SIZE.XS,
-    fontWeight: FONTS.WEIGHT.SEMIBOLD,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: DIMENSIONS.SPACING_SM,
-    marginTop: DIMENSIONS.SPACING_LG,
-    marginBottom: DIMENSIONS.SPACING_SM,
-  },
-  sectionTitle: {
-    fontSize: FONTS.SIZE.MD,
-    fontWeight: FONTS.WEIGHT.BOLD,
+  chevron: {
+    position: 'absolute',
+    right: 16,
+    top: '50%',
+    marginTop: -12,
   },
   emptyState: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: DIMENSIONS.SPACING_XXL * 2,
+    paddingVertical: 60,
   },
-  emptyIcon: {
+  emptyStateGradient: {
+    padding: 32,
+    borderRadius: 24,
+    alignItems: 'center',
+  },
+  emptyIconContainer: {
     width: 96,
     height: 96,
     borderRadius: 48,
+    backgroundColor: 'rgba(34, 197, 94, 0.1)',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: DIMENSIONS.SPACING_LG,
+    marginBottom: 20,
   },
   emptyTitle: {
-    fontSize: FONTS.SIZE.XL,
-    fontWeight: FONTS.WEIGHT.BOLD,
-    marginBottom: DIMENSIONS.SPACING_SM,
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#1F2937',
+    marginBottom: 8,
   },
-  emptyMessage: {
-    fontSize: FONTS.SIZE.MD,
+  emptyDescription: {
+    fontSize: 14,
+    color: '#6B7280',
     textAlign: 'center',
-    marginBottom: DIMENSIONS.SPACING_XL,
-    paddingHorizontal: DIMENSIONS.SPACING_XL,
+    marginBottom: 24,
   },
   emptyButton: {
-    paddingHorizontal: DIMENSIONS.SPACING_XL,
-    paddingVertical: DIMENSIONS.SPACING_MD,
-    borderRadius: DIMENSIONS.BORDER_RADIUS_MD,
-    ...SHADOWS.MEDIUM,
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  emptyButtonGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    gap: 8,
   },
   emptyButtonText: {
-    fontSize: FONTS.SIZE.MD,
-    fontWeight: FONTS.WEIGHT.SEMIBOLD,
-    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#FFF',
+  },
+  fabButton: {
+    position: 'absolute',
+    right: 20,
+    bottom: 20,
+    borderRadius: 28,
+    overflow: 'hidden',
+    ...SHADOWS.LARGE,
+  },
+  fabGradient: {
+    width: 56,
+    height: 56,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });

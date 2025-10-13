@@ -1,4 +1,4 @@
-// ====== src/screens/teams/MyTeamsScreen.js - NOUVEAU DESIGN ======
+// ====== src/screens/teams/MyTeamsScreen.js - NOUVEAU DESIGN + BACKEND ======
 import React, { useState, useCallback, useEffect } from 'react';
 import {
   View,
@@ -11,20 +11,21 @@ import {
   StatusBar,
   RefreshControl,
   Dimensions,
+  ActivityIndicator,
 } from 'react-native';
 import { useSelector } from 'react-redux';
 import Icon from 'react-native-vector-icons/Feather';
-import LinearGradient from 'react-native-linear-gradient';
+import { useFocusEffect } from '@react-navigation/native';
 import { DIMENSIONS, FONTS, SHADOWS } from '../../styles/theme';
+import { teamsApi } from '../../services/api';
+import { LinearGradient } from 'react-native-linear-gradient';
 
 const { width } = Dimensions.get('window');
 
 // Composant TeamCard moderne
 const TeamCard = ({ team, onPress, onManage }) => {
   const getRoleInfo = role => {
-    if (role === 'owner')
-      return { label: 'Capitaine', icon: 'crown', color: '#F59E0B' };
-    if (role === 'captain')
+    if (role === 'owner' || role === 'captain')
       return { label: 'Capitaine', icon: 'award', color: '#F59E0B' };
     return { label: 'Membre', icon: 'user', color: '#22C55E' };
   };
@@ -58,35 +59,31 @@ const TeamCard = ({ team, onPress, onManage }) => {
         {/* Info */}
         <View style={styles.teamInfo}>
           <View style={styles.teamHeader}>
-            <Text style={styles.teamName} numberOfLines={1}>
-              {team.name}
-            </Text>
-            {team.role && (
-              <View
-                style={[
-                  styles.roleBadge,
-                  { backgroundColor: roleInfo.color + '20' },
-                ]}
-              >
-                <Icon name={roleInfo.icon} size={12} color={roleInfo.color} />
-                <Text style={[styles.roleText, { color: roleInfo.color }]}>
-                  {roleInfo.label}
-                </Text>
-              </View>
-            )}
+            <Text style={styles.teamName}>{team.name}</Text>
+            <View
+              style={[
+                styles.roleBadge,
+                { backgroundColor: roleInfo.color + '20' },
+              ]}
+            >
+              <Icon name={roleInfo.icon} size={12} color={roleInfo.color} />
+              <Text style={[styles.roleText, { color: roleInfo.color }]}>
+                {roleInfo.label}
+              </Text>
+            </View>
           </View>
 
           <View style={styles.teamStats}>
             <View style={styles.teamStat}>
               <Icon name="users" size={14} color="#6B7280" />
               <Text style={styles.teamStatText}>
-                {team.members || 0} membres
+                {team.member_count || 0} membres
               </Text>
             </View>
             <View style={styles.teamStat}>
               <Icon name="calendar" size={14} color="#6B7280" />
               <Text style={styles.teamStatText}>
-                {team.matchesCount || 0} matchs
+                {team.matches_count || 0} matchs
               </Text>
             </View>
           </View>
@@ -100,16 +97,16 @@ const TeamCard = ({ team, onPress, onManage }) => {
 
         {/* Actions */}
         <View style={styles.teamActions}>
-          {team.role === 'owner' && (
+          {(team.role === 'owner' || team.role === 'captain') && (
             <TouchableOpacity
               style={styles.manageButton}
               onPress={e => {
                 e.stopPropagation();
-                onManage(team);
+                onManage();
               }}
             >
               <LinearGradient
-                colors={['#3B82F6', '#2563EB']}
+                colors={['#22C55E', '#16A34A']}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
                 style={styles.manageButtonGradient}
@@ -141,85 +138,138 @@ const QuickStat = ({ icon, value, label, gradient }) => (
   </View>
 );
 
+// Composant EmptyState
+const EmptyState = ({ onCreateTeam }) => (
+  <View style={styles.emptyState}>
+    <LinearGradient
+      colors={['#22C55E20', '#22C55E10']}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 0, y: 1 }}
+      style={styles.emptyStateGradient}
+    >
+      <View style={styles.emptyIconContainer}>
+        <Icon name="users" size={48} color="#22C55E" />
+      </View>
+      <Text style={styles.emptyTitle}>Aucune équipe</Text>
+      <Text style={styles.emptyDescription}>
+        Créez votre première équipe ou rejoignez-en une existante
+      </Text>
+      <TouchableOpacity
+        style={styles.emptyButton}
+        onPress={onCreateTeam}
+        activeOpacity={0.8}
+      >
+        <LinearGradient
+          colors={['#22C55E', '#16A34A']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.emptyButtonGradient}
+        >
+          <Icon name="plus" size={20} color="#FFF" />
+          <Text style={styles.emptyButtonText}>Créer une équipe</Text>
+        </LinearGradient>
+      </TouchableOpacity>
+    </LinearGradient>
+  </View>
+);
+
 export const MyTeamsScreen = ({ navigation }) => {
   const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [teams, setTeams] = useState([]);
   const [activeTab, setActiveTab] = useState('all'); // all, owner, member
+  const [stats, setStats] = useState({
+    totalTeams: 0,
+    ownedTeams: 0,
+    totalMembers: 0,
+  });
 
-  useEffect(() => {
-    loadTeams();
-  }, []);
+  // Charger les équipes au focus de l'écran
+  useFocusEffect(
+    useCallback(() => {
+      loadTeams();
+    }, []),
+  );
 
   const loadTeams = async () => {
     try {
       setLoading(true);
-      // TODO: Appeler l'API
-      // const result = await TeamApi.getMyTeams();
-      // setTeams(result.data);
+      const result = await teamsApi.getMyTeams();
 
-      // Mock data
-      setTeams([
-        {
-          id: '1',
-          name: 'Les Tigres de Paris',
-          description: 'Équipe compétitive cherchant à gagner tous les matchs',
-          members: 11,
-          matchesCount: 24,
-          role: 'owner',
-        },
-        {
-          id: '2',
-          name: 'FC Montmartre',
-          description: 'Football amateur et convivial',
-          members: 9,
-          matchesCount: 15,
-          role: 'captain',
-        },
-        {
-          id: '3',
-          name: 'Racing Club 75',
-          members: 15,
-          matchesCount: 32,
-          role: null,
-        },
-      ]);
+      if (result.success) {
+        setTeams(result.data);
+
+        // Calculer les statistiques
+        const ownedCount = result.data.filter(
+          t => t.role === 'owner' || t.role === 'captain',
+        ).length;
+        const totalMembers = result.data.reduce(
+          (sum, t) => sum + (t.currentPlayers || 0),
+          0,
+        );
+
+        setStats({
+          totalTeams: result.data.length,
+          ownedTeams: ownedCount,
+          totalMembers: totalMembers,
+        });
+      } else {
+        Alert.alert(
+          'Erreur',
+          result.error || 'Impossible de charger les équipes',
+        );
+      }
     } catch (error) {
-      console.error('Error loading teams:', error);
+      console.error('Load teams error:', error);
+      Alert.alert('Erreur', 'Une erreur est survenue');
     } finally {
       setLoading(false);
     }
   };
 
-  const onRefresh = useCallback(async () => {
+  const handleRefresh = useCallback(async () => {
     setRefreshing(true);
     await loadTeams();
     setRefreshing(false);
   }, []);
 
+  const handleTeamPress = team => {
+    navigation.navigate('TeamDetail', {
+      teamId: team.id,
+      teamName: team.name,
+    });
+  };
+
+  const handleManageTeam = team => {
+    navigation.navigate('EditTeam', {
+      teamId: team.id,
+      teamName: team.name,
+    });
+  };
+
   const handleCreateTeam = () => {
     navigation.navigate('CreateTeam');
   };
 
-  const handleTeamPress = team => {
-    navigation.navigate('TeamDetail', { teamId: team.id, teamName: team.name });
-  };
-
-  const handleManageTeam = team => {
-    navigation.navigate('EditTeam', { teamId: team.id });
-  };
-
+  // Filtrer les équipes selon l'onglet actif
   const filteredTeams = teams.filter(team => {
-    if (activeTab === 'owner') return team.role === 'owner';
-    if (activeTab === 'member') return !team.role || team.role === 'captain';
+    if (activeTab === 'owner') {
+      return team.role === 'owner' || team.role === 'captain';
+    }
+    if (activeTab === 'member') {
+      return team.role !== 'owner' && team.role !== 'captain';
+    }
     return true;
   });
 
-  const stats = {
-    total: teams.length,
-    owner: teams.filter(t => t.role === 'owner').length,
-    member: teams.filter(t => !t.role || t.role === 'captain').length,
-  };
+  if (loading && !refreshing) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#22C55E" />
+        <Text style={styles.loadingText}>Chargement...</Text>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -227,45 +277,45 @@ export const MyTeamsScreen = ({ navigation }) => {
 
       {/* Header avec gradient */}
       <LinearGradient
-        colors={['#F59E0B', '#D97706']}
+        colors={['#22C55E', '#16A34A', '#15803D']}
         start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 0 }}
+        end={{ x: 1, y: 1 }}
         style={styles.header}
       >
         <View style={styles.headerTop}>
           <View>
             <Text style={styles.headerTitle}>Mes Équipes</Text>
             <Text style={styles.headerSubtitle}>
-              {teams.length} équipe{teams.length > 1 ? 's' : ''}
+              {teams.length} {teams.length > 1 ? 'équipes' : 'équipe'}
             </Text>
           </View>
           <TouchableOpacity
             style={styles.searchButton}
-            onPress={() => navigation.navigate('SearchTeams')}
+            onPress={() => navigation.navigate('Search')}
           >
-            <Icon name="search" size={22} color="#FFF" />
+            <Icon name="search" size={20} color="#FFF" />
           </TouchableOpacity>
         </View>
 
-        {/* Stats rapides */}
+        {/* Quick Stats */}
         <View style={styles.quickStatsContainer}>
           <QuickStat
-            icon="shield"
-            value={stats.total}
-            label="Total"
-            gradient={['#FFFFFF30', '#FFFFFF20']}
-          />
-          <QuickStat
-            icon="crown"
-            value={stats.owner}
-            label="Capitaine"
-            gradient={['#FFFFFF30', '#FFFFFF20']}
-          />
-          <QuickStat
             icon="users"
-            value={stats.member}
-            label="Membre"
-            gradient={['#FFFFFF30', '#FFFFFF20']}
+            value={stats.totalTeams}
+            label="Équipes"
+            gradient={['rgba(255,255,255,0.25)', 'rgba(255,255,255,0.15)']}
+          />
+          <QuickStat
+            icon="award"
+            value={stats.ownedTeams}
+            label="Capitaine"
+            gradient={['rgba(255,255,255,0.25)', 'rgba(255,255,255,0.15)']}
+          />
+          <QuickStat
+            icon="user"
+            value={stats.totalMembers}
+            label="Membres"
+            gradient={['rgba(255,255,255,0.25)', 'rgba(255,255,255,0.15)']}
           />
         </View>
       </LinearGradient>
@@ -278,17 +328,17 @@ export const MyTeamsScreen = ({ navigation }) => {
         >
           {activeTab === 'all' ? (
             <LinearGradient
-              colors={['#F59E0B', '#D97706']}
+              colors={['#22C55E', '#16A34A']}
               start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
+              end={{ x: 1, y: 1 }}
               style={styles.tabGradient}
             >
-              <Icon name="list" size={18} color="#FFF" />
+              <Icon name="list" size={16} color="#FFF" />
               <Text style={styles.tabTextActive}>Toutes</Text>
             </LinearGradient>
           ) : (
             <View style={styles.tabContent}>
-              <Icon name="list" size={18} color="#6B7280" />
+              <Icon name="list" size={16} color="#6B7280" />
               <Text style={styles.tabText}>Toutes</Text>
             </View>
           )}
@@ -300,18 +350,18 @@ export const MyTeamsScreen = ({ navigation }) => {
         >
           {activeTab === 'owner' ? (
             <LinearGradient
-              colors={['#F59E0B', '#D97706']}
+              colors={['#22C55E', '#16A34A']}
               start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
+              end={{ x: 1, y: 1 }}
               style={styles.tabGradient}
             >
-              <Icon name="crown" size={18} color="#FFF" />
-              <Text style={styles.tabTextActive}>Mes équipes</Text>
+              <Icon name="award" size={16} color="#FFF" />
+              <Text style={styles.tabTextActive}>Capitaine</Text>
             </LinearGradient>
           ) : (
             <View style={styles.tabContent}>
-              <Icon name="crown" size={18} color="#6B7280" />
-              <Text style={styles.tabText}>Mes équipes</Text>
+              <Icon name="award" size={16} color="#6B7280" />
+              <Text style={styles.tabText}>Capitaine</Text>
             </View>
           )}
         </TouchableOpacity>
@@ -322,17 +372,17 @@ export const MyTeamsScreen = ({ navigation }) => {
         >
           {activeTab === 'member' ? (
             <LinearGradient
-              colors={['#F59E0B', '#D97706']}
+              colors={['#22C55E', '#16A34A']}
               start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
+              end={{ x: 1, y: 1 }}
               style={styles.tabGradient}
             >
-              <Icon name="users" size={18} color="#FFF" />
+              <Icon name="user" size={16} color="#FFF" />
               <Text style={styles.tabTextActive}>Membre</Text>
             </LinearGradient>
           ) : (
             <View style={styles.tabContent}>
-              <Icon name="users" size={18} color="#6B7280" />
+              <Icon name="user" size={16} color="#6B7280" />
               <Text style={styles.tabText}>Membre</Text>
             </View>
           )}
@@ -343,77 +393,47 @@ export const MyTeamsScreen = ({ navigation }) => {
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor="#F59E0B"
+            onRefresh={handleRefresh}
+            colors={['#22C55E']}
+            tintColor="#22C55E"
           />
         }
+        showsVerticalScrollIndicator={false}
       >
-        {filteredTeams.length > 0 ? (
+        {filteredTeams.length === 0 ? (
+          <EmptyState onCreateTeam={handleCreateTeam} />
+        ) : (
           filteredTeams.map(team => (
             <TeamCard
               key={team.id}
               team={team}
               onPress={() => handleTeamPress(team)}
-              onManage={handleManageTeam}
+              onManage={() => handleManageTeam(team)}
             />
           ))
-        ) : (
-          <View style={styles.emptyState}>
-            <LinearGradient
-              colors={['#F3F4F620', '#F3F4F610']}
-              style={styles.emptyGradient}
-            >
-              <Icon name="users" size={64} color="#CBD5E1" />
-              <Text style={styles.emptyStateText}>
-                {activeTab === 'all'
-                  ? 'Aucune équipe'
-                  : 'Aucune équipe dans cette catégorie'}
-              </Text>
-              <Text style={styles.emptyStateSubtext}>
-                Créez votre première équipe ou rejoignez-en une !
-              </Text>
-              <TouchableOpacity
-                style={styles.emptyStateButton}
-                onPress={handleCreateTeam}
-              >
-                <LinearGradient
-                  colors={['#F59E0B', '#D97706']}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                  style={styles.emptyStateButtonGradient}
-                >
-                  <Icon name="plus" size={18} color="#FFF" />
-                  <Text style={styles.emptyStateButtonText}>
-                    Créer une équipe
-                  </Text>
-                </LinearGradient>
-              </TouchableOpacity>
-            </LinearGradient>
-          </View>
         )}
-
-        <View style={{ height: 100 }} />
       </ScrollView>
 
-      {/* Bouton flottant */}
-      <TouchableOpacity
-        style={styles.fabContainer}
-        onPress={handleCreateTeam}
-        activeOpacity={0.9}
-      >
-        <LinearGradient
-          colors={['#F59E0B', '#D97706']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.fab}
+      {/* Bouton Créer */}
+      {teams.length > 0 && (
+        <TouchableOpacity
+          style={styles.fabButton}
+          onPress={handleCreateTeam}
+          activeOpacity={0.8}
         >
-          <Icon name="plus" size={28} color="#FFF" />
-        </LinearGradient>
-      </TouchableOpacity>
+          <LinearGradient
+            colors={['#22C55E', '#16A34A']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.fabGradient}
+          >
+            <Icon name="plus" size={28} color="#FFF" />
+          </LinearGradient>
+        </TouchableOpacity>
+      )}
     </View>
   );
 };
@@ -421,10 +441,21 @@ export const MyTeamsScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
+    backgroundColor: '#F8FAFC',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 14,
+    color: '#6B7280',
   },
   header: {
-    paddingTop: Platform.OS === 'ios' ? 50 : 20,
+    paddingTop: Platform.OS === 'ios' ? 60 : 20,
     paddingBottom: 20,
     paddingHorizontal: 20,
     ...SHADOWS.MEDIUM,
@@ -586,9 +617,9 @@ const styles = StyleSheet.create({
     color: '#6B7280',
   },
   teamDescription: {
-    fontSize: 14,
+    fontSize: 13,
     color: '#6B7280',
-    lineHeight: 20,
+    lineHeight: 18,
   },
   teamActions: {
     flexDirection: 'row',
@@ -601,61 +632,68 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   manageButtonGradient: {
-    width: 40,
-    height: 40,
+    width: 36,
+    height: 36,
     justifyContent: 'center',
     alignItems: 'center',
   },
   emptyState: {
-    marginTop: 40,
-    borderRadius: 16,
-    overflow: 'hidden',
+    flex: 1,
+    paddingVertical: 60,
   },
-  emptyGradient: {
+  emptyStateGradient: {
+    padding: 32,
+    borderRadius: 24,
     alignItems: 'center',
-    paddingVertical: 48,
-    paddingHorizontal: 24,
   },
-  emptyStateText: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#6B7280',
-    marginTop: 16,
-    marginBottom: 4,
+  emptyIconContainer: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    backgroundColor: 'rgba(34, 197, 94, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 20,
   },
-  emptyStateSubtext: {
+  emptyTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#1F2937',
+    marginBottom: 8,
+  },
+  emptyDescription: {
     fontSize: 14,
-    color: '#9CA3AF',
+    color: '#6B7280',
     textAlign: 'center',
     marginBottom: 24,
   },
-  emptyStateButton: {
+  emptyButton: {
     borderRadius: 12,
     overflow: 'hidden',
   },
-  emptyStateButtonGradient: {
+  emptyButtonGradient: {
     flexDirection: 'row',
     alignItems: 'center',
+    paddingVertical: 14,
     paddingHorizontal: 24,
-    paddingVertical: 12,
     gap: 8,
   },
-  emptyStateButtonText: {
+  emptyButtonText: {
     fontSize: 15,
     fontWeight: '600',
     color: '#FFF',
   },
-  fabContainer: {
+  fabButton: {
     position: 'absolute',
-    bottom: 24,
-    right: 24,
+    right: 20,
+    bottom: 20,
     borderRadius: 28,
-    ...SHADOWS.MEDIUM,
+    overflow: 'hidden',
+    ...SHADOWS.LARGE,
   },
-  fab: {
+  fabGradient: {
     width: 56,
     height: 56,
-    borderRadius: 28,
     justifyContent: 'center',
     alignItems: 'center',
   },

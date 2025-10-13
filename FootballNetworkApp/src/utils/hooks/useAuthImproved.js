@@ -1,6 +1,6 @@
 // ====== src/utils/hooks/useAuthImproved.js ======
 import { useSelector, useDispatch } from 'react-redux';
-import { authApi } from '../../services/api/authApi';
+import { AuthApi, authApi } from '../../services/api/authApi';
 import {
   loginSuccess,
   logout,
@@ -20,7 +20,7 @@ export const useAuthImproved = () => {
       dispatch(setLoading(true));
       dispatch(clearError());
 
-      const result = await authApi.login(email, password);
+      const result = await AuthApi.login(email, password);
 
       if (result.success) {
         dispatch(loginSuccess(result.data));

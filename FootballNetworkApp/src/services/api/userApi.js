@@ -1,6 +1,7 @@
 // ====== src/services/api/userApi.js ======
 import { SecureStorage } from '../storage';
 import { API_CONFIG } from '../../utils/constants';
+import { setMyTeams } from '../../store/slices/teamsSlice';
 
 class UserApiService {
   constructor() {

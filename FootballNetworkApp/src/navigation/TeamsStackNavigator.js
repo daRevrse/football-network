@@ -1,3 +1,4 @@
+// ====== src/navigation/TeamsStackNavigator.js - MISE À JOUR ======
 import React from 'react';
 import { createStackNavigator } from '@react-navigation/stack';
 import {
@@ -10,22 +11,26 @@ import {
 
 const Stack = createStackNavigator();
 
-// Constantes
-const COLORS = {
-  PRIMARY: '#22C55E',
-  TEXT_WHITE: '#FFFFFF',
-};
-
 export const TeamsStackNavigator = () => {
   return (
     <Stack.Navigator
       screenOptions={{
-        headerStyle: {
-          backgroundColor: COLORS.PRIMARY,
-        },
-        headerTintColor: COLORS.TEXT_WHITE,
-        headerTitleStyle: {
-          fontWeight: 'bold',
+        headerShown: false, // Tous les écrans gèrent leur propre header
+        gestureEnabled: true,
+        gestureDirection: 'horizontal',
+        cardStyleInterpolator: ({ current, layouts }) => {
+          return {
+            cardStyle: {
+              transform: [
+                {
+                  translateX: current.progress.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [layouts.screen.width, 0],
+                  }),
+                },
+              ],
+            },
+          };
         },
       }}
     >
@@ -33,40 +38,42 @@ export const TeamsStackNavigator = () => {
         name="MyTeams"
         component={MyTeamsScreen}
         options={{
-          headerShown: false, // On utilise le header custom du screen
+          title: 'Mes Équipes',
         }}
       />
+
       <Stack.Screen
         name="CreateTeam"
         component={CreateTeamScreen}
         options={{
           title: 'Créer une équipe',
-          headerBackTitle: 'Retour',
+          presentation: 'modal', // Animation modale pour iOS
         }}
       />
+
       <Stack.Screen
         name="TeamDetail"
         component={TeamDetailScreen}
-        initialParams={{ title: "Détail de l'équipe" }}
-        options={{
-          headerShown: false,
-        }}
+        options={({ route }) => ({
+          title: route.params?.teamName || "Détail de l'équipe",
+        })}
       />
+
       <Stack.Screen
         name="EditTeam"
         component={EditTeamScreen}
-        initialParams={{ title: "Modifier l'équipe" }}
-        options={{
-          headerShown: false,
-        }}
+        options={({ route }) => ({
+          title: route.params?.teamName || "Modifier l'équipe",
+          presentation: 'modal',
+        })}
       />
+
       <Stack.Screen
         name="TeamMembers"
         component={TeamMembersScreen}
-        initialParams={{ title: "Membres de l'équipe" }}
-        options={{
-          headerShown: false,
-        }}
+        options={({ route }) => ({
+          title: route.params?.teamName || "Membres de l'équipe",
+        })}
       />
     </Stack.Navigator>
   );

@@ -1,11 +1,11 @@
 export const API_CONFIG = {
   // Changez cette URL pour pointer vers votre serveur
   BASE_URL: __DEV__
-    ? 'http://192.168.1.70:5000/api' // Développement
+    ? 'http://192.168.1.83:5000/api' // Développement
     : 'https://your-api.com/api', // Production
 
   SOCKET_URL: __DEV__
-    ? 'http://192.168.1.70:5000' // Développement
+    ? 'http://192.168.1.83:5000' // Développement
     : 'https://your-api.com', // Production
 
   TIMEOUT: 10000, // 10 secondes

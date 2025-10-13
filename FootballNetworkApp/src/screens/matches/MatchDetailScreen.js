@@ -1,1041 +1,600 @@
-// ====== src/screens/matches/MatchDetailScreen.js ======
-import React, { useState, useCallback, useRef } from 'react';
+// ====== src/screens/matches/MatchDetailScreen.js - NOUVEAU DESIGN + BACKEND ======
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
+  StyleSheet,
   ScrollView,
   TouchableOpacity,
   Alert,
-  StyleSheet,
+  Platform,
   StatusBar,
   RefreshControl,
-  Animated,
-  Platform,
+  ActivityIndicator,
+  Dimensions,
+  TextInput,
+  Modal,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
-import { useTheme } from '../../hooks/useTheme';
+import LinearGradient from 'react-native-linear-gradient';
+import { useFocusEffect } from '@react-navigation/native';
 import { DIMENSIONS, FONTS, SHADOWS } from '../../styles/theme';
+import { matchesApi } from '../../services/api';
 
-// Constantes pour l'animation
-const HEADER_MAX_HEIGHT = 260;
-const HEADER_MIN_HEIGHT = Platform.OS === 'ios' ? 110 : 90;
-const HEADER_SCROLL_DISTANCE = HEADER_MAX_HEIGHT - HEADER_MIN_HEIGHT;
+const { width } = Dimensions.get('window');
 
-// Composant StatCard
-const StatCard = ({ icon, value, label, color, COLORS }) => (
-  <View style={[styles.statCard, { backgroundColor: COLORS.WHITE }]}>
-    <View style={[styles.statIcon, { backgroundColor: color + '20' }]}>
-      <Icon name={icon} size={18} color={color} />
-    </View>
-    <Text style={[styles.statValue, { color: COLORS.TEXT_PRIMARY }]}>
-      {value}
-    </Text>
-    <Text style={[styles.statLabel, { color: COLORS.TEXT_SECONDARY }]}>
-      {label}
-    </Text>
-  </View>
-);
+// Helpers
+const formatDate = dateString => {
+  const date = new Date(dateString);
+  return date.toLocaleDateString('fr-FR', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+};
 
-// Composant PlayerCard
-const PlayerCard = ({ player, COLORS }) => (
-  <View style={[styles.playerCard, { backgroundColor: COLORS.WHITE }]}>
-    <View
-      style={[
-        styles.playerAvatar,
-        { backgroundColor: COLORS.PRIMARY_ULTRA_LIGHT },
-      ]}
-    >
-      <Icon name="user" size={18} color={COLORS.PRIMARY} />
-    </View>
-    <View style={styles.playerInfo}>
-      <Text style={[styles.playerName, { color: COLORS.TEXT_PRIMARY }]}>
-        {player.name}
-      </Text>
-      <View style={styles.playerMeta}>
-        <Icon name="target" size={12} color={COLORS.TEXT_MUTED} />
-        <Text style={[styles.playerMetaText, { color: COLORS.TEXT_SECONDARY }]}>
-          {player.position}
-        </Text>
-      </View>
-    </View>
-    <View
-      style={[
-        styles.statusBadge,
-        {
-          backgroundColor:
-            player.status === 'confirmed'
-              ? COLORS.SUCCESS_LIGHT
-              : player.status === 'pending'
-              ? COLORS.WARNING_LIGHT
-              : COLORS.ERROR_LIGHT,
-        },
-      ]}
-    >
-      <Icon
-        name={
-          player.status === 'confirmed'
-            ? 'check'
-            : player.status === 'pending'
-            ? 'clock'
-            : 'x'
-        }
-        size={12}
-        color={
-          player.status === 'confirmed'
-            ? COLORS.SUCCESS
-            : player.status === 'pending'
-            ? COLORS.WARNING
-            : COLORS.ERROR
-        }
-      />
-    </View>
-  </View>
-);
+const getMatchStatus = match => {
+  if (match.status === 'completed') {
+    return { label: 'Terminé', color: '#6B7280', icon: 'check-circle' };
+  } else if (match.status === 'cancelled') {
+    return { label: 'Annulé', color: '#EF4444', icon: 'x-circle' };
+  } else if (match.status === 'in_progress') {
+    return { label: 'En cours', color: '#22C55E', icon: 'play-circle' };
+  } else {
+    return { label: 'À venir', color: '#3B82F6', icon: 'calendar' };
+  }
+};
 
-// Composant InfoRow
-const InfoRow = ({ icon, label, value, COLORS }) => (
-  <View style={styles.infoRow}>
-    <View style={styles.infoLeft}>
-      <Icon name={icon} size={18} color={COLORS.TEXT_SECONDARY} />
-      <Text style={[styles.infoLabel, { color: COLORS.TEXT_SECONDARY }]}>
-        {label}
-      </Text>
-    </View>
-    <Text style={[styles.infoValue, { color: COLORS.TEXT_PRIMARY }]}>
-      {value}
-    </Text>
-  </View>
-);
+// Modal de score
+const ScoreModal = ({ visible, onClose, onSubmit, match }) => {
+  const [team1Score, setTeam1Score] = useState(
+    match?.team1_score?.toString() || '0',
+  );
+  const [team2Score, setTeam2Score] = useState(
+    match?.team2_score?.toString() || '0',
+  );
+  const [submitting, setSubmitting] = useState(false);
 
-// Composant MatchStatRow (pour matchs passés)
-const MatchStatRow = ({ label, homeValue, awayValue, COLORS }) => {
-  const total = homeValue + awayValue;
-  const homePercentage = total > 0 ? (homeValue / total) * 100 : 50;
-  const awayPercentage = total > 0 ? (awayValue / total) * 100 : 50;
+  const handleSubmit = async () => {
+    const score1 = parseInt(team1Score);
+    const score2 = parseInt(team2Score);
+
+    if (isNaN(score1) || isNaN(score2) || score1 < 0 || score2 < 0) {
+      Alert.alert('Erreur', 'Scores invalides');
+      return;
+    }
+
+    setSubmitting(true);
+    await onSubmit(score1, score2);
+    setSubmitting(false);
+  };
 
   return (
-    <View style={styles.matchStatRow}>
-      <Text style={[styles.statNumber, { color: COLORS.TEXT_PRIMARY }]}>
-        {homeValue}
-      </Text>
-      <View style={styles.statCenter}>
-        <Text style={[styles.statLabel, { color: COLORS.TEXT_SECONDARY }]}>
-          {label}
-        </Text>
-        <View
-          style={[styles.statBar, { backgroundColor: COLORS.BACKGROUND_LIGHT }]}
-        >
-          <View
-            style={[
-              styles.statBarFill,
-              {
-                backgroundColor: COLORS.PRIMARY,
-                width: `${homePercentage}%`,
-              },
-            ]}
-          />
-          <View
-            style={[
-              styles.statBarFillRight,
-              {
-                backgroundColor: COLORS.SECONDARY,
-                width: `${awayPercentage}%`,
-              },
-            ]}
-          />
+    <Modal visible={visible} animationType="slide" transparent={true}>
+      <View style={styles.modalOverlay}>
+        <View style={styles.scoreModalContent}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Entrer le score</Text>
+            <TouchableOpacity onPress={onClose}>
+              <Icon name="x" size={24} color="#6B7280" />
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.scoreInputContainer}>
+            <View style={styles.scoreTeamSection}>
+              <Text style={styles.scoreTeamName}>{match?.team1_name}</Text>
+              <TextInput
+                style={styles.scoreInput}
+                value={team1Score}
+                onChangeText={setTeam1Score}
+                keyboardType="number-pad"
+                maxLength={2}
+              />
+            </View>
+
+            <Text style={styles.scoreVS}>-</Text>
+
+            <View style={styles.scoreTeamSection}>
+              <Text style={styles.scoreTeamName}>{match?.team2_name}</Text>
+              <TextInput
+                style={styles.scoreInput}
+                value={team2Score}
+                onChangeText={setTeam2Score}
+                keyboardType="number-pad"
+                maxLength={2}
+              />
+            </View>
+          </View>
+
+          <TouchableOpacity
+            style={styles.scoreSubmitButton}
+            onPress={handleSubmit}
+            disabled={submitting}
+          >
+            <LinearGradient
+              colors={['#22C55E', '#16A34A']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.scoreSubmitGradient}
+            >
+              {submitting ? (
+                <ActivityIndicator color="#FFF" />
+              ) : (
+                <>
+                  <Icon name="check" size={20} color="#FFF" />
+                  <Text style={styles.scoreSubmitText}>Valider le score</Text>
+                </>
+              )}
+            </LinearGradient>
+          </TouchableOpacity>
         </View>
       </View>
-      <Text style={[styles.statNumber, { color: COLORS.TEXT_PRIMARY }]}>
-        {awayValue}
-      </Text>
-    </View>
+    </Modal>
   );
 };
 
 export const MatchDetailScreen = ({ route, navigation }) => {
   const { matchId } = route.params || {};
-  const { colors: COLORS, isDark } = useTheme('auto');
   const [refreshing, setRefreshing] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [match, setMatch] = useState(null);
+  const [scoreModalVisible, setScoreModalVisible] = useState(false);
 
-  // Animation du scroll
-  const scrollY = useRef(new Animated.Value(0)).current;
+  useFocusEffect(
+    useCallback(() => {
+      loadMatchDetails();
+    }, [matchId]),
+  );
 
-  // Données mockées (à remplacer par API)
-  const [match] = useState({
-    id: matchId || 1,
-    homeTeam: {
-      id: 1,
-      name: 'Les Tigres de Paris',
-      score: 3,
-    },
-    awayTeam: {
-      id: 2,
-      name: 'FC Olympique',
-      score: 2,
-    },
-    date: 'Samedi 15 Mars 2024',
-    time: '15:00',
-    location: 'Stade Municipal',
-    address: '15 rue du Stade, 75015 Paris',
-    status: 'completed', // upcoming, ongoing, completed, cancelled
-    matchType: 'friendly', // friendly, competitive, tournament
-    maxPlayers: 22,
-    confirmedPlayers: 18,
-    description:
-      'Match amical entre deux équipes du quartier. Venez nombreux !',
-    isOrganizer: true,
-    userParticipation: 'confirmed', // confirmed, pending, declined, null
-  });
+  const loadMatchDetails = async () => {
+    try {
+      setLoading(true);
+      const result = await matchesApi.getMatchById(matchId);
+      console.log('result', result);
 
-  // Stats du match (si completed)
-  const [matchStats] = useState({
-    possession: { home: 58, away: 42 },
-    shots: { home: 15, away: 12 },
-    shotsOnTarget: { home: 8, away: 6 },
-    corners: { home: 7, away: 5 },
-    fouls: { home: 9, away: 11 },
-  });
+      if (result.success) {
+        setMatch(result.data);
+      } else {
+        Alert.alert('Erreur', result.error);
+        navigation.goBack();
+      }
+    } catch (error) {
+      console.error('Load match error:', error);
+      Alert.alert('Erreur', 'Une erreur est survenue');
+      navigation.goBack();
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  const [players] = useState([
-    {
-      id: 1,
-      name: 'Jean Dupont',
-      position: 'Attaquant',
-      team: 'home',
-      status: 'confirmed',
-    },
-    {
-      id: 2,
-      name: 'Marie Martin',
-      position: 'Milieu',
-      team: 'home',
-      status: 'confirmed',
-    },
-    {
-      id: 3,
-      name: 'Thomas Dubois',
-      position: 'Défenseur',
-      team: 'home',
-      status: 'confirmed',
-    },
-    {
-      id: 4,
-      name: 'Sophie Bernard',
-      position: 'Gardien',
-      team: 'home',
-      status: 'pending',
-    },
-    {
-      id: 5,
-      name: 'Pierre Leroy',
-      position: 'Attaquant',
-      team: 'away',
-      status: 'confirmed',
-    },
-    {
-      id: 6,
-      name: 'Julie Moreau',
-      position: 'Milieu',
-      team: 'away',
-      status: 'confirmed',
-    },
-    {
-      id: 7,
-      name: 'Lucas Simon',
-      position: 'Défenseur',
-      team: 'away',
-      status: 'declined',
-    },
-  ]);
-
-  // Animations du header
-  const headerHeight = scrollY.interpolate({
-    inputRange: [0, HEADER_SCROLL_DISTANCE],
-    outputRange: [HEADER_MAX_HEIGHT, HEADER_MIN_HEIGHT],
-    extrapolate: 'clamp',
-  });
-
-  const teamsScale = scrollY.interpolate({
-    inputRange: [0, HEADER_SCROLL_DISTANCE],
-    outputRange: [1, 0.7],
-    extrapolate: 'clamp',
-  });
-
-  const teamsOpacity = scrollY.interpolate({
-    inputRange: [0, HEADER_SCROLL_DISTANCE / 2],
-    outputRange: [1, 0],
-    extrapolate: 'clamp',
-  });
-
-  const scoreOpacity = scrollY.interpolate({
-    inputRange: [0, HEADER_SCROLL_DISTANCE / 3],
-    outputRange: [1, 0],
-    extrapolate: 'clamp',
-  });
-
-  const statusBadgeOpacity = scrollY.interpolate({
-    inputRange: [0, HEADER_SCROLL_DISTANCE / 4],
-    outputRange: [1, 0],
-    extrapolate: 'clamp',
-  });
-
-  const statusBadgeScale = scrollY.interpolate({
-    inputRange: [0, HEADER_SCROLL_DISTANCE / 4],
-    outputRange: [1, 0.7],
-    extrapolate: 'clamp',
-  });
-
-  const onRefresh = useCallback(() => {
+  const handleRefresh = useCallback(async () => {
     setRefreshing(true);
-    setTimeout(() => setRefreshing(false), 1000);
-  }, []);
+    await loadMatchDetails();
+    setRefreshing(false);
+  }, [matchId]);
 
-  const handleConfirmParticipation = () => {
+  const handleUpdateScore = async (score1, score2) => {
+    try {
+      const result = await matchesApi.updateMatchScore(matchId, score1, score2);
+
+      if (result.success) {
+        Alert.alert('Succès', 'Score mis à jour');
+        setScoreModalVisible(false);
+        loadMatchDetails();
+      } else {
+        Alert.alert('Erreur', result.error);
+      }
+    } catch (error) {
+      Alert.alert('Erreur', 'Une erreur est survenue');
+    }
+  };
+
+  const handleCancelMatch = () => {
     Alert.alert(
-      'Confirmer',
-      'Voulez-vous confirmer votre participation à ce match ?',
+      'Annuler le match',
+      'Êtes-vous sûr de vouloir annuler ce match ?',
       [
-        { text: 'Annuler', style: 'cancel' },
-        { text: 'Confirmer', onPress: () => Alert.alert('Confirmé !') },
+        { text: 'Non', style: 'cancel' },
+        {
+          text: 'Oui, annuler',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const result = await matchesApi.cancelMatch(matchId);
+              if (result.success) {
+                Alert.alert('Match annulé', '', [
+                  { text: 'OK', onPress: () => navigation.goBack() },
+                ]);
+              } else {
+                Alert.alert('Erreur', result.error);
+              }
+            } catch (error) {
+              Alert.alert('Erreur', 'Une erreur est survenue');
+            }
+          },
+        },
       ],
     );
   };
 
-  const handleDeclineParticipation = () => {
-    Alert.alert(
-      'Décliner',
-      'Voulez-vous décliner votre participation à ce match ?',
-      [
-        { text: 'Annuler', style: 'cancel' },
-        { text: 'Décliner', style: 'destructive', onPress: () => {} },
-      ],
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#22C55E" />
+        <Text style={styles.loadingText}>Chargement...</Text>
+      </View>
     );
-  };
+  }
 
-  const handleEditMatch = () => {
-    Alert.alert('Info', 'Fonctionnalité en développement');
-  };
+  if (!match) return null;
 
-  const handleShareMatch = () => {
-    Alert.alert('Partager', 'Lien de partage copié !');
-  };
-
-  const handleInvitePlayers = () => {
-    Alert.alert('Info', 'Fonctionnalité en développement');
-  };
-
-  const handleOpenMap = () => {
-    Alert.alert('Info', 'Ouverture de la carte...');
-  };
-
-  const getStatusBadge = () => {
-    const statusConfig = {
-      upcoming: { label: 'À venir', color: COLORS.PRIMARY, icon: 'calendar' },
-      ongoing: {
-        label: 'En cours',
-        color: COLORS.WARNING,
-        icon: 'play-circle',
-      },
-      completed: {
-        label: 'Terminé',
-        color: COLORS.SUCCESS,
-        icon: 'check-circle',
-      },
-      cancelled: { label: 'Annulé', color: COLORS.ERROR, icon: 'x-circle' },
-    };
-    return statusConfig[match.status] || statusConfig.upcoming;
-  };
-
-  const status = getStatusBadge();
+  const status = getMatchStatus(match);
+  const isOrganizer = match.is_organizer;
+  const canEditScore =
+    isOrganizer && match.status !== 'cancelled' && match.status !== 'completed';
 
   return (
-    <View
-      style={[styles.container, { backgroundColor: COLORS.BACKGROUND_LIGHT }]}
-    >
-      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" />
 
-      {/* Header Animé */}
-      <Animated.View
-        style={[
-          styles.header,
-          {
-            backgroundColor: COLORS.PRIMARY,
-            height: headerHeight,
-          },
-        ]}
+      {/* Header */}
+      <LinearGradient
+        colors={['#22C55E', '#16A34A']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.header}
       >
         <View style={styles.headerTop}>
           <TouchableOpacity
-            style={styles.backButton}
+            style={styles.headerButton}
             onPress={() => navigation.goBack()}
           >
-            <Icon name="arrow-left" size={24} color={COLORS.WHITE} />
+            <Icon name="arrow-left" size={24} color="#FFF" />
           </TouchableOpacity>
-
-          <View style={styles.headerActions}>
+          {isOrganizer && (
             <TouchableOpacity
               style={styles.headerButton}
-              onPress={handleShareMatch}
+              onPress={() => {
+                Alert.alert(
+                  'Options',
+                  'Choisissez une action',
+                  [
+                    { text: 'Annuler', style: 'cancel' },
+                    canEditScore && {
+                      text: 'Entrer le score',
+                      onPress: () => setScoreModalVisible(true),
+                    },
+                    match.status === 'scheduled' && {
+                      text: 'Annuler le match',
+                      style: 'destructive',
+                      onPress: handleCancelMatch,
+                    },
+                  ].filter(Boolean),
+                );
+              }}
             >
-              <Icon name="share-2" size={20} color={COLORS.WHITE} />
+              <Icon name="more-vertical" size={24} color="#FFF" />
             </TouchableOpacity>
-            {match.isOrganizer && (
-              <TouchableOpacity
-                style={styles.headerButton}
-                onPress={handleEditMatch}
-              >
-                <Icon name="edit-2" size={20} color={COLORS.WHITE} />
-              </TouchableOpacity>
-            )}
-          </View>
+          )}
         </View>
 
         <View style={styles.headerContent}>
-          {/* Match Teams */}
-          <Animated.View
+          <View
             style={[
-              styles.matchTeams,
-              {
-                opacity: teamsOpacity,
-                transform: [{ scale: teamsScale }],
-              },
+              styles.statusBadgeLarge,
+              { backgroundColor: status.color + '40' },
             ]}
           >
-            <View style={styles.teamSection}>
-              <View
-                style={[
-                  styles.teamLogo,
-                  { backgroundColor: 'rgba(255, 255, 255, 0.2)' },
-                ]}
-              >
-                <Icon name="dribbble" size={32} color={COLORS.WHITE} />
-              </View>
-              <Text style={styles.teamName}>{match.homeTeam.name}</Text>
-            </View>
-
-            <View style={styles.vsSection}>
-              <Text style={styles.vsText}>VS</Text>
-              {match.status === 'completed' && (
-                <Animated.View
-                  style={[styles.scoreContainer, { opacity: scoreOpacity }]}
-                >
-                  <Text style={styles.scoreText}>
-                    {match.homeTeam.score} - {match.awayTeam.score}
-                  </Text>
-                </Animated.View>
-              )}
-            </View>
-
-            <View style={styles.teamSection}>
-              <View
-                style={[
-                  styles.teamLogo,
-                  { backgroundColor: 'rgba(255, 255, 255, 0.2)' },
-                ]}
-              >
-                <Icon name="dribbble" size={32} color={COLORS.WHITE} />
-              </View>
-              <Text style={styles.teamName}>{match.awayTeam.name}</Text>
-            </View>
-          </Animated.View>
-
-          {/* Status Badge */}
-          <Animated.View
-            style={[
-              styles.matchStatusBadgeContainer,
-              {
-                opacity: statusBadgeOpacity,
-                transform: [{ scale: statusBadgeScale }],
-              },
-            ]}
-          >
-            <View
-              style={[
-                styles.matchStatusBadge,
-                { backgroundColor: status.color },
-              ]}
-            >
-              <Icon name={status.icon} size={14} color="#FFFFFF" />
-              <Text style={styles.matchStatusText}>{status.label}</Text>
-            </View>
-          </Animated.View>
+            <Icon name={status.icon} size={16} color="#FFF" />
+            <Text style={styles.statusTextLarge}>{status.label}</Text>
+          </View>
+          <Text style={styles.matchDateLarge}>
+            {formatDate(match.matchDate)}
+          </Text>
         </View>
-      </Animated.View>
+      </LinearGradient>
 
-      <Animated.ScrollView
+      <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-        scrollEventThrottle={16}
-        onScroll={Animated.event(
-          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-          { useNativeDriver: false },
-        )}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
-            onRefresh={onRefresh}
-            progressViewOffset={HEADER_MAX_HEIGHT}
+            onRefresh={handleRefresh}
+            colors={['#22C55E']}
+            tintColor="#22C55E"
           />
         }
       >
-        {/* Infos principales */}
-        <View style={[styles.section, { backgroundColor: COLORS.WHITE }]}>
-          <View style={styles.sectionHeader}>
-            <Icon name="info" size={20} color={COLORS.PRIMARY} />
-            <Text style={[styles.sectionTitle, { color: COLORS.TEXT_PRIMARY }]}>
-              Informations
-            </Text>
-          </View>
-          <InfoRow
-            icon="calendar"
-            label="Date"
-            value={match.date}
-            COLORS={COLORS}
-          />
-          <InfoRow
-            icon="clock"
-            label="Heure"
-            value={match.time}
-            COLORS={COLORS}
-          />
-          <InfoRow
-            icon="map-pin"
-            label="Lieu"
-            value={match.location}
-            COLORS={COLORS}
-          />
-          <InfoRow
-            icon="navigation"
-            label="Adresse"
-            value={match.address}
-            COLORS={COLORS}
-          />
-          <InfoRow
-            icon="award"
-            label="Type"
-            value={
-              match.matchType === 'friendly'
-                ? 'Amical'
-                : match.matchType === 'competitive'
-                ? 'Compétitif'
-                : 'Tournoi'
-            }
-            COLORS={COLORS}
-          />
-
-          {/* Bouton carte */}
-          <TouchableOpacity
-            style={[
-              styles.mapButton,
-              { backgroundColor: COLORS.PRIMARY_ULTRA_LIGHT },
-            ]}
-            onPress={handleOpenMap}
+        {/* Score Card */}
+        <View style={styles.scoreCard}>
+          <LinearGradient
+            colors={['#FFFFFF', '#F9FAFB']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 0, y: 1 }}
+            style={styles.scoreCardGradient}
           >
-            <Icon name="map" size={18} color={COLORS.PRIMARY} />
-            <Text style={[styles.mapButtonText, { color: COLORS.PRIMARY }]}>
-              Voir sur la carte
-            </Text>
-          </TouchableOpacity>
-        </View>
+            <View style={styles.teamsRow}>
+              {/* Team 1 */}
+              <View style={styles.teamColumn}>
+                <View style={styles.teamIconLarge}>
+                  <LinearGradient
+                    colors={['#22C55E', '#16A34A']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.teamIconGradient}
+                  >
+                    <Icon name="shield" size={32} color="#FFF" />
+                  </LinearGradient>
+                </View>
+                <Text style={styles.teamNameLarge}>{match.homeTeam.name}</Text>
+                {match.score.home !== null && (
+                  <Text style={styles.scoreLarge}>{match.score.home}</Text>
+                )}
+              </View>
 
-        {/* Description */}
-        {match.description && (
-          <View style={[styles.section, { backgroundColor: COLORS.WHITE }]}>
-            <View style={styles.sectionHeader}>
-              <Icon name="file-text" size={20} color={COLORS.PRIMARY} />
-              <Text
-                style={[styles.sectionTitle, { color: COLORS.TEXT_PRIMARY }]}
-              >
-                Description
-              </Text>
+              {/* VS */}
+              <View style={styles.vsContainerLarge}>
+                <Text style={styles.vsTextLarge}>VS</Text>
+              </View>
+
+              {/* Team 2 */}
+              <View style={styles.teamColumn}>
+                <View style={styles.teamIconLarge}>
+                  <LinearGradient
+                    colors={['#3B82F6', '#2563EB']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.teamIconGradient}
+                  >
+                    <Icon name="shield" size={32} color="#FFF" />
+                  </LinearGradient>
+                </View>
+                <Text style={styles.teamNameLarge}>{match.awayTeam.name}</Text>
+                {match.score.away !== null && (
+                  <Text style={styles.scoreLarge}>{match.score.away}</Text>
+                )}
+              </View>
             </View>
-            <Text
-              style={[styles.description, { color: COLORS.TEXT_SECONDARY }]}
-            >
-              {match.description}
-            </Text>
-          </View>
-        )}
 
-        {/* Stats du match (si terminé) */}
-        {match.status === 'completed' && matchStats && (
-          <View style={[styles.section, { backgroundColor: COLORS.WHITE }]}>
-            <View style={styles.sectionHeader}>
-              <Icon name="bar-chart-2" size={20} color={COLORS.PRIMARY} />
-              <Text
-                style={[styles.sectionTitle, { color: COLORS.TEXT_PRIMARY }]}
-              >
-                Statistiques
-              </Text>
-            </View>
-            <MatchStatRow
-              label="Possession"
-              homeValue={matchStats.possession.home}
-              awayValue={matchStats.possession.away}
-              COLORS={COLORS}
-            />
-            <MatchStatRow
-              label="Tirs"
-              homeValue={matchStats.shots.home}
-              awayValue={matchStats.shots.away}
-              COLORS={COLORS}
-            />
-            <MatchStatRow
-              label="Tirs cadrés"
-              homeValue={matchStats.shotsOnTarget.home}
-              awayValue={matchStats.shotsOnTarget.away}
-              COLORS={COLORS}
-            />
-            <MatchStatRow
-              label="Corners"
-              homeValue={matchStats.corners.home}
-              awayValue={matchStats.corners.away}
-              COLORS={COLORS}
-            />
-            <MatchStatRow
-              label="Fautes"
-              homeValue={matchStats.fouls.home}
-              awayValue={matchStats.fouls.away}
-              COLORS={COLORS}
-            />
-          </View>
-        )}
-
-        {/* Participation */}
-        <View style={[styles.section, { backgroundColor: COLORS.WHITE }]}>
-          <View style={styles.sectionHeader}>
-            <Icon name="users" size={20} color={COLORS.PRIMARY} />
-            <Text style={[styles.sectionTitle, { color: COLORS.TEXT_PRIMARY }]}>
-              Participants ({match.confirmedPlayers}/{match.maxPlayers})
-            </Text>
-            {match.isOrganizer && (
+            {canEditScore && (
               <TouchableOpacity
-                style={[
-                  styles.inviteButton,
-                  { backgroundColor: COLORS.PRIMARY_ULTRA_LIGHT },
-                ]}
-                onPress={handleInvitePlayers}
+                style={styles.editScoreButton}
+                onPress={() => setScoreModalVisible(true)}
               >
-                <Icon name="user-plus" size={16} color={COLORS.PRIMARY} />
+                <Icon name="edit-2" size={16} color="#22C55E" />
+                <Text style={styles.editScoreText}>
+                  {match.team1_score !== null
+                    ? 'Modifier le score'
+                    : 'Entrer le score'}
+                </Text>
               </TouchableOpacity>
             )}
+          </LinearGradient>
+        </View>
+
+        {/* Informations */}
+        <View style={styles.infoCard}>
+          <Text style={styles.infoCardTitle}>Informations</Text>
+
+          <View style={styles.infoRow}>
+            <Icon name="map-pin" size={18} color="#6B7280" />
+            <Text style={styles.infoLabel}>Lieu</Text>
+            <Text style={styles.infoValue}>{match.location?.name || '-'}</Text>
           </View>
 
-          {/* Progress bar */}
-          <View style={styles.progressContainer}>
-            <View
-              style={[
-                styles.progressBar,
-                { backgroundColor: COLORS.BACKGROUND_LIGHT },
-              ]}
-            >
-              <View
-                style={[
-                  styles.progressFill,
-                  {
-                    backgroundColor: COLORS.PRIMARY,
-                    width: `${
-                      (match.confirmedPlayers / match.maxPlayers) * 100
-                    }%`,
-                  },
-                ]}
-              />
-            </View>
-            <Text
-              style={[styles.progressText, { color: COLORS.TEXT_SECONDARY }]}
-            >
-              {Math.round((match.confirmedPlayers / match.maxPlayers) * 100)}%
+          <View style={styles.infoRow}>
+            <Icon name="calendar" size={18} color="#6B7280" />
+            <Text style={styles.infoLabel}>Date</Text>
+            <Text style={styles.infoValue}>
+              {new Date(match.matchDate).toLocaleDateString('fr-FR')}
             </Text>
           </View>
 
-          {/* Liste des joueurs */}
-          <View style={styles.playersList}>
-            {players.map(player => (
-              <PlayerCard key={player.id} player={player} COLORS={COLORS} />
-            ))}
+          <View style={styles.infoRow}>
+            <Icon name="clock" size={18} color="#6B7280" />
+            <Text style={styles.infoLabel}>Heure</Text>
+            <Text style={styles.infoValue}>
+              {new Date(match.matchDate).toLocaleTimeString('fr-FR', {
+                hour: '2-digit',
+                minute: '2-digit',
+              })}
+            </Text>
           </View>
-        </View>
 
-        {/* Boutons d'action */}
-        {match.status === 'upcoming' && !match.userParticipation && (
-          <View style={styles.actionsContainer}>
-            <TouchableOpacity
-              style={[
-                styles.primaryButton,
-                { backgroundColor: COLORS.PRIMARY },
-              ]}
-              onPress={handleConfirmParticipation}
-            >
-              <Icon name="check" size={20} color={COLORS.WHITE} />
-              <Text style={styles.primaryButtonText}>
-                Confirmer ma participation
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[
-                styles.secondaryButton,
-                { borderColor: COLORS.TEXT_MUTED },
-              ]}
-              onPress={handleDeclineParticipation}
-            >
-              <Icon name="x" size={20} color={COLORS.TEXT_MUTED} />
-              <Text
-                style={[
-                  styles.secondaryButtonText,
-                  { color: COLORS.TEXT_MUTED },
-                ]}
-              >
-                Décliner
-              </Text>
-            </TouchableOpacity>
-          </View>
-        )}
-
-        {match.userParticipation === 'confirmed' &&
-          match.status === 'upcoming' && (
-            <TouchableOpacity
-              style={[styles.secondaryButton, { borderColor: COLORS.ERROR }]}
-              onPress={handleDeclineParticipation}
-            >
-              <Icon name="x" size={20} color={COLORS.ERROR} />
-              <Text
-                style={[styles.secondaryButtonText, { color: COLORS.ERROR }]}
-              >
-                Annuler ma participation
-              </Text>
-            </TouchableOpacity>
+          {match.type && (
+            <View style={styles.descriptionSection}>
+              <Icon name="file-text" size={18} color="#6B7280" />
+              <View style={styles.descriptionContent}>
+                <Text style={styles.infoLabel}>Description</Text>
+                <Text style={styles.descriptionText}>{match.type}</Text>
+              </View>
+            </View>
           )}
-      </Animated.ScrollView>
+        </View>
+      </ScrollView>
+
+      {/* Score Modal */}
+      <ScoreModal
+        visible={scoreModalVisible}
+        onClose={() => setScoreModalVisible(false)}
+        onSubmit={handleUpdateScore}
+        match={match}
+      />
     </View>
   );
 };
 
+// Styles compacts pour MatchDetailScreen
 const styles = StyleSheet.create({
-  container: {
+  container: { flex: 1, backgroundColor: '#F8FAFC' },
+  loadingContainer: {
     flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
   },
+  loadingText: { marginTop: 12, fontSize: 14, color: '#6B7280' },
   header: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    zIndex: 10,
-    paddingTop: Platform.OS === 'ios' ? 50 : 20,
-    paddingBottom: DIMENSIONS.SPACING_LG,
+    paddingTop: Platform.OS === 'ios' ? 60 : 20,
+    paddingBottom: 24,
+    paddingHorizontal: 20,
     ...SHADOWS.LARGE,
   },
   headerTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: DIMENSIONS.CONTAINER_PADDING,
-    marginBottom: DIMENSIONS.SPACING_MD,
-  },
-  backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  headerActions: {
-    flexDirection: 'row',
-    gap: DIMENSIONS.SPACING_SM,
+    marginBottom: 20,
   },
   headerButton: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    backgroundColor: 'rgba(255,255,255,0.2)',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  headerContent: {
-    alignItems: 'center',
-    paddingHorizontal: DIMENSIONS.CONTAINER_PADDING,
-  },
-  matchTeams: {
+  headerContent: { alignItems: 'center' },
+  statusBadgeLarge: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    width: '100%',
-    marginBottom: DIMENSIONS.SPACING_MD,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    gap: 6,
+    marginBottom: 12,
   },
-  teamSection: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  teamLogo: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: DIMENSIONS.SPACING_SM,
-  },
-  teamName: {
-    fontSize: FONTS.SIZE.SM,
-    fontWeight: FONTS.WEIGHT.SEMIBOLD,
-    color: '#FFFFFF',
-    textAlign: 'center',
-  },
-  vsSection: {
-    alignItems: 'center',
-    paddingHorizontal: DIMENSIONS.SPACING_MD,
-  },
-  vsText: {
-    fontSize: FONTS.SIZE.XL,
-    fontWeight: FONTS.WEIGHT.BOLD,
-    color: 'rgba(255, 255, 255, 0.8)',
-  },
-  scoreContainer: {
-    marginTop: DIMENSIONS.SPACING_XS,
-  },
-  scoreText: {
-    fontSize: FONTS.SIZE.XXL,
-    fontWeight: FONTS.WEIGHT.BOLD,
-    color: '#FFFFFF',
-  },
-  matchStatusBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: DIMENSIONS.SPACING_MD,
-    paddingVertical: DIMENSIONS.SPACING_XS,
-    borderRadius: DIMENSIONS.BORDER_RADIUS_FULL,
-    gap: DIMENSIONS.SPACING_XS,
-  },
-  matchStatusText: {
-    fontSize: FONTS.SIZE.SM,
-    fontWeight: FONTS.WEIGHT.SEMIBOLD,
-    color: '#FFFFFF',
-  },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingTop: HEADER_MAX_HEIGHT + DIMENSIONS.SPACING_SM,
-    padding: DIMENSIONS.CONTAINER_PADDING,
-    paddingBottom: DIMENSIONS.SPACING_XXL,
-  },
-  section: {
-    padding: DIMENSIONS.SPACING_LG,
-    borderRadius: DIMENSIONS.BORDER_RADIUS_MD,
-    marginBottom: DIMENSIONS.SPACING_LG,
-    ...SHADOWS.SMALL,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: DIMENSIONS.SPACING_MD,
-  },
-  sectionTitle: {
-    fontSize: FONTS.SIZE.LG,
-    fontWeight: FONTS.WEIGHT.BOLD,
-    marginLeft: DIMENSIONS.SPACING_SM,
-    flex: 1,
-  },
-  infoRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: DIMENSIONS.SPACING_SM,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(0,0,0,0.05)',
-  },
-  infoLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: DIMENSIONS.SPACING_SM,
-    flex: 1,
-  },
-  infoLabel: {
-    fontSize: FONTS.SIZE.SM,
-  },
-  infoValue: {
-    fontSize: FONTS.SIZE.SM,
-    fontWeight: FONTS.WEIGHT.SEMIBOLD,
-    textAlign: 'right',
-    flex: 1,
-  },
-  mapButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: DIMENSIONS.SPACING_MD,
-    borderRadius: DIMENSIONS.BORDER_RADIUS_MD,
-    gap: DIMENSIONS.SPACING_SM,
-    marginTop: DIMENSIONS.SPACING_MD,
-  },
-  mapButtonText: {
-    fontSize: FONTS.SIZE.MD,
-    fontWeight: FONTS.WEIGHT.SEMIBOLD,
-  },
-  description: {
-    fontSize: FONTS.SIZE.MD,
-    lineHeight: FONTS.SIZE.MD * FONTS.LINE_HEIGHT.RELAXED,
-  },
-  matchStatRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: DIMENSIONS.SPACING_MD,
-  },
-  statNumber: {
-    fontSize: FONTS.SIZE.MD,
-    fontWeight: FONTS.WEIGHT.BOLD,
-    width: 30,
-    textAlign: 'center',
-  },
-  statCenter: {
-    flex: 1,
-    marginHorizontal: DIMENSIONS.SPACING_MD,
-  },
-  statLabel: {
-    fontSize: FONTS.SIZE.SM,
-    marginBottom: DIMENSIONS.SPACING_XS,
-    textAlign: 'center',
-  },
-  statBar: {
-    height: 8,
-    borderRadius: 4,
-    flexDirection: 'row',
+  statusTextLarge: { fontSize: 14, fontWeight: '600', color: '#FFF' },
+  matchDateLarge: { fontSize: 16, color: 'rgba(255,255,255,0.95)' },
+  scrollView: { flex: 1 },
+  scrollContent: { padding: 20 },
+  scoreCard: {
+    borderRadius: 20,
     overflow: 'hidden',
+    marginBottom: 16,
+    ...SHADOWS.LARGE,
   },
-  statBarFill: {
-    height: '100%',
-    borderTopLeftRadius: 4,
-    borderBottomLeftRadius: 4,
-  },
-  statBarFillRight: {
-    height: '100%',
-    borderTopRightRadius: 4,
-    borderBottomRightRadius: 4,
-  },
-  inviteButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  progressContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: DIMENSIONS.SPACING_SM,
-    marginBottom: DIMENSIONS.SPACING_MD,
-  },
-  progressBar: {
-    flex: 1,
-    height: 8,
-    borderRadius: 4,
-    overflow: 'hidden',
-  },
-  progressFill: {
-    height: '100%',
-    borderRadius: 4,
-  },
-  progressText: {
-    fontSize: FONTS.SIZE.SM,
-    fontWeight: FONTS.WEIGHT.SEMIBOLD,
-    width: 40,
-    textAlign: 'right',
-  },
-  playersList: {
-    gap: DIMENSIONS.SPACING_SM,
-  },
-  playerCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: DIMENSIONS.SPACING_SM,
-    borderRadius: DIMENSIONS.BORDER_RADIUS_MD,
-    borderWidth: 1,
-    borderColor: 'rgba(0,0,0,0.05)',
-  },
-  playerAvatar: {
-    width: 40,
-    height: 40,
+  scoreCardGradient: { padding: 24 },
+  teamsRow: { flexDirection: 'row', alignItems: 'center' },
+  teamColumn: { flex: 1, alignItems: 'center' },
+  teamIconLarge: { marginBottom: 12 },
+  teamIconGradient: {
+    width: 80,
+    height: 80,
     borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: DIMENSIONS.SPACING_MD,
   },
-  playerInfo: {
-    flex: 1,
+  teamNameLarge: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#1F2937',
+    textAlign: 'center',
+    marginBottom: 8,
   },
-  playerName: {
-    fontSize: FONTS.SIZE.SM,
-    fontWeight: FONTS.WEIGHT.SEMIBOLD,
-    marginBottom: 2,
-  },
-  playerMeta: {
+  scoreLarge: { fontSize: 32, fontWeight: '700', color: '#1F2937' },
+  vsContainerLarge: { paddingHorizontal: 20 },
+  vsTextLarge: { fontSize: 16, fontWeight: '700', color: '#9CA3AF' },
+  editScoreButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: DIMENSIONS.SPACING_XXS,
-  },
-  playerMetaText: {
-    fontSize: FONTS.SIZE.XS,
-  },
-  statusBadge: {
-    width: 24,
-    height: 24,
+    justifyContent: 'center',
+    marginTop: 20,
+    padding: 12,
+    backgroundColor: '#F0FDF4',
     borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
+    gap: 8,
   },
-  actionsContainer: {
-    gap: DIMENSIONS.SPACING_SM,
-  },
-  primaryButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: DIMENSIONS.SPACING_MD,
-    borderRadius: DIMENSIONS.BORDER_RADIUS_MD,
-    gap: DIMENSIONS.SPACING_SM,
+  editScoreText: { fontSize: 14, fontWeight: '600', color: '#22C55E' },
+  infoCard: {
+    backgroundColor: '#FFF',
+    borderRadius: 16,
+    padding: 20,
     ...SHADOWS.MEDIUM,
   },
-  primaryButtonText: {
-    fontSize: FONTS.SIZE.MD,
-    fontWeight: FONTS.WEIGHT.SEMIBOLD,
-    color: '#FFFFFF',
+  infoCardTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#1F2937',
+    marginBottom: 16,
   },
-  secondaryButton: {
+  infoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    gap: 12,
+  },
+  infoLabel: { flex: 1, fontSize: 14, color: '#6B7280' },
+  infoValue: { fontSize: 14, fontWeight: '600', color: '#1F2937' },
+  descriptionSection: {
+    flexDirection: 'row',
+    paddingTop: 12,
+    gap: 12,
+  },
+  descriptionContent: { flex: 1 },
+  descriptionText: {
+    fontSize: 14,
+    color: '#1F2937',
+    lineHeight: 20,
+    marginTop: 4,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    paddingHorizontal: 20,
+  },
+  scoreModalContent: {
+    backgroundColor: '#FFF',
+    borderRadius: 20,
+    padding: 24,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  modalTitle: { fontSize: 20, fontWeight: '700', color: '#1F2937' },
+  scoreInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  scoreTeamSection: { flex: 1, alignItems: 'center' },
+  scoreTeamName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#6B7280',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  scoreInput: {
+    width: 80,
+    height: 80,
+    backgroundColor: '#F3F4F6',
+    borderRadius: 16,
+    fontSize: 32,
+    fontWeight: '700',
+    color: '#1F2937',
+    textAlign: 'center',
+  },
+  scoreVS: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#9CA3AF',
+    paddingHorizontal: 20,
+  },
+  scoreSubmitButton: { borderRadius: 12, overflow: 'hidden' },
+  scoreSubmitGradient: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: DIMENSIONS.SPACING_MD,
-    borderRadius: DIMENSIONS.BORDER_RADIUS_MD,
-    borderWidth: 2,
-    gap: DIMENSIONS.SPACING_SM,
+    paddingVertical: 14,
+    gap: 8,
   },
-  secondaryButtonText: {
-    fontSize: FONTS.SIZE.MD,
-    fontWeight: FONTS.WEIGHT.SEMIBOLD,
-  },
-  statCard: {
-    flex: 1,
-    padding: DIMENSIONS.SPACING_SM,
-    borderRadius: DIMENSIONS.BORDER_RADIUS_MD,
-    alignItems: 'center',
-    ...SHADOWS.SMALL,
-  },
-  statIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: DIMENSIONS.SPACING_XS,
-  },
-  statValue: {
-    fontSize: FONTS.SIZE.LG,
-    fontWeight: FONTS.WEIGHT.BOLD,
-    marginBottom: 2,
-  },
-  ostatLabel: {
-    fontSize: FONTS.SIZE.XXS,
-    fontWeight: FONTS.WEIGHT.MEDIUM,
-    textAlign: 'center',
-  },
+  scoreSubmitText: { fontSize: 16, fontWeight: '600', color: '#FFF' },
 });

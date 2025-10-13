@@ -20,9 +20,10 @@ import LinearGradient from 'react-native-linear-gradient';
 import { useTheme } from '../../hooks/useTheme';
 import { DIMENSIONS, FONTS, SHADOWS } from '../../styles/theme';
 import { UserApi } from '../../services/api';
+import { useAuthImproved } from '../../utils/hooks/useAuthImproved';
 
 const { width } = Dimensions.get('window');
-const HEADER_HEIGHT = 280;
+const HEADER_HEIGHT = 320;
 
 // Composant StatCard moderne
 const StatCard = ({ icon, value, label, gradient, COLORS }) => (
@@ -111,6 +112,7 @@ const QuickAction = ({ icon, label, onPress, gradient }) => (
 
 export const ProfileScreen = ({ navigation }) => {
   const { colors: COLORS } = useTheme('auto');
+  const { logoutUser } = useAuthImproved();
   const dispatch = useDispatch();
   const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -361,74 +363,14 @@ export const ProfileScreen = ({ navigation }) => {
                   {
                     text: 'Déconnexion',
                     style: 'destructive',
-                    onPress: () => navigation.navigate('Auth'),
+                    // onPress: () => navigation.navigate('Auth'),
+                    onPress: async () => await logoutUser(),
                   },
                 ],
               );
             }}
             gradient={['#EF4444', '#DC2626']}
           />
-        </View>
-
-        {/* Section Mes équipes */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={[styles.sectionTitle, { color: COLORS.TEXT_PRIMARY }]}>
-              Mes équipes
-            </Text>
-            <TouchableOpacity onPress={() => navigation.navigate('Teams')}>
-              <Text style={styles.seeAllText}>Voir tout</Text>
-            </TouchableOpacity>
-          </View>
-
-          {teams.length > 0 ? (
-            teams.map(team => (
-              <TeamCard
-                key={team.id}
-                team={team}
-                onPress={() =>
-                  navigation.navigate('Teams', {
-                    screen: 'TeamDetail',
-                    params: { teamId: team.id },
-                  })
-                }
-                COLORS={COLORS}
-              />
-            ))
-          ) : (
-            <View style={styles.emptyState}>
-              <LinearGradient
-                colors={['#F3F4F620', '#F3F4F610']}
-                style={styles.emptyStateGradient}
-              >
-                <Icon name="users" size={56} color="#CBD5E1" />
-                <Text
-                  style={[
-                    styles.emptyStateText,
-                    { color: COLORS.TEXT_SECONDARY },
-                  ]}
-                >
-                  Aucune équipe pour le moment
-                </Text>
-                <TouchableOpacity
-                  style={styles.emptyStateButton}
-                  onPress={() => navigation.navigate('Teams')}
-                >
-                  <LinearGradient
-                    colors={['#22C55E', '#16A34A']}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 0 }}
-                    style={styles.emptyStateButtonGradient}
-                  >
-                    <Icon name="plus" size={18} color="#FFF" />
-                    <Text style={styles.emptyStateButtonText}>
-                      Rejoindre une équipe
-                    </Text>
-                  </LinearGradient>
-                </TouchableOpacity>
-              </LinearGradient>
-            </View>
-          )}
         </View>
 
         <View style={{ height: 40 }} />
@@ -562,10 +504,10 @@ const styles = StyleSheet.create({
   },
   scrollView: {
     flex: 1,
-    marginTop: HEADER_HEIGHT - 40,
+    marginTop: HEADER_HEIGHT,
   },
   scrollContent: {
-    paddingTop: 20,
+    paddingTop: 40,
   },
   statsSection: {
     flexDirection: 'row',

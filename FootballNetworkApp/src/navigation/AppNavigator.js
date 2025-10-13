@@ -43,6 +43,7 @@ export const AppNavigator = () => {
             refreshToken: await SecureStorage.getRefreshToken(),
           }),
         );
+        console.log('token', token);
       } else {
         console.log('❌ Pas de session sauvegardée');
       }

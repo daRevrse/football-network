@@ -1,597 +1,672 @@
-// ====== src/screens/matches/CreateMatchScreen.js ======
-import React, { useState } from 'react';
+// ====== src/screens/matches/CreateMatchScreen.js - NOUVEAU DESIGN + BACKEND ======
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
+  TextInput,
+  StyleSheet,
   ScrollView,
   TouchableOpacity,
-  TextInput,
   Alert,
-  StyleSheet,
-  StatusBar,
   Platform,
+  StatusBar,
+  KeyboardAvoidingView,
+  ActivityIndicator,
+  Modal,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
-import { useTheme } from '../../hooks/useTheme';
+import LinearGradient from 'react-native-linear-gradient';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { DIMENSIONS, FONTS, SHADOWS } from '../../styles/theme';
+import { matchesApi, teamsApi } from '../../services/api';
 
-// Composant FormSection
-const FormSection = ({ title, icon, children, COLORS }) => (
-  <View style={[styles.section, { backgroundColor: COLORS.WHITE }]}>
+// Composant ModernInput (réutilisable)
+const ModernInput = ({
+  label,
+  value,
+  onChangeText,
+  placeholder,
+  error,
+  icon,
+  multiline,
+  keyboardType,
+  maxLength,
+  editable = true,
+  onPress,
+  ...props
+}) => {
+  const InputComponent = onPress ? TouchableOpacity : View;
+
+  return (
+    <View style={styles.inputContainer}>
+      {label && (
+        <View style={styles.inputLabelContainer}>
+          <Text style={styles.inputLabel}>{label}</Text>
+          {maxLength && (
+            <Text style={styles.inputCounter}>
+              {value?.length || 0}/{maxLength}
+            </Text>
+          )}
+        </View>
+      )}
+      <InputComponent
+        style={[
+          styles.inputWrapper,
+          error && styles.inputWrapperError,
+          multiline && styles.inputWrapperMultiline,
+          !editable && styles.inputWrapperDisabled,
+        ]}
+        onPress={onPress}
+        disabled={!onPress}
+      >
+        {icon && (
+          <Icon
+            name={icon}
+            size={20}
+            color={error ? '#EF4444' : '#9CA3AF'}
+            style={styles.inputIcon}
+          />
+        )}
+        <TextInput
+          value={value}
+          onChangeText={onChangeText}
+          placeholder={placeholder}
+          placeholderTextColor="#9CA3AF"
+          multiline={multiline}
+          keyboardType={keyboardType}
+          maxLength={maxLength}
+          editable={editable && !onPress}
+          style={[
+            styles.input,
+            icon && styles.inputWithIcon,
+            multiline && styles.inputMultiline,
+          ]}
+          {...props}
+        />
+        {onPress && <Icon name="chevron-down" size={20} color="#9CA3AF" />}
+      </InputComponent>
+      {error && (
+        <View style={styles.errorContainer}>
+          <Icon name="alert-circle" size={14} color="#EF4444" />
+          <Text style={styles.errorText}>{error}</Text>
+        </View>
+      )}
+    </View>
+  );
+};
+
+// Composant SectionCard
+const SectionCard = ({ title, description, icon, iconBg, children }) => (
+  <View style={styles.sectionCard}>
     <View style={styles.sectionHeader}>
-      <Icon name={icon} size={20} color={COLORS.PRIMARY} />
-      <Text style={[styles.sectionTitle, { color: COLORS.TEXT_PRIMARY }]}>
-        {title}
-      </Text>
+      <View style={[styles.sectionIcon, { backgroundColor: iconBg }]}>
+        <Icon name={icon} size={22} color="#FFF" />
+      </View>
+      <View style={styles.sectionTitleContainer}>
+        <Text style={styles.sectionTitle}>{title}</Text>
+        {description && (
+          <Text style={styles.sectionDescription}>{description}</Text>
+        )}
+      </View>
     </View>
     <View style={styles.sectionContent}>{children}</View>
   </View>
 );
 
-// Composant InputField
-const InputField = ({
-  label,
-  value,
-  onChangeText,
-  placeholder,
-  multiline,
-  editable = true,
-  COLORS,
+// Modal de sélection d'équipe
+const TeamSelectorModal = ({
+  visible,
+  onClose,
+  teams,
+  onSelect,
+  selectedTeam,
 }) => (
-  <View style={styles.inputContainer}>
-    <Text style={[styles.inputLabel, { color: COLORS.TEXT_SECONDARY }]}>
-      {label}
-    </Text>
-    <TextInput
-      style={[
-        styles.input,
-        {
-          backgroundColor: COLORS.BACKGROUND_LIGHT,
-          color: COLORS.TEXT_PRIMARY,
-          borderColor: COLORS.BORDER,
-        },
-        multiline && styles.inputMultiline,
-        !editable && { opacity: 0.6 },
-      ]}
-      value={value}
-      onChangeText={onChangeText}
-      placeholder={placeholder}
-      placeholderTextColor={COLORS.TEXT_MUTED}
-      multiline={multiline}
-      numberOfLines={multiline ? 4 : 1}
-      editable={editable}
-    />
-  </View>
-);
-
-// Composant SelectButton
-const SelectButton = ({ label, value, onPress, icon, placeholder, COLORS }) => (
-  <View style={styles.inputContainer}>
-    <Text style={[styles.inputLabel, { color: COLORS.TEXT_SECONDARY }]}>
-      {label}
-    </Text>
-    <TouchableOpacity
-      style={[
-        styles.selectButton,
-        {
-          backgroundColor: COLORS.BACKGROUND_LIGHT,
-          borderColor: COLORS.BORDER,
-        },
-      ]}
-      onPress={onPress}
-    >
-      <View style={styles.selectContent}>
-        {icon && <Icon name={icon} size={20} color={COLORS.TEXT_MUTED} />}
-        <Text
-          style={[
-            styles.selectText,
-            {
-              color: value ? COLORS.TEXT_PRIMARY : COLORS.TEXT_MUTED,
-            },
-          ]}
-        >
-          {value || placeholder}
-        </Text>
-      </View>
-      <Icon name="chevron-right" size={20} color={COLORS.TEXT_MUTED} />
-    </TouchableOpacity>
-  </View>
-);
-
-// Composant TeamCard
-const TeamCard = ({ label, team, onPress, onRemove, COLORS }) => (
-  <View style={styles.inputContainer}>
-    <Text style={[styles.inputLabel, { color: COLORS.TEXT_SECONDARY }]}>
-      {label}
-    </Text>
-    {team ? (
-      <View
-        style={[
-          styles.teamCard,
-          {
-            backgroundColor: COLORS.BACKGROUND_LIGHT,
-            borderColor: COLORS.PRIMARY,
-          },
-        ]}
-      >
-        <View
-          style={[
-            styles.teamIcon,
-            { backgroundColor: COLORS.PRIMARY_ULTRA_LIGHT },
-          ]}
-        >
-          <Icon name="dribbble" size={24} color={COLORS.PRIMARY} />
+  <Modal visible={visible} animationType="slide" transparent={true}>
+    <View style={styles.modalOverlay}>
+      <View style={styles.modalContent}>
+        <View style={styles.modalHeader}>
+          <Text style={styles.modalTitle}>Sélectionnez une équipe</Text>
+          <TouchableOpacity onPress={onClose} style={styles.modalClose}>
+            <Icon name="x" size={24} color="#6B7280" />
+          </TouchableOpacity>
         </View>
-        <View style={styles.teamInfo}>
-          <Text style={[styles.teamName, { color: COLORS.TEXT_PRIMARY }]}>
-            {team.name}
-          </Text>
-          <Text style={[styles.teamMeta, { color: COLORS.TEXT_SECONDARY }]}>
-            {team.members} membres
-          </Text>
-        </View>
-        <TouchableOpacity onPress={onRemove} style={styles.removeButton}>
-          <Icon name="x" size={20} color={COLORS.ERROR} />
-        </TouchableOpacity>
+        <ScrollView style={styles.modalBody}>
+          {teams.map(team => (
+            <TouchableOpacity
+              key={team.id}
+              style={[
+                styles.teamOption,
+                selectedTeam?.id === team.id && styles.teamOptionSelected,
+              ]}
+              onPress={() => {
+                onSelect(team);
+                onClose();
+              }}
+            >
+              <View style={styles.teamOptionIcon}>
+                <Icon name="shield" size={24} color="#22C55E" />
+              </View>
+              <View style={styles.teamOptionInfo}>
+                <Text style={styles.teamOptionName}>{team.name}</Text>
+                <Text style={styles.teamOptionMeta}>
+                  {team.member_count} membres
+                </Text>
+              </View>
+              {selectedTeam?.id === team.id && (
+                <Icon name="check" size={20} color="#22C55E" />
+              )}
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
       </View>
-    ) : (
-      <TouchableOpacity
-        style={[
-          styles.addTeamButton,
-          {
-            backgroundColor: COLORS.BACKGROUND_LIGHT,
-            borderColor: COLORS.BORDER,
-          },
-        ]}
-        onPress={onPress}
-      >
-        <Icon name="plus" size={24} color={COLORS.PRIMARY} />
-        <Text style={[styles.addTeamText, { color: COLORS.TEXT_SECONDARY }]}>
-          Sélectionner une équipe
-        </Text>
-      </TouchableOpacity>
-    )}
-  </View>
-);
-
-// Composant OptionCard
-const OptionCard = ({ icon, label, selected, onPress, COLORS }) => (
-  <TouchableOpacity
-    style={[
-      styles.optionCard,
-      {
-        backgroundColor: selected
-          ? COLORS.PRIMARY_ULTRA_LIGHT
-          : COLORS.BACKGROUND_LIGHT,
-        borderColor: selected ? COLORS.PRIMARY : COLORS.BORDER,
-      },
-    ]}
-    onPress={onPress}
-  >
-    <View
-      style={[
-        styles.optionIcon,
-        {
-          backgroundColor: selected ? COLORS.PRIMARY_LIGHT : COLORS.WHITE,
-        },
-      ]}
-    >
-      <Icon
-        name={icon}
-        size={20}
-        color={selected ? COLORS.PRIMARY : COLORS.TEXT_MUTED}
-      />
     </View>
-    <Text
-      style={[
-        styles.optionLabel,
-        { color: selected ? COLORS.PRIMARY : COLORS.TEXT_PRIMARY },
-      ]}
-    >
-      {label}
-    </Text>
-    {selected && (
-      <View style={styles.checkIcon}>
-        <Icon name="check-circle" size={20} color={COLORS.PRIMARY} />
-      </View>
-    )}
-  </TouchableOpacity>
+  </Modal>
 );
 
 export const CreateMatchScreen = ({ navigation }) => {
-  const { colors: COLORS, isDark } = useTheme('auto');
+  const [isLoading, setIsLoading] = useState(false);
+  const [loadingTeams, setLoadingTeams] = useState(true);
+  const [myTeams, setMyTeams] = useState([]);
+  const [showTeamModal, setShowTeamModal] = useState(false);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showTimePicker, setShowTimePicker] = useState(false);
 
-  // État du formulaire
-  const [homeTeam, setHomeTeam] = useState(null);
-  const [awayTeam, setAwayTeam] = useState(null);
-  const [matchDate, setMatchDate] = useState('');
-  const [matchTime, setMatchTime] = useState('');
-  const [location, setLocation] = useState('');
-  const [address, setAddress] = useState('');
-  const [matchType, setMatchType] = useState('friendly'); // friendly, competitive, tournament
-  const [maxPlayers, setMaxPlayers] = useState('22');
-  const [description, setDescription] = useState('');
+  const [formData, setFormData] = useState({
+    team1: null, // Mon équipe
+    opponentName: '',
+    scheduledDate: new Date(),
+    location: '',
+    description: '',
+  });
+  const [errors, setErrors] = useState({});
 
-  // Données mockées pour la sélection d'équipe
-  const myTeams = [
-    { id: 1, name: 'Les Tigres de Paris', members: 11 },
-    { id: 2, name: 'FC Montmartre', members: 9 },
-    { id: 3, name: 'Racing Club 75', members: 15 },
-  ];
+  useEffect(() => {
+    loadMyTeams();
+  }, []);
 
-  const handleSelectHomeTeam = () => {
-    Alert.alert(
-      "Sélectionner l'équipe à domicile",
-      '',
-      myTeams
-        .map(team => ({
-          text: team.name,
-          onPress: () => setHomeTeam(team),
-        }))
-        .concat([{ text: 'Annuler', style: 'cancel' }]),
+  const loadMyTeams = async () => {
+    try {
+      setLoadingTeams(true);
+      const result = await teamsApi.getMyTeams();
+
+      if (result.success) {
+        // Filtrer seulement les équipes où je suis capitaine
+        const captainTeams = result.data.filter(
+          t => t.role === 'owner' || t.role === 'captain',
+        );
+        setMyTeams(captainTeams);
+
+        // Pré-sélectionner la première équipe
+        if (captainTeams.length > 0) {
+          setFormData(prev => ({ ...prev, team1: captainTeams[0] }));
+        }
+      }
+    } catch (error) {
+      console.error('Load teams error:', error);
+    } finally {
+      setLoadingTeams(false);
+    }
+  };
+
+  const updateFormData = (field, value) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+    if (errors[field]) {
+      setErrors(prev => ({ ...prev, [field]: null }));
+    }
+  };
+
+  const validateForm = () => {
+    const newErrors = {};
+
+    if (!formData.team1) {
+      newErrors.team1 = 'Sélectionnez votre équipe';
+    }
+
+    if (!formData.opponentName.trim()) {
+      newErrors.opponentName = "Nom de l'adversaire requis";
+    } else if (formData.opponentName.trim().length < 3) {
+      newErrors.opponentName = 'Minimum 3 caractères';
+    }
+
+    if (!formData.location.trim()) {
+      newErrors.location = 'Lieu requis';
+    }
+
+    // Vérifier que la date est dans le futur
+    if (formData.scheduledDate < new Date()) {
+      newErrors.scheduledDate = 'La date doit être dans le futur';
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const handleDateChange = (event, selectedDate) => {
+    setShowDatePicker(false);
+    if (selectedDate) {
+      const newDate = new Date(formData.scheduledDate);
+      newDate.setFullYear(selectedDate.getFullYear());
+      newDate.setMonth(selectedDate.getMonth());
+      newDate.setDate(selectedDate.getDate());
+      updateFormData('scheduledDate', newDate);
+    }
+  };
+
+  const handleTimeChange = (event, selectedTime) => {
+    setShowTimePicker(false);
+    if (selectedTime) {
+      const newDate = new Date(formData.scheduledDate);
+      newDate.setHours(selectedTime.getHours());
+      newDate.setMinutes(selectedTime.getMinutes());
+      updateFormData('scheduledDate', newDate);
+    }
+  };
+
+  const handleSubmit = async () => {
+    if (!validateForm()) {
+      Alert.alert('Erreur', 'Veuillez corriger les erreurs du formulaire');
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+
+      const matchData = {
+        team1_id: formData.team1.id,
+        opponent_name: formData.opponentName.trim(),
+        scheduled_at: formData.scheduledDate.toISOString(),
+        location: formData.location.trim(),
+        description: formData.description.trim() || undefined,
+      };
+
+      const result = await matchesApi.createMatch(matchData);
+
+      if (result.success) {
+        Alert.alert('Succès', 'Le match a été créé avec succès !', [
+          {
+            text: 'Voir le match',
+            onPress: () => {
+              navigation.navigate('MatchDetail', {
+                matchId: result.data.id,
+              });
+            },
+          },
+        ]);
+      } else {
+        Alert.alert('Erreur', result.error || 'Impossible de créer le match');
+      }
+    } catch (error) {
+      console.error('Create match error:', error);
+      Alert.alert('Erreur', 'Une erreur est survenue');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  if (loadingTeams) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#22C55E" />
+        <Text style={styles.loadingText}>Chargement...</Text>
+      </View>
     );
-  };
+  }
 
-  const handleSelectAwayTeam = () => {
-    Alert.alert(
-      "Sélectionner l'équipe extérieure",
-      '',
-      myTeams
-        .map(team => ({
-          text: team.name,
-          onPress: () => setAwayTeam(team),
-        }))
-        .concat([{ text: 'Annuler', style: 'cancel' }]),
+  if (myTeams.length === 0) {
+    return (
+      <View style={styles.emptyContainer}>
+        <Icon name="users" size={64} color="#D1D5DB" />
+        <Text style={styles.emptyTitle}>Aucune équipe</Text>
+        <Text style={styles.emptyDescription}>
+          Vous devez être capitaine d'une équipe pour créer un match
+        </Text>
+        <TouchableOpacity
+          style={styles.emptyButton}
+          onPress={() => navigation.navigate('Teams')}
+        >
+          <LinearGradient
+            colors={['#22C55E', '#16A34A']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.emptyButtonGradient}
+          >
+            <Icon name="plus" size={20} color="#FFF" />
+            <Text style={styles.emptyButtonText}>Créer une équipe</Text>
+          </LinearGradient>
+        </TouchableOpacity>
+      </View>
     );
-  };
-
-  const handleSelectDate = () => {
-    // Simulation de sélection de date
-    const today = new Date();
-    const dateStr = `${today.getDate().toString().padStart(2, '0')}/${(
-      today.getMonth() + 1
-    )
-      .toString()
-      .padStart(2, '0')}/${today.getFullYear()}`;
-    setMatchDate(dateStr);
-  };
-
-  const handleSelectTime = () => {
-    // Simulation de sélection d'heure
-    Alert.alert("Sélectionner l'heure", '', [
-      { text: '10:00', onPress: () => setMatchTime('10:00') },
-      { text: '14:00', onPress: () => setMatchTime('14:00') },
-      { text: '15:00', onPress: () => setMatchTime('15:00') },
-      { text: '16:00', onPress: () => setMatchTime('16:00') },
-      { text: '18:00', onPress: () => setMatchTime('18:00') },
-      { text: 'Annuler', style: 'cancel' },
-    ]);
-  };
-
-  const handleSelectLocation = () => {
-    Alert.alert('Sélectionner un lieu', '', [
-      {
-        text: 'Stade Municipal Paris 15e',
-        onPress: () => {
-          setLocation('Stade Municipal');
-          setAddress('15 rue du Stade, 75015 Paris');
-        },
-      },
-      {
-        text: 'Terrain Synthétique Paris 18e',
-        onPress: () => {
-          setLocation('Terrain Synthétique');
-          setAddress('8 avenue du Sport, 75018 Paris');
-        },
-      },
-      {
-        text: 'Parc des Sports Paris 14e',
-        onPress: () => {
-          setLocation('Parc des Sports');
-          setAddress('22 rue de la Victoire, 75014 Paris');
-        },
-      },
-      { text: 'Annuler', style: 'cancel' },
-    ]);
-  };
-
-  const handleCreateMatch = () => {
-    // Validation
-    if (!homeTeam || !awayTeam) {
-      Alert.alert('Erreur', 'Veuillez sélectionner les deux équipes');
-      return;
-    }
-    if (!matchDate || !matchTime) {
-      Alert.alert('Erreur', "Veuillez sélectionner la date et l'heure");
-      return;
-    }
-    if (!location) {
-      Alert.alert('Erreur', 'Veuillez sélectionner un lieu');
-      return;
-    }
-
-    Alert.alert('Match créé !', 'Le match a été créé avec succès', [
-      {
-        text: 'OK',
-        onPress: () => navigation.goBack(),
-      },
-    ]);
-  };
+  }
 
   return (
-    <View
-      style={[styles.container, { backgroundColor: COLORS.BACKGROUND_LIGHT }]}
-    >
-      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" />
 
       {/* Header */}
-      <View style={[styles.header, { backgroundColor: COLORS.WHITE }]}>
+      <LinearGradient
+        colors={['#22C55E', '#16A34A']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.header}
+      >
         <TouchableOpacity
           style={styles.backButton}
           onPress={() => navigation.goBack()}
         >
-          <Icon name="arrow-left" size={24} color={COLORS.TEXT_PRIMARY} />
+          <Icon name="x" size={24} color="#FFF" />
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: COLORS.TEXT_PRIMARY }]}>
-          Créer un match
-        </Text>
-        <View style={styles.headerPlaceholder} />
-      </View>
 
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
+        <View style={styles.headerContent}>
+          <View style={styles.headerIconContainer}>
+            <Icon name="calendar" size={32} color="#FFF" />
+          </View>
+          <Text style={styles.headerTitle}>Nouveau match</Text>
+          <Text style={styles.headerSubtitle}>
+            Organisez votre prochain match
+          </Text>
+        </View>
+      </LinearGradient>
+
+      <KeyboardAvoidingView
+        style={styles.keyboardView}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        {/* Équipes */}
-        <FormSection title="Équipes" icon="users" COLORS={COLORS}>
-          <TeamCard
-            label="Équipe à domicile"
-            team={homeTeam}
-            onPress={handleSelectHomeTeam}
-            onRemove={() => setHomeTeam(null)}
-            COLORS={COLORS}
-          />
-          <TeamCard
-            label="Équipe extérieure"
-            team={awayTeam}
-            onPress={handleSelectAwayTeam}
-            onRemove={() => setAwayTeam(null)}
-            COLORS={COLORS}
-          />
-        </FormSection>
-
-        {/* Date et heure */}
-        <FormSection title="Date et heure" icon="calendar" COLORS={COLORS}>
-          <SelectButton
-            label="Date du match"
-            value={matchDate}
-            placeholder="Sélectionner la date"
-            icon="calendar"
-            onPress={handleSelectDate}
-            COLORS={COLORS}
-          />
-          <SelectButton
-            label="Heure du match"
-            value={matchTime}
-            placeholder="Sélectionner l'heure"
-            icon="clock"
-            onPress={handleSelectTime}
-            COLORS={COLORS}
-          />
-        </FormSection>
-
-        {/* Lieu */}
-        <FormSection title="Lieu" icon="map-pin" COLORS={COLORS}>
-          <SelectButton
-            label="Terrain"
-            value={location}
-            placeholder="Sélectionner un terrain"
-            icon="map-pin"
-            onPress={handleSelectLocation}
-            COLORS={COLORS}
-          />
-          {address && (
-            <InputField
-              label="Adresse"
-              value={address}
-              placeholder="Adresse du terrain"
-              editable={false}
-              COLORS={COLORS}
-            />
-          )}
-        </FormSection>
-
-        {/* Type de match */}
-        <FormSection title="Type de match" icon="award" COLORS={COLORS}>
-          <View style={styles.optionsGrid}>
-            <OptionCard
-              icon="smile"
-              label="Amical"
-              selected={matchType === 'friendly'}
-              onPress={() => setMatchType('friendly')}
-              COLORS={COLORS}
-            />
-            <OptionCard
-              icon="zap"
-              label="Compétitif"
-              selected={matchType === 'competitive'}
-              onPress={() => setMatchType('competitive')}
-              COLORS={COLORS}
-            />
-            <OptionCard
-              icon="trophy"
-              label="Tournoi"
-              selected={matchType === 'tournament'}
-              onPress={() => setMatchType('tournament')}
-              COLORS={COLORS}
-            />
-          </View>
-        </FormSection>
-
-        {/* Détails */}
-        <FormSection title="Détails" icon="info" COLORS={COLORS}>
-          <InputField
-            label="Nombre de joueurs maximum"
-            value={maxPlayers}
-            onChangeText={setMaxPlayers}
-            placeholder="22"
-            COLORS={COLORS}
-          />
-          <InputField
-            label="Description (optionnel)"
-            value={description}
-            onChangeText={setDescription}
-            placeholder="Ajouter des informations supplémentaires..."
-            multiline
-            COLORS={COLORS}
-          />
-        </FormSection>
-
-        {/* Récapitulatif */}
-        {homeTeam && awayTeam && matchDate && matchTime && location && (
-          <View
-            style={[
-              styles.summary,
-              { backgroundColor: COLORS.PRIMARY_ULTRA_LIGHT },
-            ]}
-          >
-            <View style={styles.summaryHeader}>
-              <Icon name="info" size={20} color={COLORS.PRIMARY} />
-              <Text style={[styles.summaryTitle, { color: COLORS.PRIMARY }]}>
-                Récapitulatif
-              </Text>
-            </View>
-            <View style={styles.summaryContent}>
-              <View style={styles.summaryMatch}>
-                <Text
-                  style={[styles.summaryTeam, { color: COLORS.TEXT_PRIMARY }]}
-                >
-                  {homeTeam.name}
-                </Text>
-                <Text style={[styles.summaryVs, { color: COLORS.TEXT_MUTED }]}>
-                  VS
-                </Text>
-                <Text
-                  style={[styles.summaryTeam, { color: COLORS.TEXT_PRIMARY }]}
-                >
-                  {awayTeam.name}
-                </Text>
-              </View>
-              <View style={styles.summaryDetails}>
-                <View style={styles.summaryRow}>
-                  <Icon
-                    name="calendar"
-                    size={14}
-                    color={COLORS.TEXT_SECONDARY}
-                  />
-                  <Text
-                    style={[
-                      styles.summaryText,
-                      { color: COLORS.TEXT_SECONDARY },
-                    ]}
-                  >
-                    {matchDate} à {matchTime}
-                  </Text>
-                </View>
-                <View style={styles.summaryRow}>
-                  <Icon
-                    name="map-pin"
-                    size={14}
-                    color={COLORS.TEXT_SECONDARY}
-                  />
-                  <Text
-                    style={[
-                      styles.summaryText,
-                      { color: COLORS.TEXT_SECONDARY },
-                    ]}
-                  >
-                    {location}
-                  </Text>
-                </View>
-                <View style={styles.summaryRow}>
-                  <Icon name="award" size={14} color={COLORS.TEXT_SECONDARY} />
-                  <Text
-                    style={[
-                      styles.summaryText,
-                      { color: COLORS.TEXT_SECONDARY },
-                    ]}
-                  >
-                    Match{' '}
-                    {matchType === 'friendly'
-                      ? 'amical'
-                      : matchType === 'competitive'
-                      ? 'compétitif'
-                      : 'de tournoi'}
-                  </Text>
-                </View>
-              </View>
-            </View>
-          </View>
-        )}
-      </ScrollView>
-
-      {/* Bouton de création */}
-      <View style={[styles.footer, { backgroundColor: COLORS.WHITE }]}>
-        <TouchableOpacity
-          style={[styles.createButton, { backgroundColor: COLORS.PRIMARY }]}
-          onPress={handleCreateMatch}
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
         >
-          <Icon name="plus-circle" size={20} color={COLORS.WHITE} />
-          <Text style={styles.createButtonText}>Créer le match</Text>
-        </TouchableOpacity>
-      </View>
+          {/* Section Équipes */}
+          <SectionCard
+            title="Équipes"
+            description="Qui joue ?"
+            icon="users"
+            iconBg="#22C55E"
+          >
+            <ModernInput
+              label="Votre équipe"
+              value={formData.team1?.name || ''}
+              placeholder="Sélectionnez votre équipe"
+              error={errors.team1}
+              icon="shield"
+              editable={false}
+              onPress={() => setShowTeamModal(true)}
+            />
+
+            <ModernInput
+              label="Équipe adverse"
+              value={formData.opponentName}
+              onChangeText={text => updateFormData('opponentName', text)}
+              placeholder="Nom de l'équipe adverse"
+              error={errors.opponentName}
+              icon="shield"
+              maxLength={100}
+            />
+          </SectionCard>
+
+          {/* Section Date et Heure */}
+          <SectionCard
+            title="Date et Heure"
+            description="Quand se joue le match ?"
+            icon="calendar"
+            iconBg="#3B82F6"
+          >
+            <ModernInput
+              label="Date"
+              value={formData.scheduledDate.toLocaleDateString('fr-FR', {
+                weekday: 'long',
+                day: 'numeric',
+                month: 'long',
+                year: 'numeric',
+              })}
+              placeholder="Sélectionnez la date"
+              error={errors.scheduledDate}
+              icon="calendar"
+              editable={false}
+              onPress={() => setShowDatePicker(true)}
+            />
+
+            <ModernInput
+              label="Heure"
+              value={formData.scheduledDate.toLocaleTimeString('fr-FR', {
+                hour: '2-digit',
+                minute: '2-digit',
+              })}
+              placeholder="Sélectionnez l'heure"
+              icon="clock"
+              editable={false}
+              onPress={() => setShowTimePicker(true)}
+            />
+          </SectionCard>
+
+          {/* Section Lieu */}
+          <SectionCard
+            title="Lieu"
+            description="Où se joue le match ?"
+            icon="map-pin"
+            iconBg="#F59E0B"
+          >
+            <ModernInput
+              label="Adresse ou nom du terrain"
+              value={formData.location}
+              onChangeText={text => updateFormData('location', text)}
+              placeholder="Ex: Stade Municipal, 123 Rue..."
+              error={errors.location}
+              icon="map-pin"
+              maxLength={200}
+            />
+          </SectionCard>
+
+          {/* Section Notes */}
+          <SectionCard
+            title="Notes"
+            description="Informations complémentaires"
+            icon="file-text"
+            iconBg="#8B5CF6"
+          >
+            <ModernInput
+              label="Description (optionnel)"
+              value={formData.description}
+              onChangeText={text => updateFormData('description', text)}
+              placeholder="Précisions sur le match, équipement nécessaire..."
+              icon="align-left"
+              multiline
+              maxLength={500}
+            />
+          </SectionCard>
+        </ScrollView>
+
+        {/* Footer avec bouton */}
+        <View style={styles.footer}>
+          <TouchableOpacity
+            style={styles.submitButton}
+            onPress={handleSubmit}
+            disabled={isLoading}
+            activeOpacity={0.8}
+          >
+            <LinearGradient
+              colors={['#22C55E', '#16A34A']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.submitGradient}
+            >
+              {isLoading ? (
+                <ActivityIndicator color="#FFF" />
+              ) : (
+                <>
+                  <Icon name="check" size={22} color="#FFF" />
+                  <Text style={styles.submitText}>Créer le match</Text>
+                </>
+              )}
+            </LinearGradient>
+          </TouchableOpacity>
+        </View>
+      </KeyboardAvoidingView>
+
+      {/* Modals */}
+      <TeamSelectorModal
+        visible={showTeamModal}
+        onClose={() => setShowTeamModal(false)}
+        teams={myTeams}
+        selectedTeam={formData.team1}
+        onSelect={team => updateFormData('team1', team)}
+      />
+
+      {showDatePicker && (
+        <DateTimePicker
+          value={formData.scheduledDate}
+          mode="date"
+          display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+          onChange={handleDateChange}
+          minimumDate={new Date()}
+        />
+      )}
+
+      {showTimePicker && (
+        <DateTimePicker
+          value={formData.scheduledDate}
+          mode="time"
+          display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+          onChange={handleTimeChange}
+        />
+      )}
     </View>
   );
 };
 
+// Styles (similaires à CreateTeamScreen)
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#F8FAFC',
   },
-  header: {
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 14,
+    color: '#6B7280',
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    padding: 32,
+  },
+  emptyTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#1F2937',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  emptyDescription: {
+    fontSize: 14,
+    color: '#6B7280',
+    textAlign: 'center',
+    marginBottom: 24,
+  },
+  emptyButton: {
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  emptyButtonGradient: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    gap: 8,
+  },
+  emptyButtonText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#FFF',
+  },
+  keyboardView: {
+    flex: 1,
+  },
+  header: {
     paddingTop: Platform.OS === 'ios' ? 60 : 20,
-    paddingBottom: DIMENSIONS.SPACING_MD,
+    paddingBottom: DIMENSIONS.SPACING_XL,
     paddingHorizontal: DIMENSIONS.CONTAINER_PADDING,
-    ...SHADOWS.SMALL,
+    ...SHADOWS.LARGE,
   },
   backButton: {
     width: 40,
     height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
     justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: DIMENSIONS.SPACING_LG,
+  },
+  headerContent: {
+    alignItems: 'center',
+  },
+  headerIconContainer: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: DIMENSIONS.SPACING_MD,
   },
   headerTitle: {
-    fontSize: FONTS.SIZE.XL,
+    fontSize: FONTS.SIZE.XXL,
     fontWeight: FONTS.WEIGHT.BOLD,
+    color: '#FFFFFF',
+    marginBottom: DIMENSIONS.SPACING_XS,
   },
-  headerPlaceholder: {
-    width: 40,
+  headerSubtitle: {
+    fontSize: FONTS.SIZE.MD,
+    color: 'rgba(255, 255, 255, 0.9)',
   },
   scrollView: {
     flex: 1,
   },
   scrollContent: {
     padding: DIMENSIONS.CONTAINER_PADDING,
-    paddingBottom: 100,
+    paddingBottom: DIMENSIONS.SPACING_XXL,
   },
-  section: {
-    padding: DIMENSIONS.SPACING_LG,
+  sectionCard: {
+    backgroundColor: '#FFFFFF',
     borderRadius: DIMENSIONS.BORDER_RADIUS_LG,
+    padding: DIMENSIONS.SPACING_LG,
     marginBottom: DIMENSIONS.SPACING_LG,
-    ...SHADOWS.SMALL,
+    ...SHADOWS.MEDIUM,
   },
   sectionHeader: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     marginBottom: DIMENSIONS.SPACING_LG,
+  },
+  sectionIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: DIMENSIONS.SPACING_MD,
+  },
+  sectionTitleContainer: {
+    flex: 1,
   },
   sectionTitle: {
     fontSize: FONTS.SIZE.LG,
     fontWeight: FONTS.WEIGHT.BOLD,
-    marginLeft: DIMENSIONS.SPACING_SM,
+    color: '#1F2937',
+    marginBottom: DIMENSIONS.SPACING_XXS,
+  },
+  sectionDescription: {
+    fontSize: FONTS.SIZE.SM,
+    color: '#6B7280',
   },
   sectionContent: {
     gap: DIMENSIONS.SPACING_MD,
@@ -599,175 +674,151 @@ const styles = StyleSheet.create({
   inputContainer: {
     gap: DIMENSIONS.SPACING_XS,
   },
+  inputLabelContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
   inputLabel: {
     fontSize: FONTS.SIZE.SM,
     fontWeight: FONTS.WEIGHT.SEMIBOLD,
+    color: '#374151',
+  },
+  inputCounter: {
+    fontSize: FONTS.SIZE.XS,
+    color: '#9CA3AF',
+  },
+  inputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F9FAFB',
+    borderRadius: DIMENSIONS.BORDER_RADIUS_MD,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    paddingHorizontal: DIMENSIONS.SPACING_MD,
+  },
+  inputWrapperError: {
+    borderColor: '#EF4444',
+    backgroundColor: '#FEF2F2',
+  },
+  inputWrapperDisabled: {
+    backgroundColor: '#F3F4F6',
+  },
+  inputWrapperMultiline: {
+    alignItems: 'flex-start',
+  },
+  inputIcon: {
+    marginRight: DIMENSIONS.SPACING_SM,
   },
   input: {
-    padding: DIMENSIONS.SPACING_MD,
-    borderRadius: DIMENSIONS.BORDER_RADIUS_MD,
+    flex: 1,
+    paddingVertical: DIMENSIONS.SPACING_MD,
     fontSize: FONTS.SIZE.MD,
-    borderWidth: 1,
+    color: '#1F2937',
+  },
+  inputWithIcon: {
+    paddingLeft: 0,
   },
   inputMultiline: {
     minHeight: 100,
     textAlignVertical: 'top',
   },
-  selectButton: {
+  errorContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: DIMENSIONS.SPACING_MD,
-    borderRadius: DIMENSIONS.BORDER_RADIUS_MD,
-    borderWidth: 1,
+    gap: DIMENSIONS.SPACING_XS,
   },
-  selectContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: DIMENSIONS.SPACING_SM,
-    flex: 1,
-  },
-  selectText: {
-    fontSize: FONTS.SIZE.MD,
-  },
-  teamCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: DIMENSIONS.SPACING_MD,
-    borderRadius: DIMENSIONS.BORDER_RADIUS_MD,
-    borderWidth: 2,
-  },
-  teamIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: DIMENSIONS.SPACING_MD,
-  },
-  teamInfo: {
-    flex: 1,
-  },
-  teamName: {
-    fontSize: FONTS.SIZE.MD,
-    fontWeight: FONTS.WEIGHT.SEMIBOLD,
-    marginBottom: 2,
-  },
-  teamMeta: {
+  errorText: {
     fontSize: FONTS.SIZE.SM,
-  },
-  removeButton: {
-    padding: DIMENSIONS.SPACING_SM,
-  },
-  addTeamButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: DIMENSIONS.SPACING_LG,
-    borderRadius: DIMENSIONS.BORDER_RADIUS_MD,
-    borderWidth: 2,
-    borderStyle: 'dashed',
-    gap: DIMENSIONS.SPACING_SM,
-  },
-  addTeamText: {
-    fontSize: FONTS.SIZE.MD,
-    fontWeight: FONTS.WEIGHT.MEDIUM,
-  },
-  optionsGrid: {
-    flexDirection: 'row',
-    gap: DIMENSIONS.SPACING_SM,
-  },
-  optionCard: {
-    flex: 1,
-    padding: DIMENSIONS.SPACING_MD,
-    borderRadius: DIMENSIONS.BORDER_RADIUS_MD,
-    alignItems: 'center',
-    borderWidth: 2,
-    position: 'relative',
-  },
-  optionIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: DIMENSIONS.SPACING_SM,
-  },
-  optionLabel: {
-    fontSize: FONTS.SIZE.SM,
-    fontWeight: FONTS.WEIGHT.SEMIBOLD,
-    textAlign: 'center',
-  },
-  checkIcon: {
-    position: 'absolute',
-    top: DIMENSIONS.SPACING_XS,
-    right: DIMENSIONS.SPACING_XS,
-  },
-  summary: {
-    padding: DIMENSIONS.SPACING_LG,
-    borderRadius: DIMENSIONS.BORDER_RADIUS_LG,
-    marginBottom: DIMENSIONS.SPACING_LG,
-  },
-  summaryHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: DIMENSIONS.SPACING_MD,
-  },
-  summaryTitle: {
-    fontSize: FONTS.SIZE.MD,
-    fontWeight: FONTS.WEIGHT.BOLD,
-    marginLeft: DIMENSIONS.SPACING_SM,
-  },
-  summaryContent: {
-    gap: DIMENSIONS.SPACING_MD,
-  },
-  summaryMatch: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: DIMENSIONS.SPACING_MD,
-  },
-  summaryTeam: {
-    fontSize: FONTS.SIZE.MD,
-    fontWeight: FONTS.WEIGHT.BOLD,
-  },
-  summaryVs: {
-    fontSize: FONTS.SIZE.SM,
-    fontWeight: FONTS.WEIGHT.BOLD,
-  },
-  summaryDetails: {
-    gap: DIMENSIONS.SPACING_SM,
-  },
-  summaryRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: DIMENSIONS.SPACING_SM,
-  },
-  summaryText: {
-    fontSize: FONTS.SIZE.SM,
+    color: '#EF4444',
   },
   footer: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
     padding: DIMENSIONS.CONTAINER_PADDING,
-    paddingBottom:
-      Platform.OS === 'ios' ? DIMENSIONS.SPACING_XL : DIMENSIONS.SPACING_MD,
-    ...SHADOWS.LARGE,
+    backgroundColor: '#FFFFFF',
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
+    ...SHADOWS.MEDIUM,
   },
-  createButton: {
+  submitButton: {
+    borderRadius: DIMENSIONS.BORDER_RADIUS_MD,
+    overflow: 'hidden',
+  },
+  submitGradient: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: DIMENSIONS.SPACING_LG,
-    borderRadius: DIMENSIONS.BORDER_RADIUS_MD,
+    paddingVertical: DIMENSIONS.SPACING_MD,
     gap: DIMENSIONS.SPACING_SM,
-    ...SHADOWS.MEDIUM,
   },
-  createButtonText: {
+  submitText: {
     fontSize: FONTS.SIZE.LG,
     fontWeight: FONTS.WEIGHT.BOLD,
     color: '#FFFFFF',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: '#FFF',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    maxHeight: '70%',
+    paddingBottom: Platform.OS === 'ios' ? 34 : 20,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#1F2937',
+  },
+  modalClose: {
+    padding: 4,
+  },
+  modalBody: {
+    padding: 20,
+  },
+  teamOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    backgroundColor: '#F9FAFB',
+    borderRadius: 12,
+    marginBottom: 12,
+  },
+  teamOptionSelected: {
+    backgroundColor: '#F0FDF4',
+    borderWidth: 2,
+    borderColor: '#22C55E',
+  },
+  teamOptionIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#22C55E20',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  teamOptionInfo: {
+    flex: 1,
+  },
+  teamOptionName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1F2937',
+    marginBottom: 2,
+  },
+  teamOptionMeta: {
+    fontSize: 13,
+    color: '#6B7280',
   },
 });

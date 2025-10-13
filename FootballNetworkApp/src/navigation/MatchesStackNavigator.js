@@ -1,13 +1,12 @@
-// ====== src/navigation/MatchesStackNavigator.js ======
+// ====== src/navigation/MatchesStackNavigator.js - MISE À JOUR ======
 import React from 'react';
 import { createStackNavigator } from '@react-navigation/stack';
 import {
   MatchesScreen,
-  MatchDetailScreen,
   CreateMatchScreen,
+  MatchDetailScreen,
   InvitationsScreen,
 } from '../screens/matches';
-import { COLORS } from '@utils/constants';
 
 const Stack = createStackNavigator();
 
@@ -15,37 +14,56 @@ export const MatchesStackNavigator = () => {
   return (
     <Stack.Navigator
       screenOptions={{
-        headerStyle: {
-          backgroundColor: COLORS.PRIMARY,
-        },
-        headerTintColor: COLORS.TEXT_WHITE,
-        headerTitleStyle: {
-          fontWeight: 'bold',
+        headerShown: false, // Tous les écrans gèrent leur propre header
+        gestureEnabled: true,
+        gestureDirection: 'horizontal',
+        cardStyleInterpolator: ({ current, layouts }) => {
+          return {
+            cardStyle: {
+              transform: [
+                {
+                  translateX: current.progress.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [layouts.screen.width, 0],
+                  }),
+                },
+              ],
+            },
+          };
         },
       }}
     >
       <Stack.Screen
         name="Matches"
         component={MatchesScreen}
-        options={{ headerShown: false }}
+        options={{
+          title: 'Mes Matchs',
+        }}
       />
-      <Stack.Screen
-        name="MatchDetail"
-        component={MatchDetailScreen}
-        // options={{ title: 'Détail du match' }}
-        options={{ headerShown: false }}
-      />
+
       <Stack.Screen
         name="CreateMatch"
         component={CreateMatchScreen}
-        // options={{ title: 'Créer un match' }}
-        options={{ headerShown: false }}
+        options={{
+          title: 'Créer un match',
+          presentation: 'modal', // Animation modale pour iOS
+        }}
       />
+
+      <Stack.Screen
+        name="MatchDetail"
+        component={MatchDetailScreen}
+        options={{
+          title: 'Détail du match',
+        }}
+      />
+
       <Stack.Screen
         name="Invitations"
         component={InvitationsScreen}
-        // options={{ title: 'Invitations reçues' }}
-        options={{ headerShown: false }}
+        options={{
+          title: 'Invitations',
+        }}
       />
     </Stack.Navigator>
   );

@@ -488,6 +488,109 @@ router.get("/", authenticateToken, async (req, res) => {
   }
 });
 
+/**
+ * GET /api/matches/my-matches
+ * Récupérer tous les matchs où l'utilisateur est impliqué
+ */
+router.get("/my-matches", authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { status, limit = 50, offset = 0 } = req.query;
+
+    // Récupérer les équipes actives de l'utilisateur
+    const [userTeams] = await db.execute(
+      "SELECT team_id FROM team_members WHERE user_id = ? AND is_active = true",
+      [userId]
+    );
+
+    if (userTeams.length === 0) {
+      return res.json({ success: true, matches: [] });
+    }
+
+    const teamIds = userTeams.map((t) => t.team_id);
+    const placeholders = teamIds.map(() => "?").join(",");
+
+    let query = `
+      SELECT DISTINCT
+        m.id,
+        m.match_date,
+        m.match_type,
+        m.status,
+        m.home_score,
+        m.away_score,
+        m.created_at,
+        ht.id AS home_team_id,
+        ht.name AS home_team_name,
+        ht.skill_level AS home_skill_level,
+        at.id AS away_team_id,
+        at.name AS away_team_name,
+        at.skill_level AS away_skill_level,
+        l.id AS location_id,
+        l.name AS location_name,
+        l.address AS location_address,
+        CASE 
+          WHEN ht.captain_id = ? THEN true 
+          WHEN at.captain_id = ? THEN true 
+          ELSE false 
+        END AS is_organizer
+      FROM matches m
+      JOIN teams ht ON m.home_team_id = ht.id
+      LEFT JOIN teams at ON m.away_team_id = at.id
+      LEFT JOIN locations l ON m.location_id = l.id
+      WHERE (m.home_team_id IN (${placeholders}) OR m.away_team_id IN (${placeholders}))
+    `;
+
+    const queryParams = [userId, userId, ...teamIds, ...teamIds];
+
+    if (status && status !== "all") {
+      query += " AND m.status = ?";
+      queryParams.push(status);
+    }
+
+    query += " ORDER BY m.match_date DESC LIMIT ? OFFSET ?";
+    queryParams.push(parseInt(limit), parseInt(offset));
+
+    const [matches] = await db.execute(query, queryParams);
+
+    const formattedMatches = matches.map((m) => ({
+      id: m.id,
+      matchDate: m.match_date,
+      type: m.match_type,
+      status: m.status,
+      score: { home: m.home_score, away: m.away_score },
+      homeTeam: {
+        id: m.home_team_id,
+        name: m.home_team_name,
+        skillLevel: m.home_skill_level,
+      },
+      awayTeam: m.away_team_id
+        ? {
+            id: m.away_team_id,
+            name: m.away_team_name,
+            skillLevel: m.away_skill_level,
+          }
+        : null,
+      location: m.location_id
+        ? {
+            id: m.location_id,
+            name: m.location_name,
+            address: m.location_address,
+          }
+        : null,
+      isOrganizer: !!m.is_organizer,
+      createdAt: m.created_at,
+    }));
+
+    res.json({ success: true, matches: formattedMatches });
+  } catch (error) {
+    console.error("Get my matches error:", error);
+    res.status(500).json({
+      success: false,
+      error: "Erreur lors de la récupération des matchs",
+    });
+  }
+});
+
 // GET /api/matches/:id - Récupérer les détails d'un match
 router.get("/:id", authenticateToken, async (req, res) => {
   try {
