@@ -1,5 +1,10 @@
+// ====================================================================
+// football-network-frontend/src/components/matches/MatchDetails.js
+// Version complète avec gestion du match
+// ====================================================================
+
 import React, { useState, useEffect } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, Link } from "react-router-dom";
 import {
   Calendar,
   MapPin,
@@ -7,6 +12,13 @@ import {
   MessageCircle,
   Trophy,
   ArrowLeft,
+  Edit,
+  Trash2,
+  CheckCircle,
+  XCircle,
+  Settings,
+  AlertTriangle,
+  Clock,
 } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
 import toast from "react-hot-toast";
@@ -20,9 +32,24 @@ const MatchDetails = () => {
   const { matchId } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
+
   const [match, setMatch] = useState(null);
   const [loading, setLoading] = useState(true);
   const [showChat, setShowChat] = useState(false);
+
+  // États pour les modals
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [showCancelModal, setShowCancelModal] = useState(false);
+
+  // États pour l'édition
+  const [editForm, setEditForm] = useState({
+    matchDate: "",
+    duration: 90,
+    location: "",
+    refereeContact: "",
+    notes: "",
+  });
 
   useEffect(() => {
     loadMatch();
@@ -33,12 +60,96 @@ const MatchDetails = () => {
       setLoading(true);
       const response = await axios.get(`${API_BASE_URL}/matches/${matchId}`);
       setMatch(response.data);
+
+      // Pré-remplir le formulaire d'édition
+      setEditForm({
+        matchDate: response.data.matchDate?.slice(0, 16) || "",
+        duration: response.data.duration || 90,
+        location: response.data.location?.id || null,
+        refereeContact: response.data.refereeContact || "",
+        notes: response.data.notes || "",
+      });
     } catch (error) {
       console.error("Error loading match:", error);
       toast.error("Erreur lors du chargement du match");
-      navigate("/dashboard");
+      navigate("/matches");
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Vérifier si l'utilisateur peut gérer ce match
+  const canManageMatch = () => {
+    if (!match || !user) return false;
+    // L'utilisateur peut gérer s'il est capitaine de l'équipe domicile
+    return match.homeTeam?.captain?.id === user.id;
+  };
+
+  const canCancelMatch = () => {
+    if (!match || !user) return false;
+    // Les deux capitaines peuvent annuler
+    return (
+      match.homeTeam?.captain?.id === user.id ||
+      match.awayTeam?.captain?.id === user.id
+    );
+  };
+
+  const handleEditMatch = async (e) => {
+    e.preventDefault();
+
+    try {
+      await axios.put(`${API_BASE_URL}/matches/${matchId}`, {
+        matchDate: editForm.matchDate,
+        durationMinutes: parseInt(editForm.duration),
+        locationId: editForm.location || null,
+        refereeContact: editForm.refereeContact || null,
+        notes: editForm.notes || null,
+      });
+
+      toast.success("Match modifié avec succès");
+      setShowEditModal(false);
+      loadMatch();
+    } catch (error) {
+      console.error("Error updating match:", error);
+      toast.error(
+        error.response?.data?.error || "Erreur lors de la modification"
+      );
+    }
+  };
+
+  const handleConfirmMatch = async () => {
+    try {
+      await axios.patch(`${API_BASE_URL}/matches/${matchId}/confirm`);
+      toast.success("Match confirmé");
+      loadMatch();
+    } catch (error) {
+      console.error("Error confirming match:", error);
+      toast.error("Erreur lors de la confirmation");
+    }
+  };
+
+  const handleCancelMatch = async (reason) => {
+    try {
+      await axios.patch(`${API_BASE_URL}/matches/${matchId}/cancel`, {
+        reason: reason || "Annulé par le capitaine",
+      });
+      toast.success("Match annulé");
+      setShowCancelModal(false);
+      loadMatch();
+    } catch (error) {
+      console.error("Error cancelling match:", error);
+      toast.error("Erreur lors de l'annulation");
+    }
+  };
+
+  const handleDeleteMatch = async () => {
+    try {
+      await axios.delete(`${API_BASE_URL}/matches/${matchId}`);
+      toast.success("Match supprimé");
+      navigate("/matches");
+    } catch (error) {
+      console.error("Error deleting match:", error);
+      toast.error("Erreur lors de la suppression");
     }
   };
 
@@ -100,9 +211,11 @@ const MatchDetails = () => {
     (match.homeTeam.id === match.userTeamId ||
       match.awayTeam?.id === match.userTeamId);
 
+  const isPastMatch = new Date(match.matchDate) < new Date();
+
   return (
     <div className="max-w-6xl mx-auto">
-      {/* Header */}
+      {/* Header avec actions */}
       <div className="flex items-center justify-between mb-8">
         <button
           onClick={() => navigate(-1)}
@@ -112,19 +225,95 @@ const MatchDetails = () => {
           Retour
         </button>
 
-        {isUserInvolved && (
-          <button
-            onClick={() => setShowChat(!showChat)}
-            className={`flex items-center px-4 py-2 rounded-lg transition-colors ${
-              showChat
-                ? "bg-green-100 text-green-700"
-                : "bg-green-600 text-white hover:bg-green-700"
-            }`}
-          >
-            <MessageCircle className="w-5 h-5 mr-2" />
-            {showChat ? "Fermer le chat" : "Ouvrir le chat"}
-          </button>
-        )}
+        <div className="flex items-center gap-3">
+          {/* Chat */}
+          {isUserInvolved && match.status === "confirmed" && (
+            <button
+              onClick={() => setShowChat(!showChat)}
+              className={`flex items-center px-4 py-2 rounded-lg transition-colors ${
+                showChat
+                  ? "bg-green-100 text-green-700"
+                  : "bg-green-600 text-white hover:bg-green-700"
+              }`}
+            >
+              <MessageCircle className="w-5 h-5 mr-2" />
+              {showChat ? "Fermer" : "Chat"}
+            </button>
+          )}
+
+          {/* Menu de gestion */}
+          {(canManageMatch() || canCancelMatch()) &&
+            match.status !== "cancelled" && (
+              <div className="relative group">
+                <button className="flex items-center px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors">
+                  <Settings className="w-5 h-5 mr-2" />
+                  Gérer
+                </button>
+
+                {/* Menu déroulant */}
+                <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-lg border border-gray-200 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-10">
+                  {/* Confirmer le match */}
+                  {canManageMatch() && match.status === "pending" && (
+                    <button
+                      onClick={handleConfirmMatch}
+                      className="w-full flex items-center px-4 py-3 text-left text-green-700 hover:bg-green-50 transition-colors"
+                    >
+                      <CheckCircle className="w-4 h-4 mr-3" />
+                      Confirmer le match
+                    </button>
+                  )}
+
+                  {/* Saisir/Valider le score */}
+                  {match.status === "completed" && isUserInvolved && (
+                    <Link
+                      to={`/matches/${matchId}/validate`}
+                      className="w-full flex items-center px-4 py-3 text-left text-blue-700 hover:bg-blue-50 transition-colors"
+                    >
+                      <Trophy className="w-4 h-4 mr-3" />
+                      Valider le score
+                    </Link>
+                  )}
+
+                  {/* Modifier le match */}
+                  {canManageMatch() &&
+                    !isPastMatch &&
+                    match.status !== "completed" && (
+                      <button
+                        onClick={() => setShowEditModal(true)}
+                        className="w-full flex items-center px-4 py-3 text-left text-blue-700 hover:bg-blue-50 transition-colors"
+                      >
+                        <Edit className="w-4 h-4 mr-3" />
+                        Modifier
+                      </button>
+                    )}
+
+                  {/* Annuler le match */}
+                  {canCancelMatch() &&
+                    !isPastMatch &&
+                    match.status !== "completed" && (
+                      <button
+                        onClick={() => setShowCancelModal(true)}
+                        className="w-full flex items-center px-4 py-3 text-left text-yellow-700 hover:bg-yellow-50 transition-colors"
+                      >
+                        <XCircle className="w-4 h-4 mr-3" />
+                        Annuler le match
+                      </button>
+                    )}
+
+                  {/* Supprimer le match */}
+                  {canManageMatch() && (
+                    <button
+                      onClick={() => setShowDeleteModal(true)}
+                      className="w-full flex items-center px-4 py-3 text-left text-red-700 hover:bg-red-50 transition-colors border-t border-gray-200"
+                    >
+                      <Trash2 className="w-4 h-4 mr-3" />
+                      Supprimer
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+        </div>
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
@@ -137,7 +326,7 @@ const MatchDetails = () => {
                 <span
                   className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(
                     match.status
-                  )} !text-gray-800`}
+                  )} !bg-white`}
                 >
                   {getStatusLabel(match.status)}
                 </span>
@@ -286,6 +475,163 @@ const MatchDetails = () => {
           </div>
         )}
       </div>
+
+      {/* Modal d'édition */}
+      {showEditModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg max-w-2xl w-full p-6">
+            <h3 className="text-xl font-bold mb-4">Modifier le match</h3>
+
+            <form onSubmit={handleEditMatch}>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Date et heure
+                  </label>
+                  <input
+                    type="datetime-local"
+                    value={editForm.matchDate}
+                    onChange={(e) =>
+                      setEditForm({ ...editForm, matchDate: e.target.value })
+                    }
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Durée (minutes)
+                  </label>
+                  <input
+                    type="number"
+                    value={editForm.duration}
+                    onChange={(e) =>
+                      setEditForm({ ...editForm, duration: e.target.value })
+                    }
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    min="30"
+                    max="180"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Contact arbitre (optionnel)
+                  </label>
+                  <input
+                    type="text"
+                    value={editForm.refereeContact}
+                    onChange={(e) =>
+                      setEditForm({
+                        ...editForm,
+                        refereeContact: e.target.value,
+                      })
+                    }
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    placeholder="Nom et téléphone de l'arbitre"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Notes (optionnel)
+                  </label>
+                  <textarea
+                    value={editForm.notes}
+                    onChange={(e) =>
+                      setEditForm({ ...editForm, notes: e.target.value })
+                    }
+                    rows="3"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    placeholder="Informations complémentaires..."
+                  />
+                </div>
+              </div>
+
+              <div className="flex gap-3 mt-6">
+                <button
+                  type="button"
+                  onClick={() => setShowEditModal(false)}
+                  className="flex-1 px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
+                >
+                  Annuler
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                >
+                  Enregistrer
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal d'annulation */}
+      {showCancelModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg max-w-md w-full p-6">
+            <div className="flex items-center mb-4">
+              <AlertTriangle className="w-6 h-6 text-yellow-600 mr-2" />
+              <h3 className="text-xl font-bold">Annuler le match</h3>
+            </div>
+
+            <p className="text-gray-600 mb-6">
+              Êtes-vous sûr de vouloir annuler ce match ? Les deux équipes
+              seront notifiées.
+            </p>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowCancelModal(false)}
+                className="flex-1 px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
+              >
+                Non, garder
+              </button>
+              <button
+                onClick={() => handleCancelMatch()}
+                className="flex-1 px-6 py-3 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700"
+              >
+                Oui, annuler
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de suppression */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg max-w-md w-full p-6">
+            <div className="flex items-center mb-4">
+              <Trash2 className="w-6 h-6 text-red-600 mr-2" />
+              <h3 className="text-xl font-bold">Supprimer le match</h3>
+            </div>
+
+            <p className="text-gray-600 mb-6">
+              Cette action est irréversible. Toutes les données du match seront
+              définitivement supprimées.
+            </p>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowDeleteModal(false)}
+                className="flex-1 px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
+              >
+                Annuler
+              </button>
+              <button
+                onClick={handleDeleteMatch}
+                className="flex-1 px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700"
+              >
+                Supprimer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

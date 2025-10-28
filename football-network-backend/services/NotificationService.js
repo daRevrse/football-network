@@ -1,7 +1,5 @@
-// football-network-backend/services/NotificationService.js - VERSION SÉCURISÉE
 let socketManager = null;
 
-// Import dynamique pour éviter les dépendances circulaires
 const getSocketManager = () => {
   if (!socketManager) {
     try {
@@ -15,167 +13,149 @@ const getSocketManager = () => {
 };
 
 class NotificationService {
-  // Types de notifications
   static TYPES = {
     PLAYER_INVITATION: "player_invitation",
     PLAYER_INVITATION_RESPONSE: "player_invitation_response",
     MATCH_INVITATION: "match_invitation",
     MATCH_INVITATION_RESPONSE: "match_invitation_response",
+    MATCH_UPDATED: "match_updated",
+    MATCH_CONFIRMED: "match_confirmed",
+    MATCH_CANCELLED: "match_cancelled",
+    MATCH_DELETED: "match_deleted",
+    MATCH_STARTED: "match_started",
+    MATCH_COMPLETED: "match_completed",
+    MATCH_VALIDATION_NEEDED: "match_validation_needed",
+    MATCH_VALIDATED: "match_validated",
+    MATCH_DISPUTED: "match_disputed",
     TEAM_JOIN: "team_join",
     TEAM_LEAVE: "team_leave",
-    MATCH_UPDATE: "match_update",
     GENERAL: "general",
   };
 
-  // Envoyer une notification d'invitation de joueur
-  static async notifyPlayerInvitation(userId, invitationData) {
+  /**
+   * NOUVELLE MÉTHODE GÉNÉRIQUE
+   */
+  static async createNotification({
+    userId,
+    type,
+    title,
+    message,
+    relatedId = null,
+    relatedType = null,
+    data = {},
+  }) {
     try {
       const notification = {
-        id: `notif-${Date.now()}`,
-        type: this.TYPES.PLAYER_INVITATION,
-        title: "Nouvelle invitation d'équipe",
-        message: `L'équipe "${invitationData.teamName}" vous invite à rejoindre leur équipe`,
+        id: `notif-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        type: type || this.TYPES.GENERAL,
+        title: title,
+        message: message,
         data: {
-          invitationId: invitationData.invitationId,
-          teamId: invitationData.teamId,
-          teamName: invitationData.teamName,
-          inviterName: invitationData.inviterName,
+          ...data,
+          relatedId: relatedId,
+          relatedType: relatedType,
         },
         timestamp: new Date().toISOString(),
         read: false,
       };
 
-      // Envoyer via WebSocket si possible
       const sm = getSocketManager();
-      if (sm) {
+      if (sm && userId) {
         const sent = sm.sendToUser(userId, "notification", notification);
         console.log(
-          `📨 Player invitation notification sent: ${
+          `📨 Notification sent to user ${userId}: ${
             sent ? "SUCCESS" : "QUEUED"
           }`
         );
-      } else {
-        console.log("⚠️ Socket manager not available, notification not sent");
       }
-
-      // TODO: Sauvegarder en base de données pour les notifications persistantes
-      // TODO: Envoyer un email si l'utilisateur n'est pas en ligne
 
       return notification;
     } catch (error) {
-      console.error("❌ Error sending player invitation notification:", error);
-      throw error;
+      console.error("❌ Error creating notification:", error);
+      return null;
     }
   }
 
-  // Envoyer une notification de réponse d'invitation
-  static async notifyPlayerInvitationResponse(captainId, responseData) {
+  static async createNotificationForMultipleUsers(userIds, notificationData) {
     try {
-      const notification = {
-        id: `notif-${Date.now()}`,
-        type: this.TYPES.PLAYER_INVITATION_RESPONSE,
-        title:
-          responseData.response === "accepted"
-            ? "Invitation acceptée !"
-            : "Invitation refusée",
-        message: `${responseData.playerName} a ${
-          responseData.response === "accepted" ? "accepté" : "refusé"
-        } votre invitation pour l'équipe "${responseData.teamName}"`,
-        data: {
-          invitationId: responseData.invitationId,
-          playerId: responseData.playerId,
-          playerName: responseData.playerName,
-          teamId: responseData.teamId,
-          teamName: responseData.teamName,
-          response: responseData.response,
-          responseMessage: responseData.responseMessage,
-        },
-        timestamp: new Date().toISOString(),
-        read: false,
-      };
-
-      const sm = getSocketManager();
-      if (sm) {
-        const sent = sm.sendToUser(captainId, "notification", notification);
-        console.log(
-          `📨 Invitation response notification sent: ${
-            sent ? "SUCCESS" : "QUEUED"
-          }`
-        );
-      }
-
-      return notification;
-    } catch (error) {
-      console.error(
-        "❌ Error sending invitation response notification:",
-        error
+      const promises = userIds.map((userId) =>
+        this.createNotification({
+          userId,
+          ...notificationData,
+        })
       );
-      throw error;
-    }
-  }
 
-  // Envoyer une notification d'invitation de match
-  static async notifyMatchInvitation(captainId, matchData) {
-    try {
-      const notification = {
-        id: `notif-${Date.now()}`,
-        type: this.TYPES.MATCH_INVITATION,
-        title: "Nouvelle invitation de match",
-        message: `L'équipe "${matchData.senderTeamName}" vous défie pour un match`,
-        data: {
-          invitationId: matchData.invitationId,
-          senderTeamId: matchData.senderTeamId,
-          senderTeamName: matchData.senderTeamName,
-          receiverTeamId: matchData.receiverTeamId,
-          proposedDate: matchData.proposedDate,
-          location: matchData.location,
-        },
-        timestamp: new Date().toISOString(),
-        read: false,
-      };
-
-      const sm = getSocketManager();
-      if (sm) {
-        const sent = sm.sendToUser(captainId, "notification", notification);
-        console.log(
-          `📨 Match invitation notification sent: ${
-            sent ? "SUCCESS" : "QUEUED"
-          }`
-        );
-      }
-
-      return notification;
+      await Promise.allSettled(promises);
+      console.log(`📨 Notifications sent to ${userIds.length} users`);
     } catch (error) {
-      console.error("❌ Error sending match invitation notification:", error);
-      throw error;
+      console.error("❌ Error creating multiple notifications:", error);
     }
   }
 
-  // Notifier qu'un joueur a rejoint l'équipe
+  // Méthodes spécifiques existantes (garder pour compatibilité)
+  static async notifyPlayerInvitation(userId, invitationData) {
+    return this.createNotification({
+      userId,
+      type: this.TYPES.PLAYER_INVITATION,
+      title: "Nouvelle invitation d'équipe",
+      message: `L'équipe "${invitationData.teamName}" vous invite à rejoindre leur équipe`,
+      relatedId: invitationData.invitationId,
+      relatedType: "invitation",
+      data: invitationData,
+    });
+  }
+
+  static async notifyPlayerInvitationResponse(captainId, responseData) {
+    return this.createNotification({
+      userId: captainId,
+      type: this.TYPES.PLAYER_INVITATION_RESPONSE,
+      title:
+        responseData.response === "accepted"
+          ? "Invitation acceptée !"
+          : "Invitation refusée",
+      message: `${responseData.playerName} a ${
+        responseData.response === "accepted" ? "accepté" : "refusé"
+      } votre invitation pour l'équipe "${responseData.teamName}"`,
+      relatedId: responseData.invitationId,
+      relatedType: "invitation",
+      data: responseData,
+    });
+  }
+
+  static async notifyMatchInvitation(captainId, matchData) {
+    return this.createNotification({
+      userId: captainId,
+      type: this.TYPES.MATCH_INVITATION,
+      title: "Nouvelle invitation de match",
+      message: `L'équipe "${matchData.senderTeamName}" vous défie pour un match`,
+      relatedId: matchData.invitationId,
+      relatedType: "match",
+      data: matchData,
+    });
+  }
+
   static async notifyTeamJoin(teamMembers, playerData) {
     try {
       const notification = {
-        id: `notif-${Date.now()}`,
         type: this.TYPES.TEAM_JOIN,
         title: "Nouveau membre !",
         message: `${playerData.playerName} a rejoint l'équipe "${playerData.teamName}"`,
-        data: {
-          playerId: playerData.playerId,
-          playerName: playerData.playerName,
-          teamId: playerData.teamId,
-          teamName: playerData.teamName,
-        },
-        timestamp: new Date().toISOString(),
-        read: false,
+        relatedId: playerData.teamId,
+        relatedType: "team",
+        data: playerData,
       };
 
       const sm = getSocketManager();
       if (sm) {
-        // Envoyer à tous les membres de l'équipe sauf le nouveau membre
         let sentCount = 0;
         teamMembers.forEach((memberId) => {
           if (memberId !== playerData.playerId) {
-            const sent = sm.sendToUser(memberId, "notification", notification);
+            const sent = sm.sendToUser(memberId, "notification", {
+              ...notification,
+              id: `notif-${Date.now()}-${memberId}`,
+              timestamp: new Date().toISOString(),
+              read: false,
+            });
             if (sent) sentCount++;
           }
         });
@@ -185,15 +165,11 @@ class NotificationService {
           } members`
         );
       }
-
-      return notification;
     } catch (error) {
       console.error("❌ Error sending team join notification:", error);
-      throw error;
     }
   }
 
-  // Notifier les changements de statut des invitations en masse
   static async notifyInvitationStatusUpdate(userId) {
     try {
       const sm = getSocketManager();
@@ -207,11 +183,9 @@ class NotificationService {
       }
     } catch (error) {
       console.error("❌ Error sending invitation status update:", error);
-      // Ne pas faire échouer pour cette notification
     }
   }
 
-  // Notifier tous les utilisateurs connectés (pour les annonces globales)
   static async notifyAll(notification) {
     try {
       const sm = getSocketManager();
@@ -221,11 +195,9 @@ class NotificationService {
       }
     } catch (error) {
       console.error("❌ Error broadcasting notification:", error);
-      throw error;
     }
   }
 
-  // Méthode utilitaire pour vérifier la disponibilité
   static isAvailable() {
     const sm = getSocketManager();
     return sm !== null;

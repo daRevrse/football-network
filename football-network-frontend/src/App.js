@@ -23,6 +23,8 @@ import Calendar from "./components/calendar/Calendar";
 import TeamDetails from "./components/teams/TeamDetails";
 // NOUVELLES IMPORTATIONS
 import PlayerInvitations from "./components/invitations/PlayerInvitations";
+import MatchValidation from "./components/matches/MatchValidation";
+import PendingValidations from "./components/matches/PendingValidations";
 
 // Composant de protection des routes
 const ProtectedRoute = ({ children }) => {
@@ -149,6 +151,22 @@ function App() {
                 element={
                   <ProtectedRoute>
                     <MatchDetails />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/matches/:matchId/validate"
+                element={
+                  <ProtectedRoute>
+                    <MatchValidation />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/pending-validations"
+                element={
+                  <ProtectedRoute>
+                    <PendingValidations />
                   </ProtectedRoute>
                 }
               />

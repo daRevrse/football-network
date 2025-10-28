@@ -1,4 +1,8 @@
-// football-network-frontend/src/components/Dashboard.js - VERSION CORRIGÉE
+// ====================================================================
+// Mise à jour du Dashboard pour afficher les validations en attente
+// football-network-frontend/src/components/Dashboard.js
+// ====================================================================
+
 import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
@@ -12,6 +16,7 @@ import {
   CalendarIcon,
   UserPlus,
   Bell,
+  CheckCircle, // NOUVEAU
 } from "lucide-react";
 import axios from "axios";
 
@@ -23,6 +28,7 @@ const Dashboard = () => {
   const [stats, setStats] = useState({
     pendingPlayerInvitations: 0,
     pendingMatchInvitations: 0,
+    pendingValidations: 0, // NOUVEAU
     teamsCount: 0,
     matchesCount: 0,
   });
@@ -36,17 +42,16 @@ const Dashboard = () => {
     try {
       setLoading(true);
 
-      // CORRECTION : Charger les invitations de joueurs en attente avec la bonne route
+      // Charger les invitations de joueurs
       const playerInvitationsResponse = await axios.get(
         `${API_BASE_URL}/player-invitations?status=pending&limit=50`
       );
 
-      // Compter seulement les invitations pending
       const pendingPlayerInvitations = playerInvitationsResponse.data.filter(
         (inv) => inv.status === "pending"
       ).length;
 
-      // Charger les invitations de matchs en attente (si applicable)
+      // Charger les invitations de matchs
       let matchInvitationsCount = 0;
       try {
         const matchInvitationsResponse = await axios.get(
@@ -54,22 +59,32 @@ const Dashboard = () => {
         );
         matchInvitationsCount = matchInvitationsResponse.data.length;
       } catch (error) {
-        // Ignorer si l'utilisateur n'est capitaine d'aucune équipe
-        console.log("No match invitations (user might not be a captain)");
+        console.log("No match invitations");
       }
 
-      // Charger les équipes de l'utilisateur
+      // NOUVEAU : Charger les validations en attente
+      let pendingValidationsCount = 0;
+      try {
+        const validationsResponse = await axios.get(
+          `${API_BASE_URL}/matches/pending-validation/list`
+        );
+        pendingValidationsCount = validationsResponse.data.count || 0;
+      } catch (error) {
+        console.log("Error loading pending validations:", error);
+      }
+
+      // Charger les équipes
       const teamsResponse = await axios.get(`${API_BASE_URL}/teams/my`);
 
       setStats({
         pendingPlayerInvitations: pendingPlayerInvitations,
         pendingMatchInvitations: matchInvitationsCount,
+        pendingValidations: pendingValidationsCount, // NOUVEAU
         teamsCount: teamsResponse.data.length,
-        matchesCount: 0, // TODO: implémenter le compteur de matchs
+        matchesCount: 0,
       });
     } catch (error) {
       console.error("Error loading dashboard stats:", error);
-      // En cas d'erreur, garder les valeurs par défaut
     } finally {
       setLoading(false);
     }
@@ -128,7 +143,6 @@ const Dashboard = () => {
             <p className="text-orange-600">Trouvez des équipes à rejoindre</p>
           </Link>
 
-          {/* NOUVEAU : Invitations d'équipes */}
           <Link
             to="/player-invitations"
             className="bg-purple-50 p-6 rounded-lg hover:bg-purple-100 transition-colors relative"
@@ -167,6 +181,27 @@ const Dashboard = () => {
             </p>
           </Link>
 
+          {/* NOUVEAU : Lien vers les validations en attente */}
+          <Link
+            to="/pending-validations"
+            className="bg-pink-50 p-6 rounded-lg hover:bg-pink-100 transition-colors relative"
+          >
+            <div className="flex items-center mb-3">
+              <CheckCircle className="w-8 h-8 text-pink-600 mr-3" />
+              <h3 className="text-lg font-semibold text-pink-800">
+                Validations Matchs
+              </h3>
+              {stats.pendingValidations > 0 && (
+                <span className="ml-2 bg-red-500 text-white text-xs px-2 py-1 rounded-full animate-pulse">
+                  {stats.pendingValidations}
+                </span>
+              )}
+            </div>
+            <p className="text-pink-600">
+              Validez les scores de vos matchs terminés
+            </p>
+          </Link>
+
           <Link
             to="/calendar"
             className="bg-indigo-50 p-6 rounded-lg hover:bg-indigo-100 transition-colors"
@@ -195,14 +230,6 @@ const Dashboard = () => {
         </div>
 
         <div className="bg-white p-6 rounded-lg shadow-md">
-          <h3 className="text-lg font-semibold mb-2">Matchs</h3>
-          <div className="text-3xl font-bold text-blue-600">
-            {loading ? "-" : stats.matchesCount}
-          </div>
-          <p className="text-gray-600 text-sm">matchs joués</p>
-        </div>
-
-        <div className="bg-white p-6 rounded-lg shadow-md">
           <h3 className="text-lg font-semibold mb-2 flex items-center">
             Invitations Équipes
             {stats.pendingPlayerInvitations > 0 && (
@@ -226,6 +253,20 @@ const Dashboard = () => {
             {loading ? "-" : stats.pendingMatchInvitations}
           </div>
           <p className="text-gray-600 text-sm">en attente</p>
+        </div>
+
+        {/* NOUVEAU : Statistique des validations */}
+        <div className="bg-white p-6 rounded-lg shadow-md">
+          <h3 className="text-lg font-semibold mb-2 flex items-center">
+            Validations Matchs
+            {stats.pendingValidations > 0 && (
+              <Bell className="w-4 h-4 ml-2 text-red-500 animate-pulse" />
+            )}
+          </h3>
+          <div className="text-3xl font-bold text-pink-600">
+            {loading ? "-" : stats.pendingValidations}
+          </div>
+          <p className="text-gray-600 text-sm">à valider</p>
         </div>
       </div>
     </div>

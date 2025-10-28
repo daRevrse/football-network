@@ -2,6 +2,7 @@ const express = require("express");
 const { body, validationResult } = require("express-validator");
 const db = require("../config/database");
 const { authenticateToken } = require("../middleware/auth");
+const NotificationService = require("../services/NotificationService");
 
 const router = express.Router();
 
@@ -603,8 +604,8 @@ router.get("/:id", authenticateToken, async (req, res) => {
               at.id as away_team_id, at.name as away_team_name, at.skill_level as away_skill_level,
               l.id as location_id, l.name as location_name, l.address as location_address,
               l.city, l.field_type, l.price_per_hour, l.amenities,
-              hc.first_name as home_captain_first_name, hc.last_name as home_captain_last_name,
-              ac.first_name as away_captain_first_name, ac.last_name as away_captain_last_name
+              hc.first_name as home_captain_first_name, hc.last_name as home_captain_last_name, hc.id as home_captain_id,
+              ac.first_name as away_captain_first_name, ac.last_name as away_captain_last_name, ac.id as away_captain_id
        FROM matches m
        JOIN teams ht ON m.home_team_id = ht.id
        JOIN users hc ON ht.captain_id = hc.id
@@ -664,6 +665,7 @@ router.get("/:id", authenticateToken, async (req, res) => {
         name: match.home_team_name,
         skillLevel: match.home_skill_level,
         captain: {
+          id: match.home_captain_id,
           firstName: match.home_captain_first_name,
           lastName: match.home_captain_last_name,
         },
@@ -674,6 +676,7 @@ router.get("/:id", authenticateToken, async (req, res) => {
             name: match.away_team_name,
             skillLevel: match.away_skill_level,
             captain: {
+              id: match.away_captain_id,
               firstName: match.away_captain_first_name,
               lastName: match.away_captain_last_name,
             },
@@ -835,6 +838,1026 @@ router.post(
     }
   }
 );
+
+/**
+ * POST /api/matches/:id/score
+ * Mettre à jour le score d'un match (MODIFIÉ avec validation)
+ */
+router.post(
+  "/:id/validate-score",
+  [
+    authenticateToken,
+    body("homeScore")
+      .isInt({ min: 0 })
+      .withMessage("Home score must be a positive integer"),
+    body("awayScore")
+      .isInt({ min: 0 })
+      .withMessage("Away score must be a positive integer"),
+  ],
+  async (req, res) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ errors: errors.array() });
+      }
+
+      const matchId = req.params.id;
+      const { homeScore, awayScore } = req.body;
+
+      // Vérifier que le match existe et récupérer les infos
+      const [matches] = await db.execute(
+        `SELECT m.*, 
+                ht.captain_id as home_captain_id, 
+                at.captain_id as away_captain_id,
+                ht.name as home_team_name,
+                at.name as away_team_name
+         FROM matches m
+         JOIN teams ht ON m.home_team_id = ht.id
+         LEFT JOIN teams at ON m.away_team_id = at.id
+         WHERE m.id = ?`,
+        [matchId]
+      );
+
+      if (matches.length === 0) {
+        return res.status(404).json({ error: "Match not found" });
+      }
+
+      const match = matches[0];
+
+      // Vérifier que l'utilisateur est capitaine d'une des équipes
+      const isHomeCaptain = req.user.id === match.home_captain_id;
+      const isAwayCaptain = req.user.id === match.away_captain_id;
+
+      if (!isHomeCaptain && !isAwayCaptain) {
+        return res
+          .status(403)
+          .json({ error: "Only team captains can update the score" });
+      }
+
+      // Déterminer le rôle du validateur
+      const validatorRole = isHomeCaptain ? "home_captain" : "away_captain";
+
+      // Vérifier si c'est la première saisie ou une validation
+      const isFirstEntry =
+        match.home_score === null && match.away_score === null;
+
+      if (isFirstEntry) {
+        // Première saisie du score
+        await db.execute(
+          `UPDATE matches 
+           SET home_score = ?, 
+               away_score = ?, 
+               status = 'completed',
+               ${
+                 isHomeCaptain
+                   ? "home_captain_validated = 1, home_captain_validated_at = NOW()"
+                   : "away_captain_validated = 1, away_captain_validated_at = NOW()"
+               }
+           WHERE id = ?`,
+          [homeScore, awayScore, matchId]
+        );
+
+        // Enregistrer dans l'historique
+        try {
+          await db.execute(
+            `INSERT INTO match_validations 
+           (match_id, validator_id, validator_role, validation_type, home_score, away_score, status)
+           VALUES (?, ?, ?, 'score', ?, ?, 'approved')`,
+            [matchId, req.user.id, validatorRole, homeScore, awayScore]
+          );
+          console.log("✅ Validation inserted successfully");
+        } catch (error) {
+          console.error("❌ ERROR inserting validation:", error);
+        }
+
+        // Notifier l'autre capitaine
+        const otherCaptainId = isHomeCaptain
+          ? match.away_captain_id
+          : match.home_captain_id;
+        const otherTeamName = isHomeCaptain
+          ? match.away_team_name
+          : match.home_team_name;
+
+        if (otherCaptainId) {
+          await NotificationService.createNotification({
+            userId: otherCaptainId,
+            type: "match_validation_needed",
+            title: "Validation de score requise",
+            message: `Le score du match contre ${
+              isHomeCaptain ? match.away_team_name : match.home_team_name
+            } a été saisi. Veuillez le valider.`,
+            relatedId: matchId,
+            relatedType: "match",
+          });
+        }
+
+        return res.json({
+          message:
+            "Score entered successfully. Waiting for opponent validation.",
+          match: {
+            id: matchId,
+            homeScore,
+            awayScore,
+            validatedBy: validatorRole,
+            needsValidation: true,
+          },
+        });
+      } else {
+        // Validation du score existant
+        const scoresMatch =
+          match.home_score === homeScore && match.away_score === awayScore;
+
+        if (scoresMatch) {
+          // Les scores correspondent - validation réussie
+          await db.execute(
+            `UPDATE matches 
+             SET ${
+               isHomeCaptain
+                 ? "home_captain_validated = 1, home_captain_validated_at = NOW()"
+                 : "away_captain_validated = 1, away_captain_validated_at = NOW()"
+             }
+             WHERE id = ?`,
+            [matchId]
+          );
+
+          // Enregistrer la validation
+          try {
+            await db.execute(
+              `INSERT INTO match_validations 
+             (match_id, validator_id, validator_role, validation_type, home_score, away_score, status)
+             VALUES (?, ?, ?, 'score', ?, ?, 'approved')`,
+              [matchId, req.user.id, validatorRole, homeScore, awayScore]
+            );
+            console.log("✅ Validation inserted successfully");
+          } catch (error) {
+            console.error("❌ ERROR inserting validation:", error);
+          }
+
+          // Vérifier si les deux capitaines ont validé
+          const [updated] = await db.execute(
+            "SELECT home_captain_validated, away_captain_validated FROM matches WHERE id = ?",
+            [matchId]
+          );
+
+          const fullyValidated =
+            updated[0].home_captain_validated &&
+            updated[0].away_captain_validated;
+
+          if (fullyValidated) {
+            // Notifier les deux capitaines
+            await NotificationService.createNotification({
+              userId: match.home_captain_id,
+              type: "match_validated",
+              title: "Match validé",
+              message: `Le score du match a été confirmé par les deux équipes.`,
+              relatedId: matchId,
+              relatedType: "match",
+            });
+
+            if (match.away_captain_id) {
+              await NotificationService.createNotification({
+                userId: match.away_captain_id,
+                type: "match_validated",
+                title: "Match validé",
+                message: `Le score du match a été confirmé par les deux équipes.`,
+                relatedId: matchId,
+                relatedType: "match",
+              });
+            }
+          }
+
+          return res.json({
+            message: fullyValidated
+              ? "Match fully validated!"
+              : "Score validated successfully",
+            match: {
+              id: matchId,
+              homeScore,
+              awayScore,
+              fullyValidated,
+            },
+          });
+        } else {
+          // Les scores ne correspondent pas - ouvrir une contestation
+          return res.status(409).json({
+            error: "Score mismatch",
+            message:
+              "The scores you entered do not match. Please review or open a dispute.",
+            existingScore: {
+              home: match.home_score,
+              away: match.away_score,
+            },
+            yourScore: {
+              home: homeScore,
+              away: awayScore,
+            },
+          });
+        }
+      }
+    } catch (error) {
+      console.error("Update score error:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  }
+);
+
+/**
+ * POST /api/matches/:id/dispute
+ * Ouvrir une contestation sur un match
+ */
+router.post(
+  "/:id/dispute",
+  [
+    authenticateToken,
+    body("reason")
+      .trim()
+      .isLength({ min: 10, max: 1000 })
+      .withMessage("Reason must be between 10 and 1000 characters"),
+    body("proposedHomeScore").optional().isInt({ min: 0 }),
+    body("proposedAwayScore").optional().isInt({ min: 0 }),
+  ],
+  async (req, res) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ errors: errors.array() });
+      }
+
+      const matchId = req.params.id;
+      const { reason, proposedHomeScore, proposedAwayScore } = req.body;
+
+      // Vérifier que le match existe
+      const [matches] = await db.execute(
+        `SELECT m.*, 
+                ht.captain_id as home_captain_id, 
+                at.captain_id as away_captain_id,
+                ht.name as home_team_name,
+                at.name as away_team_name
+         FROM matches m
+         JOIN teams ht ON m.home_team_id = ht.id
+         LEFT JOIN teams at ON m.away_team_id = at.id
+         WHERE m.id = ?`,
+        [matchId]
+      );
+
+      if (matches.length === 0) {
+        return res.status(404).json({ error: "Match not found" });
+      }
+
+      const match = matches[0];
+
+      // Vérifier que l'utilisateur est capitaine
+      const isHomeCaptain = req.user.id === match.home_captain_id;
+      const isAwayCaptain = req.user.id === match.away_captain_id;
+
+      if (!isHomeCaptain && !isAwayCaptain) {
+        return res
+          .status(403)
+          .json({ error: "Only captains can open disputes" });
+      }
+
+      // Vérifier qu'il n'y a pas déjà une contestation ouverte
+      if (match.is_disputed) {
+        return res
+          .status(400)
+          .json({ error: "A dispute is already open for this match" });
+      }
+
+      const disputeRole = isHomeCaptain ? "home_captain" : "away_captain";
+
+      // Créer la contestation
+      const [disputeResult] = await db.execute(
+        `INSERT INTO match_disputes 
+         (match_id, opened_by, opened_by_role, reason, proposed_home_score, proposed_away_score, status)
+         VALUES (?, ?, ?, ?, ?, ?, 'open')`,
+        [
+          matchId,
+          req.user.id,
+          disputeRole,
+          reason,
+          proposedHomeScore || null,
+          proposedAwayScore || null,
+        ]
+      );
+
+      // Marquer le match comme contesté
+      await db.execute(
+        `UPDATE matches 
+         SET is_disputed = TRUE, 
+             dispute_reason = ?, 
+             dispute_opened_at = NOW(),
+             dispute_opened_by = ?
+         WHERE id = ?`,
+        [reason, req.user.id, matchId]
+      );
+
+      // Notifier l'autre capitaine
+      const otherCaptainId = isHomeCaptain
+        ? match.away_captain_id
+        : match.home_captain_id;
+      await NotificationService.createNotification({
+        userId: otherCaptainId,
+        type: "match_disputed",
+        title: "Contestation de match",
+        message: `${
+          isHomeCaptain ? match.home_team_name : match.away_team_name
+        } a ouvert une contestation sur le match.`,
+        relatedId: matchId,
+        relatedType: "match",
+      });
+
+      res.json({
+        message: "Dispute opened successfully",
+        disputeId: disputeResult.insertId,
+      });
+    } catch (error) {
+      console.error("Open dispute error:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  }
+);
+
+/**
+ * GET /api/matches/:id/validation-status
+ * Obtenir le statut de validation d'un match
+ */
+router.get("/:id/validation-status", authenticateToken, async (req, res) => {
+  try {
+    const matchId = req.params.id;
+
+    const [matches] = await db.execute(
+      `SELECT 
+        m.id,
+        m.home_score,
+        m.away_score,
+        m.home_captain_validated,
+        m.away_captain_validated,
+        m.home_captain_validated_at,
+        m.away_captain_validated_at,
+        m.is_disputed,
+        m.dispute_reason,
+        m.is_referee_verified,
+        ht.captain_id as home_captain_id,
+        ht.id as home_team_id,
+        at.captain_id as away_captain_id,
+        at.id as away_team_id,
+        ht.name as home_team_name,
+        at.name as away_team_name
+      FROM matches m
+      JOIN teams ht ON m.home_team_id = ht.id
+      LEFT JOIN teams at ON m.away_team_id = at.id
+      WHERE m.id = ?`,
+      [matchId]
+    );
+
+    if (matches.length === 0) {
+      return res.status(404).json({ error: "Match not found" });
+    }
+
+    const match = matches[0];
+
+    // Vérifier que l'utilisateur est capitaine d'une des équipes
+    const isHomeCaptain = req.user.id === match.home_captain_id;
+    const isAwayCaptain = req.user.id === match.away_captain_id;
+
+    if (!isHomeCaptain && !isAwayCaptain) {
+      // Vérifier si l'utilisateur est membre d'une des équipes
+      const [membership] = await db.execute(
+        `SELECT team_id FROM team_members 
+         WHERE user_id = ? AND is_active = true 
+         AND (team_id = ? OR team_id = ?)`,
+        [req.user.id, match.home_team_id, match.away_team_id || 0]
+      );
+
+      if (membership.length === 0) {
+        return res
+          .status(403)
+          .json({ error: "Not authorized to view this match validation" });
+      }
+    }
+
+    // Récupérer l'historique des validations
+    const [validations] = await db.execute(
+      `SELECT v.*, u.first_name, u.last_name
+       FROM match_validations v
+       JOIN users u ON v.validator_id = u.id
+       WHERE v.match_id = ?
+       ORDER BY v.validated_at DESC`,
+      [matchId]
+    );
+
+    // Récupérer les contestations actives
+    const [disputes] = await db.execute(
+      `SELECT d.*, u.first_name, u.last_name
+       FROM match_disputes d
+       JOIN users u ON d.opened_by = u.id
+       WHERE d.match_id = ? AND d.status = 'open'`,
+      [matchId]
+    );
+
+    // Déterminer le rôle de l'utilisateur
+    let userRole = null;
+    if (isHomeCaptain) {
+      userRole = "home_captain";
+    } else if (isAwayCaptain) {
+      userRole = "away_captain";
+    }
+
+    res.json({
+      match: {
+        id: match.id,
+        homeScore: match.home_score,
+        awayScore: match.away_score,
+        homeTeamName: match.home_team_name,
+        awayTeamName: match.away_team_name,
+      },
+      validation: {
+        homeCaptainValidated: Boolean(match.home_captain_validated),
+        awayCaptainValidated: Boolean(match.away_captain_validated),
+        homeCaptainValidatedAt: match.home_captain_validated_at,
+        awayCaptainValidatedAt: match.away_captain_validated_at,
+        fullyValidated: Boolean(
+          match.home_captain_validated && match.away_captain_validated
+        ),
+        isDisputed: Boolean(match.is_disputed),
+        disputeReason: match.dispute_reason,
+        isRefereeVerified: Boolean(match.is_referee_verified),
+      },
+      validations: validations.map((v) => ({
+        id: v.id,
+        validatorName: `${v.first_name} ${v.last_name}`,
+        role: v.validator_role,
+        homeScore: v.home_score,
+        awayScore: v.away_score,
+        validatedAt: v.validated_at,
+        status: v.status,
+      })),
+      disputes: disputes.map((d) => ({
+        id: d.id,
+        openedBy: `${d.first_name} ${d.last_name}`,
+        role: d.opened_by_role,
+        reason: d.reason,
+        proposedHomeScore: d.proposed_home_score,
+        proposedAwayScore: d.proposed_away_score,
+        status: d.status,
+        createdAt: d.created_at,
+      })),
+      userRole: userRole,
+    });
+  } catch (error) {
+    console.error("Get validation status error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+/**
+ * GET /api/matches/pending-validation
+ * Obtenir tous les matchs en attente de validation pour l'utilisateur
+ */
+router.get("/pending-validation/list", authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    const [matches] = await db.execute(
+      `SELECT 
+        m.id,
+        m.match_date,
+        m.home_score,
+        m.away_score,
+        m.home_captain_validated,
+        m.away_captain_validated,
+        m.is_disputed,
+        ht.id as home_team_id,
+        ht.name as home_team_name,
+        ht.captain_id as home_captain_id,
+        at.id as away_team_id,
+        at.name as away_team_name,
+        at.captain_id as away_captain_id,
+        CASE 
+          WHEN ht.captain_id = ? THEN 'home_captain'
+          WHEN at.captain_id = ? THEN 'away_captain'
+          ELSE NULL
+        END as user_role
+      FROM matches m
+      JOIN teams ht ON m.home_team_id = ht.id
+      LEFT JOIN teams at ON m.away_team_id = at.id
+      WHERE m.status = 'completed'
+        AND (ht.captain_id = ? OR at.captain_id = ?)
+        AND (
+          (ht.captain_id = ? AND m.home_captain_validated = FALSE) OR
+          (at.captain_id = ? AND m.away_captain_validated = FALSE) OR
+          m.is_disputed = TRUE
+        )
+      ORDER BY m.match_date DESC`,
+      [userId, userId, userId, userId, userId, userId]
+    );
+
+    res.json({
+      count: matches.length,
+      matches: matches.map((m) => ({
+        id: m.id,
+        matchDate: m.match_date,
+        homeTeam: {
+          id: m.home_team_id,
+          name: m.home_team_name,
+        },
+        awayTeam: {
+          id: m.away_team_id,
+          name: m.away_team_name,
+        },
+        score: {
+          home: m.home_score,
+          away: m.away_score,
+        },
+        validation: {
+          homeCaptainValidated: m.home_captain_validated,
+          awayCaptainValidated: m.away_captain_validated,
+          needsYourValidation:
+            (m.user_role === "home_captain" && !m.home_captain_validated) ||
+            (m.user_role === "away_captain" && !m.away_captain_validated),
+        },
+        isDisputed: m.is_disputed,
+        userRole: m.user_role,
+      })),
+    });
+  } catch (error) {
+    console.error("Get pending validations error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+/**
+ * PUT /api/matches/:id
+ * Modifier un match existant
+ */
+router.put(
+  "/:id",
+  [
+    authenticateToken,
+    body("matchDate").isISO8601().withMessage("Invalid date format"),
+    body("durationMinutes").optional().isInt({ min: 30, max: 180 }),
+    // body("locationId").optional().isInt(),
+    body("refereeContact").optional().trim().isLength({ max: 200 }),
+    body("notes").optional().trim().isLength({ max: 1000 }),
+  ],
+  async (req, res) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ errors: errors.array() });
+      }
+
+      const matchId = req.params.id;
+      const { matchDate, durationMinutes, locationId, refereeContact, notes } =
+        req.body;
+
+      // Vérifier que le match existe et que l'utilisateur est le capitaine domicile
+      const [matches] = await db.execute(
+        `SELECT m.*, ht.captain_id as home_captain_id
+         FROM matches m
+         JOIN teams ht ON m.home_team_id = ht.id
+         WHERE m.id = ?`,
+        [matchId]
+      );
+
+      if (matches.length === 0) {
+        return res.status(404).json({ error: "Match not found" });
+      }
+
+      const match = matches[0];
+
+      if (req.user.id !== match.home_captain_id) {
+        return res.status(403).json({
+          error: "Only the home team captain can edit the match",
+        });
+      }
+
+      // Ne pas permettre l'édition d'un match terminé ou annulé
+      if (match.status === "completed" || match.status === "cancelled") {
+        return res.status(400).json({
+          error: "Cannot edit a completed or cancelled match",
+        });
+      }
+
+      // Vérifier que la nouvelle date est dans le futur
+      if (new Date(matchDate) < new Date()) {
+        return res.status(400).json({
+          error: "Match date must be in the future",
+        });
+      }
+
+      // Mettre à jour le match
+      await db.execute(
+        `UPDATE matches 
+         SET match_date = ?, 
+             duration_minutes = ?, 
+             location_id = ?, 
+             referee_contact = ?, 
+             notes = ?
+         WHERE id = ?`,
+        [
+          matchDate,
+          durationMinutes || 90,
+          locationId || null,
+          refereeContact || null,
+          notes || null,
+          matchId,
+        ]
+      );
+
+      // Notifier l'équipe adverse si elle existe
+      if (match.away_team_id) {
+        const [awayTeam] = await db.execute(
+          "SELECT captain_id FROM teams WHERE id = ?",
+          [match.away_team_id]
+        );
+
+        if (awayTeam.length > 0) {
+          await NotificationService.createNotification({
+            userId: awayTeam[0].captain_id,
+            type: "match_updated",
+            title: "Match modifié",
+            message: `Le match a été modifié. Veuillez vérifier les nouveaux détails.`,
+            relatedId: matchId,
+            relatedType: "match",
+          });
+        }
+      }
+
+      res.json({
+        success: true,
+        message: "Match updated successfully",
+      });
+    } catch (error) {
+      console.error("Update match error:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  }
+);
+
+/**
+ * PATCH /api/matches/:id/confirm
+ * Confirmer un match (passage de pending à confirmed)
+ */
+router.patch("/:id/confirm", authenticateToken, async (req, res) => {
+  try {
+    const matchId = req.params.id;
+
+    // Vérifier que le match existe et que l'utilisateur est le capitaine domicile
+    const [matches] = await db.execute(
+      `SELECT m.*, ht.captain_id as home_captain_id, at.captain_id as away_captain_id
+       FROM matches m
+       JOIN teams ht ON m.home_team_id = ht.id
+       LEFT JOIN teams at ON m.away_team_id = at.id
+       WHERE m.id = ?`,
+      [matchId]
+    );
+
+    if (matches.length === 0) {
+      return res.status(404).json({ error: "Match not found" });
+    }
+
+    const match = matches[0];
+
+    if (req.user.id !== match.home_captain_id) {
+      return res.status(403).json({
+        error: "Only the home team captain can confirm the match",
+      });
+    }
+
+    if (match.status !== "pending") {
+      return res.status(400).json({
+        error: "Only pending matches can be confirmed",
+      });
+    }
+
+    // Mettre à jour le statut
+    await db.execute("UPDATE matches SET status = ? WHERE id = ?", [
+      "confirmed",
+      matchId,
+    ]);
+
+    // Notifier l'équipe adverse
+    if (match.away_captain_id) {
+      await NotificationService.createNotification({
+        userId: match.away_captain_id,
+        type: "match_confirmed",
+        title: "Match confirmé",
+        message: `Le match a été confirmé par l'équipe adverse.`,
+        relatedId: matchId,
+        relatedType: "match",
+      });
+    }
+
+    res.json({
+      success: true,
+      message: "Match confirmed successfully",
+    });
+  } catch (error) {
+    console.error("Confirm match error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+/**
+ * PATCH /api/matches/:id/cancel
+ * Annuler un match
+ */
+router.patch(
+  "/:id/cancel",
+  [authenticateToken, body("reason").optional().trim().isLength({ max: 500 })],
+  async (req, res) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ errors: errors.array() });
+      }
+
+      const matchId = req.params.id;
+      const { reason } = req.body;
+
+      // Vérifier que le match existe
+      const [matches] = await db.execute(
+        `SELECT m.*, 
+                ht.captain_id as home_captain_id, 
+                ht.name as home_team_name,
+                at.captain_id as away_captain_id,
+                at.name as away_team_name
+         FROM matches m
+         JOIN teams ht ON m.home_team_id = ht.id
+         LEFT JOIN teams at ON m.away_team_id = at.id
+         WHERE m.id = ?`,
+        [matchId]
+      );
+
+      if (matches.length === 0) {
+        return res.status(404).json({ error: "Match not found" });
+      }
+
+      const match = matches[0];
+
+      // Vérifier que l'utilisateur est l'un des deux capitaines
+      const isHomeCaptain = req.user.id === match.home_captain_id;
+      const isAwayCaptain = req.user.id === match.away_captain_id;
+
+      if (!isHomeCaptain && !isAwayCaptain) {
+        return res.status(403).json({
+          error: "Only team captains can cancel the match",
+        });
+      }
+
+      // Ne pas permettre l'annulation d'un match déjà terminé
+      if (match.status === "completed") {
+        return res.status(400).json({
+          error: "Cannot cancel a completed match",
+        });
+      }
+
+      // Mettre à jour le statut
+      await db.execute(
+        "UPDATE matches SET status = ?, notes = ? WHERE id = ?",
+        ["cancelled", reason || "Annulé par un capitaine", matchId]
+      );
+
+      // Notifier l'autre capitaine
+      const otherCaptainId = isHomeCaptain
+        ? match.away_captain_id
+        : match.home_captain_id;
+
+      if (otherCaptainId) {
+        await NotificationService.createNotification({
+          userId: otherCaptainId,
+          type: "match_cancelled",
+          title: "Match annulé",
+          message: `Le match a été annulé. ${
+            reason ? `Raison: ${reason}` : ""
+          }`,
+          relatedId: matchId,
+          relatedType: "match",
+        });
+      }
+
+      res.json({
+        success: true,
+        message: "Match cancelled successfully",
+      });
+    } catch (error) {
+      console.error("Cancel match error:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  }
+);
+
+/**
+ * DELETE /api/matches/:id
+ * Supprimer un match
+ */
+router.delete("/:id", authenticateToken, async (req, res) => {
+  try {
+    const matchId = req.params.id;
+
+    // Vérifier que le match existe et que l'utilisateur est le capitaine domicile
+    const [matches] = await db.execute(
+      `SELECT m.*, ht.captain_id as home_captain_id, at.captain_id as away_captain_id
+       FROM matches m
+       JOIN teams ht ON m.home_team_id = ht.id
+       LEFT JOIN teams at ON m.away_team_id = at.id
+       WHERE m.id = ?`,
+      [matchId]
+    );
+
+    if (matches.length === 0) {
+      return res.status(404).json({ error: "Match not found" });
+    }
+
+    const match = matches[0];
+
+    if (req.user.id !== match.home_captain_id) {
+      return res.status(403).json({
+        error: "Only the home team captain can delete the match",
+      });
+    }
+
+    // Ne permettre la suppression que si le match est en attente ou annulé
+    if (match.status === "completed" || match.status === "confirmed") {
+      return res.status(400).json({
+        error: "Cannot delete a confirmed or completed match. Cancel it first.",
+      });
+    }
+
+    // Notifier l'équipe adverse avant suppression
+    if (match.away_captain_id) {
+      await NotificationService.createNotification({
+        userId: match.away_captain_id,
+        type: "match_deleted",
+        title: "Match supprimé",
+        message: `Le match a été supprimé par l'équipe organisatrice.`,
+        relatedId: matchId,
+        relatedType: "match",
+      });
+    }
+
+    // Supprimer le match (CASCADE supprimera les données liées)
+    await db.execute("DELETE FROM matches WHERE id = ?", [matchId]);
+
+    res.json({
+      success: true,
+      message: "Match deleted successfully",
+    });
+  } catch (error) {
+    console.error("Delete match error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+/**
+ * PATCH /api/matches/:id/start
+ * Marquer un match comme "en cours"
+ */
+router.patch("/:id/start", authenticateToken, async (req, res) => {
+  try {
+    const matchId = req.params.id;
+
+    // Vérifier que le match existe
+    const [matches] = await db.execute(
+      `SELECT m.*, ht.captain_id as home_captain_id, at.captain_id as away_captain_id
+       FROM matches m
+       JOIN teams ht ON m.home_team_id = ht.id
+       LEFT JOIN teams at ON m.away_team_id = at.id
+       WHERE m.id = ?`,
+      [matchId]
+    );
+
+    if (matches.length === 0) {
+      return res.status(404).json({ error: "Match not found" });
+    }
+
+    const match = matches[0];
+
+    // Vérifier que l'utilisateur est l'un des capitaines
+    const isHomeCaptain = req.user.id === match.home_captain_id;
+    const isAwayCaptain = req.user.id === match.away_captain_id;
+
+    if (!isHomeCaptain && !isAwayCaptain) {
+      return res.status(403).json({
+        error: "Only team captains can start the match",
+      });
+    }
+
+    if (match.status !== "confirmed") {
+      return res.status(400).json({
+        error: "Match must be confirmed before starting",
+      });
+    }
+
+    // Mettre à jour le statut
+    await db.execute("UPDATE matches SET status = ? WHERE id = ?", [
+      "in_progress",
+      matchId,
+    ]);
+
+    // Notifier l'autre capitaine
+    const otherCaptainId = isHomeCaptain
+      ? match.away_captain_id
+      : match.home_captain_id;
+
+    if (otherCaptainId) {
+      await NotificationService.createNotification({
+        userId: otherCaptainId,
+        type: "match_started",
+        title: "Match démarré",
+        message: `Le match a été marqué comme en cours.`,
+        relatedId: matchId,
+        relatedType: "match",
+      });
+    }
+
+    res.json({
+      success: true,
+      message: "Match started successfully",
+    });
+  } catch (error) {
+    console.error("Start match error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+/**
+ * PATCH /api/matches/:id/complete
+ * Marquer un match comme "terminé" sans score (score sera saisi après)
+ */
+router.patch("/:id/complete", authenticateToken, async (req, res) => {
+  try {
+    const matchId = req.params.id;
+
+    // Vérifier que le match existe
+    const [matches] = await db.execute(
+      `SELECT m.*, ht.captain_id as home_captain_id, at.captain_id as away_captain_id
+       FROM matches m
+       JOIN teams ht ON m.home_team_id = ht.id
+       LEFT JOIN teams at ON m.away_team_id = at.id
+       WHERE m.id = ?`,
+      [matchId]
+    );
+
+    if (matches.length === 0) {
+      return res.status(404).json({ error: "Match not found" });
+    }
+
+    const match = matches[0];
+
+    // Vérifier que l'utilisateur est l'un des capitaines
+    const isHomeCaptain = req.user.id === match.home_captain_id;
+    const isAwayCaptain = req.user.id === match.away_captain_id;
+
+    if (!isHomeCaptain && !isAwayCaptain) {
+      return res.status(403).json({
+        error: "Only team captains can complete the match",
+      });
+    }
+
+    if (match.status === "completed") {
+      return res.status(400).json({
+        error: "Match is already completed",
+      });
+    }
+
+    // Mettre à jour le statut
+    await db.execute("UPDATE matches SET status = ? WHERE id = ?", [
+      "completed",
+      matchId,
+    ]);
+
+    // Notifier les deux capitaines pour saisir le score
+    await NotificationService.createNotification({
+      userId: match.home_captain_id,
+      type: "match_completed",
+      title: "Match terminé",
+      message: `Le match est terminé. Veuillez saisir le score final.`,
+      relatedId: matchId,
+      relatedType: "match",
+    });
+
+    if (match.away_captain_id) {
+      await NotificationService.createNotification({
+        userId: match.away_captain_id,
+        type: "match_completed",
+        title: "Match terminé",
+        message: `Le match est terminé. Veuillez saisir le score final.`,
+        relatedId: matchId,
+        relatedType: "match",
+      });
+    }
+
+    res.json({
+      success: true,
+      message: "Match marked as completed. Please enter the score.",
+    });
+  } catch (error) {
+    console.error("Complete match error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
 
 // Fonction utilitaire pour mettre à jour les statistiques d'équipe
 async function updateTeamStats(teamId, goalsFor, goalsAgainst) {
