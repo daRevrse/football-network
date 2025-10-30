@@ -1,7 +1,9 @@
+// routes/users.js - VERSION AMÉLIORÉE
 const express = require("express");
 const { body, validationResult } = require("express-validator");
 const db = require("../config/database");
 const { authenticateToken } = require("../middleware/auth");
+const UploadService = require("../services/UploadService");
 
 const router = express.Router();
 
@@ -9,10 +11,16 @@ const router = express.Router();
 router.get("/profile", authenticateToken, async (req, res) => {
   try {
     const [users] = await db.execute(
-      `SELECT id, email, first_name, last_name, phone, birth_date, bio, 
-              profile_picture, position, skill_level, location_city, 
-              location_lat, location_lng, created_at 
-       FROM users WHERE id = ?`,
+      `SELECT u.id, u.email, u.first_name, u.last_name, u.phone, u.birth_date, u.bio, 
+              u.position, u.skill_level, u.location_city, 
+              u.location_lat, u.location_lng, u.created_at,
+              u.profile_picture_id, u.cover_photo_id,
+              pp.stored_filename as profile_picture_filename, pp.file_path as profile_picture_path,
+              cp.stored_filename as cover_photo_filename, cp.file_path as cover_photo_path
+       FROM users u
+       LEFT JOIN uploads pp ON u.profile_picture_id = pp.id AND pp.is_active = true
+       LEFT JOIN uploads cp ON u.cover_photo_id = cp.id AND cp.is_active = true
+       WHERE u.id = ?`,
       [req.user.id]
     );
 
@@ -21,6 +29,16 @@ router.get("/profile", authenticateToken, async (req, res) => {
     }
 
     const user = users[0];
+
+    // Construire les URLs des photos
+    const profilePictureUrl = user.profile_picture_filename
+      ? `/uploads/users/${user.profile_picture_filename}`
+      : null;
+
+    const coverPhotoUrl = user.cover_photo_filename
+      ? `/uploads/users/${user.cover_photo_filename}`
+      : null;
+
     res.json({
       id: user.id,
       email: user.email,
@@ -29,7 +47,8 @@ router.get("/profile", authenticateToken, async (req, res) => {
       phone: user.phone,
       birthDate: user.birth_date,
       bio: user.bio,
-      profilePicture: user.profile_picture,
+      profilePictureUrl: profilePictureUrl,
+      coverPhotoUrl: coverPhotoUrl,
       position: user.position,
       skillLevel: user.skill_level,
       locationCity: user.location_city,
@@ -52,7 +71,7 @@ router.put(
     authenticateToken,
     body("firstName").optional().trim().isLength({ min: 2 }),
     body("lastName").optional().trim().isLength({ min: 2 }),
-    body("phone").optional().isMobilePhone(),
+    body("phone").optional(),
     body("bio").optional().isLength({ max: 500 }),
     body("position")
       .optional()
@@ -145,6 +164,267 @@ router.put(
   }
 );
 
+// POST /api/users/profile/picture - Définir la photo de profil
+router.post("/profile/picture", authenticateToken, async (req, res) => {
+  try {
+    const { uploadId } = req.body;
+
+    console.log("req", req.body);
+
+    if (!uploadId) {
+      return res.status(400).json({ error: "Upload ID required" });
+    }
+
+    await UploadService.setUserProfilePicture(req.user.id, uploadId);
+
+    // Récupérer l'URL de la nouvelle photo
+    const [user] = await db.execute(
+      `SELECT u.stored_filename 
+       FROM users usr
+       JOIN uploads u ON usr.profile_picture_id = u.id
+       WHERE usr.id = ? AND u.is_active = true`,
+      [req.user.id]
+    );
+
+    const profilePictureUrl =
+      user.length > 0 ? `/uploads/users/${user[0].stored_filename}` : null;
+
+    res.json({
+      success: true,
+      message: "Photo de profil mise à jour",
+      profilePictureUrl: profilePictureUrl,
+    });
+  } catch (error) {
+    console.error("Set profile picture error:", error);
+    res.status(400).json({
+      error: error.message || "Erreur lors de la mise à jour de la photo",
+    });
+  }
+});
+
+// DELETE /api/users/profile/picture - Supprimer la photo de profil
+router.delete("/profile/picture", authenticateToken, async (req, res) => {
+  try {
+    // Récupérer l'ID de la photo actuelle
+    const [users] = await db.execute(
+      "SELECT profile_picture_id FROM users WHERE id = ?",
+      [req.user.id]
+    );
+
+    if (users.length === 0 || !users[0].profile_picture_id) {
+      return res
+        .status(404)
+        .json({ error: "Aucune photo de profil à supprimer" });
+    }
+
+    const uploadId = users[0].profile_picture_id;
+
+    // Retirer la référence dans users
+    await db.execute(
+      "UPDATE users SET profile_picture_id = NULL WHERE id = ?",
+      [req.user.id]
+    );
+
+    // Marquer l'upload comme inactif
+    await db.execute("UPDATE uploads SET is_active = false WHERE id = ?", [
+      uploadId,
+    ]);
+
+    res.json({
+      success: true,
+      message: "Photo de profil supprimée",
+    });
+  } catch (error) {
+    console.error("Delete profile picture error:", error);
+    res.status(500).json({ error: "Erreur lors de la suppression" });
+  }
+});
+
+// POST /api/users/profile/cover - Définir la photo de couverture
+router.post("/profile/cover", authenticateToken, async (req, res) => {
+  try {
+    const { uploadId } = req.body;
+
+    if (!uploadId) {
+      return res.status(400).json({ error: "Upload ID required" });
+    }
+
+    // Utiliser une logique similaire à setUserProfilePicture
+    const connection = await db.getConnection();
+    try {
+      await connection.beginTransaction();
+
+      // Vérifier que l'upload existe et appartient à l'utilisateur
+      const [uploads] = await connection.execute(
+        "SELECT * FROM uploads WHERE id = ? AND uploaded_by = ? AND is_active = true",
+        [uploadId, req.user.id]
+      );
+
+      if (uploads.length === 0) {
+        throw new Error("Fichier non trouvé ou non autorisé");
+      }
+
+      // Récupérer l'ancienne photo de couverture
+      const [users] = await connection.execute(
+        "SELECT cover_photo_id FROM users WHERE id = ?",
+        [req.user.id]
+      );
+
+      const oldCoverId = users[0]?.cover_photo_id;
+
+      // Mettre à jour le profil
+      await connection.execute(
+        "UPDATE users SET cover_photo_id = ? WHERE id = ?",
+        [uploadId, req.user.id]
+      );
+
+      // Mettre à jour le contexte de l'upload
+      await connection.execute(
+        `UPDATE uploads 
+         SET upload_context = 'user_cover', 
+             related_entity_type = 'user', 
+             related_entity_id = ? 
+         WHERE id = ?`,
+        [req.user.id, uploadId]
+      );
+
+      // Marquer l'ancienne photo comme inactive
+      if (oldCoverId) {
+        await connection.execute(
+          "UPDATE uploads SET is_active = false WHERE id = ?",
+          [oldCoverId]
+        );
+      }
+
+      await connection.commit();
+
+      // Récupérer l'URL de la nouvelle photo
+      const [user] = await db.execute(
+        `SELECT u.stored_filename 
+         FROM users usr
+         JOIN uploads u ON usr.cover_photo_id = u.id
+         WHERE usr.id = ? AND u.is_active = true`,
+        [req.user.id]
+      );
+
+      const coverPhotoUrl =
+        user.length > 0 ? `/uploads/users/${user[0].stored_filename}` : null;
+
+      res.json({
+        success: true,
+        message: "Photo de couverture mise à jour",
+        coverPhotoUrl: coverPhotoUrl,
+      });
+    } catch (error) {
+      await connection.rollback();
+      throw error;
+    } finally {
+      connection.release();
+    }
+  } catch (error) {
+    console.error("Set cover photo error:", error);
+    res.status(400).json({
+      error: error.message || "Erreur lors de la mise à jour de la photo",
+    });
+  }
+});
+
+// DELETE /api/users/profile/cover - Supprimer la photo de couverture
+router.delete("/profile/cover", authenticateToken, async (req, res) => {
+  try {
+    // Récupérer l'ID de la photo actuelle
+    const [users] = await db.execute(
+      "SELECT cover_photo_id FROM users WHERE id = ?",
+      [req.user.id]
+    );
+
+    if (users.length === 0 || !users[0].cover_photo_id) {
+      return res
+        .status(404)
+        .json({ error: "Aucune photo de couverture à supprimer" });
+    }
+
+    const uploadId = users[0].cover_photo_id;
+
+    // Retirer la référence dans users
+    await db.execute("UPDATE users SET cover_photo_id = NULL WHERE id = ?", [
+      req.user.id,
+    ]);
+
+    // Marquer l'upload comme inactif
+    await db.execute("UPDATE uploads SET is_active = false WHERE id = ?", [
+      uploadId,
+    ]);
+
+    res.json({
+      success: true,
+      message: "Photo de couverture supprimée",
+    });
+  } catch (error) {
+    console.error("Delete cover photo error:", error);
+    res.status(500).json({ error: "Erreur lors de la suppression" });
+  }
+});
+
+// GET /api/users/stats - Récupérer les statistiques de l'utilisateur
+router.get("/stats", authenticateToken, async (req, res) => {
+  try {
+    // Compter le nombre d'équipes
+    const [teams] = await db.execute(
+      `SELECT COUNT(DISTINCT tm.team_id) as count
+       FROM team_members tm
+       WHERE tm.user_id = ? AND tm.is_active = true`,
+      [req.user.id]
+    );
+
+    // Compter le nombre de matchs joués
+    const [matches] = await db.execute(
+      `SELECT COUNT(DISTINCT m.id) as count
+       FROM matches m
+       JOIN team_members tm ON (tm.team_id = m.home_team_id OR tm.team_id = m.away_team_id)
+       WHERE tm.user_id = ? 
+         AND tm.is_active = true 
+         AND m.status = 'completed'`,
+      [req.user.id]
+    );
+
+    // Calculer le taux de victoire
+    const [wins] = await db.execute(
+      `SELECT COUNT(DISTINCT m.id) as count
+       FROM matches m
+       JOIN team_members tm ON tm.team_id = m.home_team_id
+       WHERE tm.user_id = ? 
+         AND tm.is_active = true 
+         AND m.status = 'completed'
+         AND m.home_score > m.away_score
+       UNION ALL
+       SELECT COUNT(DISTINCT m.id) as count
+       FROM matches m
+       JOIN team_members tm ON tm.team_id = m.away_team_id
+       WHERE tm.user_id = ? 
+         AND tm.is_active = true 
+         AND m.status = 'completed'
+         AND m.away_score > m.home_score`,
+      [req.user.id, req.user.id]
+    );
+
+    const totalWins = wins.reduce((sum, row) => sum + row.count, 0);
+    const totalMatches = matches[0].count;
+    const winRate =
+      totalMatches > 0 ? Math.round((totalWins / totalMatches) * 100) : 0;
+
+    res.json({
+      teamsCount: teams[0].count,
+      matchesCount: totalMatches,
+      winsCount: totalWins,
+      winRate: winRate,
+    });
+  } catch (error) {
+    console.error("Get user stats error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 // GET /api/users/search - Rechercher des joueurs
 router.get("/search", authenticateToken, async (req, res) => {
   try {
@@ -160,19 +440,21 @@ router.get("/search", authenticateToken, async (req, res) => {
     } = req.query;
 
     let query = `
-      SELECT id, first_name, last_name, position, skill_level, 
-             location_city, location_lat, location_lng,
+      SELECT u.id, u.first_name, u.last_name, u.position, u.skill_level, 
+             u.location_city, u.location_lat, u.location_lng,
+             pp.stored_filename as profile_picture_filename,
              ${
                lat && lng
                  ? `
-             (6371 * acos(cos(radians(?)) * cos(radians(location_lat)) * 
-              cos(radians(location_lng) - radians(?)) + sin(radians(?)) * 
-              sin(radians(location_lat)))) AS distance
+             (6371 * acos(cos(radians(?)) * cos(radians(u.location_lat)) * 
+              cos(radians(u.location_lng) - radians(?)) + sin(radians(?)) * 
+              sin(radians(u.location_lat)))) AS distance
              `
                  : "NULL as distance"
              }
-      FROM users 
-      WHERE is_active = true AND id != ?
+      FROM users u
+      LEFT JOIN uploads pp ON u.profile_picture_id = pp.id AND pp.is_active = true
+      WHERE u.is_active = true AND u.id != ?
     `;
 
     const queryParams = [];
@@ -183,17 +465,17 @@ router.get("/search", authenticateToken, async (req, res) => {
     queryParams.push(req.user.id);
 
     if (position && position !== "any") {
-      query += " AND position = ?";
+      query += " AND u.position = ?";
       queryParams.push(position);
     }
 
     if (skillLevel) {
-      query += " AND skill_level = ?";
+      query += " AND u.skill_level = ?";
       queryParams.push(skillLevel);
     }
 
     if (city) {
-      query += " AND location_city LIKE ?";
+      query += " AND u.location_city LIKE ?";
       queryParams.push(`%${city}%`);
     }
 
@@ -202,7 +484,7 @@ router.get("/search", authenticateToken, async (req, res) => {
       queryParams.push(radius);
       query += ` ORDER BY distance`;
     } else {
-      query += ` ORDER BY created_at DESC`;
+      query += ` ORDER BY u.created_at DESC`;
     }
 
     query += ` LIMIT ? OFFSET ?`;
@@ -217,6 +499,9 @@ router.get("/search", authenticateToken, async (req, res) => {
       position: user.position,
       skillLevel: user.skill_level,
       locationCity: user.location_city,
+      profilePictureUrl: user.profile_picture_filename
+        ? `/uploads/users/${user.profile_picture_filename}`
+        : null,
       distance: user.distance ? Math.round(user.distance * 10) / 10 : null,
     }));
 

@@ -1,4 +1,4 @@
-// football-network-frontend/src/components/layout/Navbar.js - VERSION AVEC NOTIFICATIONS
+// football-network-frontend/src/components/layout/Navbar.js - VERSION AVEC PHOTO DE PROFIL
 import React, { useState, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
 import {
@@ -30,9 +30,31 @@ const Navbar = () => {
   const [pendingPlayerInvitations, setPendingPlayerInvitations] = useState(0);
   const [showNotifications, setShowNotifications] = useState(false);
   const [showUserDropdown, setShowUserDropdown] = useState(false);
+  const [profilePictureUrl, setProfilePictureUrl] = useState(null);
 
   // Hook pour les notifications temps réel
   const { unreadCount, isConnected } = useNotifications();
+
+  // Charger la photo de profil
+  useEffect(() => {
+    if (user) {
+      loadProfilePicture();
+    }
+  }, [user]);
+
+  const loadProfilePicture = async () => {
+    try {
+      const response = await axios.get(`${API_BASE_URL}/users/profile`);
+      if (response.data.profilePictureUrl) {
+        const fullUrl = `${API_BASE_URL.replace("/api", "")}${
+          response.data.profilePictureUrl
+        }`;
+        setProfilePictureUrl(fullUrl);
+      }
+    } catch (error) {
+      console.error("Error loading profile picture:", error);
+    }
+  };
 
   // Fermer le dropdown utilisateur quand on clique ailleurs
   useEffect(() => {
@@ -61,7 +83,7 @@ const Navbar = () => {
 
       window.addEventListener("invitations_updated", handleInvitationsUpdate);
 
-      // Actualiser toutes les 60 secondes (moins fréquent car on a les notifications temps réel)
+      // Actualiser toutes les 60 secondes
       const interval = setInterval(loadPendingInvitations, 60000);
 
       return () => {
@@ -205,28 +227,57 @@ const Navbar = () => {
                   </button>
                 </div>
 
-                {/* Menu utilisateur dropdown */}
-                <div className="relative ml-4 pl-4 border-l border-gray-200 user-dropdown-container">
+                {/* Dropdown utilisateur avec photo */}
+                <div className="relative user-dropdown-container">
                   <button
                     onClick={() => setShowUserDropdown(!showUserDropdown)}
-                    className={`flex items-center space-x-3 px-3 py-2 rounded-lg transition-all duration-200 ${
+                    className={`flex items-center space-x-2 px-3 py-2 rounded-lg transition-all duration-200 ${
                       showUserDropdown
-                        ? "bg-green-50 ring-2 ring-green-500 ring-opacity-50"
+                        ? "bg-green-50 text-green-600 ring-2 ring-green-200"
                         : "hover:bg-gray-50"
                     }`}
                   >
-                    <div className="w-9 h-9 rounded-full bg-gradient-to-br from-green-500 to-green-600 flex items-center justify-center text-white font-bold text-sm shadow-md">
-                      {user.firstName?.charAt(0).toUpperCase()}
-                      {user.lastName?.charAt(0).toUpperCase()}
+                    {/* Photo de profil ou avatar par défaut */}
+                    <div className="relative">
+                      {profilePictureUrl ? (
+                        <img
+                          src={profilePictureUrl}
+                          alt="Profile"
+                          className="w-8 h-8 rounded-full object-cover ring-2 ring-white"
+                          onError={(e) => {
+                            e.target.onerror = null;
+                            e.target.src = "";
+                            e.target.style.display = "none";
+                            e.target.nextSibling.style.display = "flex";
+                          }}
+                        />
+                      ) : null}
+
+                      {/* Fallback avatar */}
+                      <div
+                        className={`w-8 h-8 rounded-full bg-gradient-to-br from-green-400 to-green-600 flex items-center justify-center text-white font-semibold text-sm ring-2 ring-white ${
+                          profilePictureUrl ? "hidden" : "flex"
+                        }`}
+                      >
+                        {user?.firstName?.[0]?.toUpperCase() || "U"}
+                      </div>
+
+                      {/* Indicateur de connexion (petit point vert) */}
+                      {isConnected && (
+                        <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-green-500 border-2 border-white rounded-full"></div>
+                      )}
                     </div>
-                    <div className="hidden xl:block text-left">
-                      <p className="text-sm font-semibold text-gray-900 leading-tight">
-                        {user.firstName} {user.lastName}
-                      </p>
-                      <p className="text-xs text-gray-500">Mon compte</p>
+
+                    <div className="hidden lg:flex flex-col items-start">
+                      <span className="text-sm font-semibold text-gray-900">
+                        {user?.firstName} {user?.lastName}
+                      </span>
+                      <span className="text-xs text-gray-500">Mon compte</span>
                     </div>
+
+                    {/* Icône chevron */}
                     <svg
-                      className={`w-4 h-4 text-gray-500 transition-transform duration-200 hidden xl:block ${
+                      className={`w-4 h-4 text-gray-500 transition-transform duration-200 ${
                         showUserDropdown ? "rotate-180" : ""
                       }`}
                       fill="none"
@@ -242,23 +293,50 @@ const Navbar = () => {
                     </svg>
                   </button>
 
-                  {/* Dropdown menu */}
+                  {/* Dropdown Menu */}
                   {showUserDropdown && (
                     <>
-                      {/* Overlay pour fermer en cliquant à l'extérieur */}
+                      {/* Overlay transparent pour fermer */}
                       <div
                         className="fixed inset-0 z-40"
                         onClick={() => setShowUserDropdown(false)}
-                      ></div>
+                      />
 
-                      <div className="absolute right-0 mt-3 w-72 bg-white rounded-xl shadow-2xl border border-gray-100 overflow-hidden z-50 animate-in fade-in slide-in-from-top-2 duration-200">
-                        {/* Header du dropdown */}
-                        <div className="px-5 py-4 bg-gradient-to-br from-green-50 to-blue-50 border-b border-gray-100">
-                          <div className="flex items-center space-x-3">
-                            <div className="w-12 h-12 rounded-full bg-gradient-to-br from-green-500 to-green-600 flex items-center justify-center text-white font-bold text-lg shadow-lg ring-4 ring-white">
-                              {user.firstName?.charAt(0).toUpperCase()}
-                              {user.lastName?.charAt(0).toUpperCase()}
+                      <div className="absolute right-0 mt-2 w-80 bg-white rounded-xl shadow-xl border border-gray-100 overflow-hidden z-50 animate-in fade-in slide-in-from-top-2 duration-200">
+                        {/* Header avec info utilisateur */}
+                        <div className="bg-gradient-to-br from-green-50 to-green-100 p-5 border-b border-green-200">
+                          <div className="flex items-center space-x-4">
+                            {/* Photo de profil grande */}
+                            <div className="relative">
+                              {profilePictureUrl ? (
+                                <img
+                                  src={profilePictureUrl}
+                                  alt="Profile"
+                                  className="w-16 h-16 rounded-full object-cover ring-4 ring-white shadow-md"
+                                  onError={(e) => {
+                                    e.target.onerror = null;
+                                    e.target.src = "";
+                                    e.target.style.display = "none";
+                                    e.target.nextSibling.style.display = "flex";
+                                  }}
+                                />
+                              ) : null}
+
+                              {/* Fallback avatar */}
+                              <div
+                                className={`w-16 h-16 rounded-full bg-gradient-to-br from-green-400 to-green-600 flex items-center justify-center text-white font-bold text-2xl ring-4 ring-white shadow-md ${
+                                  profilePictureUrl ? "hidden" : "flex"
+                                }`}
+                              >
+                                {user?.firstName?.[0]?.toUpperCase() || "U"}
+                              </div>
+
+                              {/* Badge en ligne */}
+                              {isConnected && (
+                                <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-green-500 border-4 border-white rounded-full"></div>
+                              )}
                             </div>
+
                             <div className="flex-1">
                               <p className="text-base font-bold text-gray-900">
                                 {user.firstName} {user.lastName}
@@ -339,17 +417,36 @@ const Navbar = () => {
                   )}
                 </button>
 
-                {/* Menu hamburger */}
+                {/* Photo de profil mobile (avatar cliquable) */}
                 <button
                   onClick={() => setIsMenuOpen(!isMenuOpen)}
-                  className="p-2 rounded-md text-gray-700 hover:text-green-600 hover:bg-gray-50 transition-colors relative"
+                  className="relative focus:outline-none focus:ring-2 focus:ring-green-500 rounded-full"
                 >
-                  {isMenuOpen ? (
-                    <X className="h-6 w-6" />
-                  ) : (
-                    <Menu className="h-6 w-6" />
-                  )}
-                  {pendingPlayerInvitations > 0 && !isMenuOpen && (
+                  {profilePictureUrl ? (
+                    <img
+                      src={profilePictureUrl}
+                      alt="Profile"
+                      className="w-8 h-8 rounded-full object-cover"
+                      onError={(e) => {
+                        e.target.onerror = null;
+                        e.target.src = "";
+                        e.target.style.display = "none";
+                        e.target.nextSibling.style.display = "flex";
+                      }}
+                    />
+                  ) : null}
+
+                  {/* Fallback avatar mobile */}
+                  <div
+                    className={`w-8 h-8 rounded-full bg-gradient-to-br from-green-400 to-green-600 flex items-center justify-center text-white font-semibold text-sm ${
+                      profilePictureUrl ? "hidden" : "flex"
+                    }`}
+                  >
+                    {user?.firstName?.[0]?.toUpperCase() || "U"}
+                  </div>
+
+                  {/* Badge invitations */}
+                  {pendingPlayerInvitations > 0 && (
                     <span className="absolute -top-1 -right-1 h-4 w-4 bg-red-500 text-white text-xs rounded-full flex items-center justify-center">
                       {pendingPlayerInvitations > 9
                         ? "9+"
@@ -383,6 +480,40 @@ const Navbar = () => {
           {user && isMenuOpen && (
             <div className="md:hidden">
               <div className="px-2 pt-2 pb-3 space-y-1 border-t border-gray-200">
+                {/* Header mobile avec photo */}
+                <div className="px-3 py-3 mb-2 bg-green-50 rounded-lg">
+                  <div className="flex items-center space-x-3">
+                    {profilePictureUrl ? (
+                      <img
+                        src={profilePictureUrl}
+                        alt="Profile"
+                        className="w-12 h-12 rounded-full object-cover ring-2 ring-green-200"
+                        onError={(e) => {
+                          e.target.onerror = null;
+                          e.target.src = "";
+                          e.target.style.display = "none";
+                          e.target.nextSibling.style.display = "flex";
+                        }}
+                      />
+                    ) : null}
+
+                    <div
+                      className={`w-12 h-12 rounded-full bg-gradient-to-br from-green-400 to-green-600 flex items-center justify-center text-white font-bold text-lg ring-2 ring-green-200 ${
+                        profilePictureUrl ? "hidden" : "flex"
+                      }`}
+                    >
+                      {user?.firstName?.[0]?.toUpperCase() || "U"}
+                    </div>
+
+                    <div className="flex-1">
+                      <p className="font-semibold text-gray-900">
+                        {user?.firstName} {user?.lastName}
+                      </p>
+                      <p className="text-sm text-gray-600">{user?.email}</p>
+                    </div>
+                  </div>
+                </div>
+
                 {/* Statut de connexion */}
                 <div className="px-3 py-2 flex items-center space-x-2 text-sm text-gray-600">
                   {isConnected ? (

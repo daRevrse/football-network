@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useForm } from "react-hook-form";
 import { yupResolver } from "@hookform/resolvers/yup";
 import * as yup from "yup";
@@ -11,6 +11,12 @@ import {
   Save,
   Edit3,
   X,
+  Camera,
+  Upload,
+  Trash2,
+  Award,
+  Users as UsersIcon,
+  TrendingUp,
 } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 import toast from "react-hot-toast";
@@ -35,18 +41,28 @@ const profileSchema = yup.object({
 });
 
 const Profile = () => {
-  const { user } = useAuth();
+  const { user, updateUser } = useAuth();
   const [profileData, setProfileData] = useState(null);
   const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [profilePictureUrl, setProfilePictureUrl] = useState(null);
+  const [coverPhotoUrl, setCoverPhotoUrl] = useState(null);
+  const [stats, setStats] = useState({
+    teamsCount: 0,
+    matchesCount: 0,
+    winRate: 0,
+  });
+
+  const fileInputRef = useRef(null);
+  const coverInputRef = useRef(null);
 
   const {
     register,
     handleSubmit,
     formState: { errors },
     reset,
-    setValue,
   } = useForm({
     resolver: yupResolver(profileSchema),
   });
@@ -68,9 +84,9 @@ const Profile = () => {
     { value: "semi_pro", label: "Semi-professionnel" },
   ];
 
-  // Charger le profil au montage du composant
   useEffect(() => {
     loadProfile();
+    loadStats();
   }, []);
 
   const loadProfile = async () => {
@@ -80,6 +96,18 @@ const Profile = () => {
       const profile = response.data;
 
       setProfileData(profile);
+
+      // Charger les URLs des photos
+      if (profile.profilePictureUrl) {
+        setProfilePictureUrl(
+          `${API_BASE_URL.replace("/api", "")}${profile.profilePictureUrl}`
+        );
+      }
+      if (profile.coverPhotoUrl) {
+        setCoverPhotoUrl(
+          `${API_BASE_URL.replace("/api", "")}${profile.coverPhotoUrl}`
+        );
+      }
 
       // Pré-remplir le formulaire
       reset({
@@ -100,6 +128,17 @@ const Profile = () => {
     }
   };
 
+  const loadStats = async () => {
+    try {
+      // Charger les statistiques de l'utilisateur
+      const response = await axios.get(`${API_BASE_URL}/users/stats`);
+      setStats(response.data);
+    } catch (error) {
+      console.error("Load stats error:", error);
+      // Les stats ne sont pas critiques, on ne fait pas de toast
+    }
+  };
+
   const onSubmit = async (data) => {
     try {
       setSaving(true);
@@ -115,7 +154,16 @@ const Profile = () => {
 
       toast.success("Profil mis à jour avec succès !");
       setIsEditing(false);
-      await loadProfile(); // Recharger les données
+      await loadProfile();
+
+      // Mettre à jour le contexte Auth si nécessaire
+      if (updateUser) {
+        updateUser({
+          ...user,
+          firstName: data.firstName,
+          lastName: data.lastName,
+        });
+      }
     } catch (error) {
       toast.error(
         error.response?.data?.error || "Erreur lors de la mise à jour"
@@ -126,9 +174,96 @@ const Profile = () => {
     }
   };
 
+  const handlePhotoUpload = async (file, isProfilePicture = true) => {
+    try {
+      setUploadingPhoto(true);
+
+      // Validation du fichier
+      if (!file.type.startsWith("image/")) {
+        toast.error("Veuillez sélectionner une image");
+        return;
+      }
+
+      if (file.size > 5 * 1024 * 1024) {
+        toast.error("L'image ne doit pas dépasser 5MB");
+        return;
+      }
+
+      // Étape 1: Upload du fichier
+      const formData = new FormData();
+      formData.append("files", file);
+
+      // ✅ IMPORTANT: Passer le contexte en QUERY PARAM, pas dans formData
+      const uploadContext = isProfilePicture ? "user_profile" : "user_cover";
+
+      const uploadResponse = await axios.post(
+        `${API_BASE_URL}/uploads?upload_context=${uploadContext}`, // ← QUERY PARAM ICI
+        formData,
+        {
+          headers: {
+            "Content-Type": "multipart/form-data",
+          },
+        }
+      );
+
+      const uploadId = uploadResponse.data.files[0].id;
+      const uploadUrl = uploadResponse.data.files[0].url;
+
+      // Étape 2: Associer la photo au profil
+      const endpoint = isProfilePicture
+        ? "/users/profile/picture"
+        : "/users/profile/cover";
+
+      await axios.post(`${API_BASE_URL}${endpoint}`, { uploadId });
+
+      // Mettre à jour l'affichage local
+      const fullUrl = `${API_BASE_URL.replace("/api", "")}${uploadUrl}`;
+
+      if (isProfilePicture) {
+        setProfilePictureUrl(fullUrl);
+        toast.success("Photo de profil mise à jour !");
+      } else {
+        setCoverPhotoUrl(fullUrl);
+        toast.success("Photo de couverture mise à jour !");
+      }
+
+      await loadProfile();
+    } catch (error) {
+      console.error("Photo upload error:", error);
+      toast.error(
+        error.response?.data?.error || "Erreur lors de l'upload de la photo"
+      );
+    } finally {
+      setUploadingPhoto(false);
+    }
+  };
+
+  const handleRemovePhoto = async (isProfilePicture = true) => {
+    try {
+      const endpoint = isProfilePicture
+        ? "/users/profile/picture"
+        : "/users/profile/cover";
+
+      await axios.delete(`${API_BASE_URL}${endpoint}`);
+
+      if (isProfilePicture) {
+        setProfilePictureUrl(null);
+        toast.success("Photo de profil supprimée");
+      } else {
+        setCoverPhotoUrl(null);
+        toast.success("Photo de couverture supprimée");
+      }
+
+      await loadProfile();
+    } catch (error) {
+      toast.error("Erreur lors de la suppression");
+      console.error("Remove photo error:", error);
+    }
+  };
+
   const handleCancel = () => {
     setIsEditing(false);
-    reset(); // Reset du formulaire aux valeurs d'origine
+    reset();
   };
 
   const formatDate = (dateString) => {
@@ -153,42 +288,162 @@ const Profile = () => {
   }
 
   return (
-    <div className="max-w-4xl mx-auto">
+    <div className="max-w-5xl mx-auto">
       <div className="bg-white rounded-lg shadow-md overflow-hidden">
-        {/* Header */}
-        <div className="bg-gradient-to-r from-green-500 to-green-600 px-6 py-8 text-white">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              <div className="w-20 h-20 bg-white/20 rounded-full flex items-center justify-center">
-                <User className="w-10 h-10" />
-              </div>
-              <div>
-                <h1 className="text-3xl font-bold">
-                  {profileData?.firstName} {profileData?.lastName}
-                </h1>
-                <p className="text-green-100 mt-1">
-                  {getPositionLabel(profileData?.position)} •{" "}
-                  {getSkillLevelLabel(profileData?.skillLevel)}
-                </p>
-                <p className="text-green-100 text-sm mt-1">
-                  Membre depuis {formatDate(profileData?.createdAt)}
-                </p>
-              </div>
-            </div>
+        {/* Photo de couverture */}
+        <div className="relative h-48 bg-gradient-to-r from-green-500 to-green-600">
+          {coverPhotoUrl ? (
+            <img
+              src={coverPhotoUrl}
+              alt="Couverture"
+              className="w-full h-full object-cover"
+            />
+          ) : null}
 
-            {!isEditing && (
+          <div className="absolute inset-0 bg-gradient-to-b from-transparent to-black/30"></div>
+
+          {/* Boutons pour changer la couverture */}
+          <div className="absolute bottom-4 right-4 flex gap-2">
+            <button
+              onClick={() => coverInputRef.current?.click()}
+              disabled={uploadingPhoto}
+              className="bg-white/90 hover:bg-white p-2 rounded-lg transition-colors shadow-lg"
+              title="Changer la photo de couverture"
+            >
+              <Camera className="w-5 h-5 text-gray-700" />
+            </button>
+            {coverPhotoUrl && (
               <button
-                onClick={() => setIsEditing(true)}
-                className="bg-white/20 hover:bg-white/30 p-3 rounded-lg transition-colors"
+                onClick={() => handleRemovePhoto(false)}
+                className="bg-red-500/90 hover:bg-red-600 p-2 rounded-lg transition-colors shadow-lg text-white"
+                title="Supprimer la photo de couverture"
               >
-                <Edit3 className="w-5 h-5" />
+                <Trash2 className="w-5 h-5" />
               </button>
             )}
+          </div>
+
+          <input
+            ref={coverInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) handlePhotoUpload(file, false);
+            }}
+          />
+        </div>
+
+        {/* Header avec photo de profil */}
+        <div className="px-6 pb-6 relative">
+          <div className="flex flex-col sm:flex-row items-start sm:items-end gap-4 -mt-16">
+            {/* Photo de profil */}
+            <div className="relative">
+              <div className="w-32 h-32 rounded-full border-4 border-white bg-white shadow-lg overflow-hidden">
+                {profilePictureUrl ? (
+                  <img
+                    src={profilePictureUrl}
+                    alt="Profile"
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <div className="w-full h-full bg-gradient-to-br from-green-400 to-green-600 flex items-center justify-center">
+                    <User className="w-16 h-16 text-white" />
+                  </div>
+                )}
+              </div>
+
+              {/* Bouton pour changer la photo de profil */}
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploadingPhoto}
+                className="absolute bottom-0 right-0 bg-white hover:bg-gray-50 p-2 rounded-full shadow-lg border-2 border-gray-200 transition-colors"
+                title="Changer la photo de profil"
+              >
+                {uploadingPhoto ? (
+                  <div className="animate-spin w-5 h-5 border-2 border-green-500 border-t-transparent rounded-full"></div>
+                ) : (
+                  <Camera className="w-5 h-5 text-gray-700" />
+                )}
+              </button>
+
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) handlePhotoUpload(file, true);
+                }}
+              />
+            </div>
+
+            {/* Infos utilisateur */}
+            <div className="flex-1">
+              <div className="flex items-start justify-between">
+                <div>
+                  <h1 className="text-3xl font-bold text-gray-900">
+                    {profileData?.firstName} {profileData?.lastName}
+                  </h1>
+                  <p className="text-gray-600 mt-1">
+                    {getPositionLabel(profileData?.position)} •{" "}
+                    {getSkillLevelLabel(profileData?.skillLevel)}
+                  </p>
+                  <p className="text-gray-500 text-sm mt-1">
+                    <Calendar className="inline w-4 h-4 mr-1" />
+                    Membre depuis {formatDate(profileData?.createdAt)}
+                  </p>
+                </div>
+
+                {!isEditing && (
+                  <button
+                    onClick={() => setIsEditing(true)}
+                    className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                  >
+                    <Edit3 className="w-4 h-4" />
+                    Modifier le profil
+                  </button>
+                )}
+              </div>
+
+              {/* Statistiques en ligne */}
+              <div className="flex gap-6 mt-4">
+                <div className="text-center">
+                  <div className="flex items-center gap-1 text-gray-600">
+                    <UsersIcon className="w-4 h-4" />
+                    <span className="text-sm">Équipes</span>
+                  </div>
+                  <p className="text-2xl font-bold text-gray-900">
+                    {stats.teamsCount || 0}
+                  </p>
+                </div>
+                <div className="text-center">
+                  <div className="flex items-center gap-1 text-gray-600">
+                    <Award className="w-4 h-4" />
+                    <span className="text-sm">Matchs</span>
+                  </div>
+                  <p className="text-2xl font-bold text-gray-900">
+                    {stats.matchesCount || 0}
+                  </p>
+                </div>
+                <div className="text-center">
+                  <div className="flex items-center gap-1 text-gray-600">
+                    <TrendingUp className="w-4 h-4" />
+                    <span className="text-sm">Victoires</span>
+                  </div>
+                  <p className="text-2xl font-bold text-green-600">
+                    {stats.winRate ? `${stats.winRate}%` : "0%"}
+                  </p>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
         {/* Contenu */}
-        <div className="p-6">
+        <div className="p-6 border-t">
           <form onSubmit={handleSubmit(onSubmit)}>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
               {/* Informations personnelles */}
@@ -376,14 +631,14 @@ const Profile = () => {
                   {isEditing ? (
                     <textarea
                       {...register("bio")}
-                      rows={4}
+                      rows={6}
                       className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent resize-none ${
                         errors.bio ? "border-red-500" : "border-gray-300"
                       }`}
                       placeholder="Parlez-nous de votre parcours footballistique, vos préférences de jeu..."
                     />
                   ) : (
-                    <p className="px-3 py-2 bg-gray-50 rounded-lg min-h-[100px]">
+                    <p className="px-3 py-2 bg-gray-50 rounded-lg min-h-[140px] whitespace-pre-wrap">
                       {profileData?.bio || "Aucune biographie renseignée"}
                     </p>
                   )}
@@ -392,23 +647,6 @@ const Profile = () => {
                       {errors.bio.message}
                     </p>
                   )}
-                </div>
-
-                {/* Statistiques si disponibles */}
-                <div className="bg-green-50 p-4 rounded-lg">
-                  <h3 className="font-semibold text-green-800 mb-2">
-                    Statistiques
-                  </h3>
-                  <div className="grid grid-cols-2 gap-4 text-sm">
-                    <div>
-                      <span className="text-green-600">Équipes rejointes:</span>
-                      <p className="font-semibold">À venir</p>
-                    </div>
-                    <div>
-                      <span className="text-green-600">Matchs joués:</span>
-                      <p className="font-semibold">À venir</p>
-                    </div>
-                  </div>
                 </div>
               </div>
             </div>
