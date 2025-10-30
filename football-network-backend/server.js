@@ -18,6 +18,7 @@ const matchRoutes = require("./routes/matches");
 const playerInvitationRoutes = require("./routes/player-invitations");
 const feedRoutes = require("./routes/feed");
 const uploadRoutes = require("./routes/uploads");
+const teamMediaRoutes = require("./routes/teamMediaRoutes");
 
 // Import de la base de données
 const db = require("./config/database");
@@ -83,6 +84,7 @@ app.use("/api/matches", matchRoutes);
 app.use("/api/player-invitations", playerInvitationRoutes);
 app.use("/api/feed", feedRoutes);
 app.use("/api/uploads", uploadRoutes);
+app.use("/api/teams", teamMediaRoutes);
 
 // Routes pour les notifications (nouvelles)
 app.get(

@@ -1,4 +1,4 @@
-// middleware/uploadMiddleware.js - VERSION DEBUG INTENSIVE
+// middleware/uploadMiddleware.js - VERSION CORRIGÉE
 const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
@@ -29,29 +29,40 @@ const createUploadDirs = () => {
 createUploadDirs();
 
 // Fonction pour déterminer le dossier de destination basé sur le contexte
+// 👇 SECTION CORRIGÉE
 const getSubFolder = (context) => {
-  console.log("📁 getSubFolder appelée avec context:", context);
+  console.log("🔍 getSubFolder appelée avec context:", context);
 
   let result;
   switch (context) {
     case "user_profile":
     case "user_cover":
+    case "profile":
+    case "profiles":
       result = "users";
       break;
-    case "team_logo":
-    case "team_banner":
+    case "team_logo": // ✅ Déjà présent
+    case "team_banner": // ✅ Déjà présent
+    case "team_gallery": // 👈 AJOUTÉ
+    case "team": // 👈 AJOUTÉ (alias)
+    case "teams": // 👈 AJOUTÉ (alias)
       result = "teams";
       break;
     case "match_photo":
+    case "match":
+    case "matches":
       result = "matches";
       break;
     case "post_media":
+    case "posts":
       result = "posts";
       break;
     case "message_attachment":
+    case "messages":
       result = "messages";
       break;
     case "location_photo":
+    case "locations":
       result = "locations";
       break;
     default:

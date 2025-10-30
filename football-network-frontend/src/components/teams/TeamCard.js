@@ -22,6 +22,9 @@ import {
 } from "lucide-react";
 import { Link } from "react-router-dom";
 
+const API_BASE_URL =
+  process.env.REACT_APP_API_URL || "http://localhost:5000/api";
+
 const TeamCard = ({ team, onLeaveTeam, isOwner, onEditTeam, onDeleteTeam }) => {
   const [showMenu, setShowMenu] = useState(false);
 
@@ -83,21 +86,38 @@ const TeamCard = ({ team, onLeaveTeam, isOwner, onEditTeam, onDeleteTeam }) => {
 
   return (
     <div className="bg-white rounded-xl shadow-md overflow-hidden hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 border border-gray-100">
-      {/* Header avec gradient */}
-      <div
-        className={`p-6 bg-gradient-to-r ${
-          isOwner
-            ? "from-yellow-400 via-orange-500 to-red-500"
-            : "from-blue-500 via-purple-500 to-indigo-600"
-        } text-white relative`}
-      >
+      {/* Header avec gradient ou bannière */}
+      <div className="relative">
+        {/* Bannière ou gradient */}
+        {team.banner_id ? (
+          <div className="h-32 relative overflow-hidden">
+            <img
+              src={`${API_BASE_URL}/uploads/teams/${team.banner_id}`}
+              alt="Bannière"
+              className="w-full h-full object-cover"
+              style={{
+                objectPosition: team.banner_position || "center",
+              }}
+            />
+            <div className="absolute inset-0 bg-gradient-to-b from-transparent to-black/50" />
+          </div>
+        ) : (
+          <div
+            className={`h-32 bg-gradient-to-r ${
+              isOwner
+                ? "from-yellow-400 via-orange-500 to-red-500"
+                : "from-blue-500 via-purple-500 to-indigo-600"
+            }`}
+          />
+        )}
+
         {/* Menu options pour le capitaine */}
         {isOwner && (
-          <div className="absolute top-4 right-4">
+          <div className="absolute top-4 right-4 z-10">
             <div className="relative">
               <button
                 onClick={() => setShowMenu(!showMenu)}
-                className="p-2 rounded-full hover:bg-white/20 transition-colors"
+                className="p-2 rounded-full bg-white/20 backdrop-blur-sm hover:bg-white/30 transition-colors text-white"
               >
                 <MoreVertical className="w-5 h-5" />
               </button>
@@ -130,78 +150,93 @@ const TeamCard = ({ team, onLeaveTeam, isOwner, onEditTeam, onDeleteTeam }) => {
           </div>
         )}
 
-        <div className="flex items-start justify-between mb-3 pr-12">
-          <div>
-            <h3 className="text-xl font-bold mb-2 flex items-center">
-              {team.name}
-              {isOwner && <Crown className="w-5 h-5 ml-2 text-yellow-200" />}
-            </h3>
+        {/* Logo et infos principales */}
+        <div className="absolute -bottom-10 left-6 right-6">
+          <div className="flex items-end space-x-4">
+            {/* Logo de l'équipe */}
+            {team.logo_id ? (
+              <img
+                src={`${API_BASE_URL}/uploads/teams/${team.logo_id}`}
+                alt={team.name}
+                className="w-20 h-20 rounded-full border-4 border-white shadow-lg object-cover bg-white"
+              />
+            ) : (
+              <div className="w-20 h-20 bg-gradient-to-br from-green-400 to-blue-500 rounded-full border-4 border-white shadow-lg flex items-center justify-center">
+                <Shield className="w-10 h-10 text-white" />
+              </div>
+            )}
 
-            <div className="flex items-center space-x-3">
-              <span
-                className={`px-3 py-1 rounded-full text-xs font-medium border ${getSkillLevelColor(
-                  team.skillLevel
-                )} !text-current`}
-              >
-                {getSkillLevelLabel(team.skillLevel)}
-              </span>
-
-              <div className="flex items-center text-white/80 text-sm">
-                <span>{teamMood.emoji}</span>
-                <span className="ml-1">{teamMood.text}</span>
+            {/* Nom et badges */}
+            <div className="flex-1 pb-2">
+              <h3 className="text-xl font-bold text-gray-900 flex items-center mb-1">
+                {team.name}
+                {isOwner && <Crown className="w-5 h-5 ml-2 text-yellow-500" />}
+              </h3>
+              <div className="flex items-center space-x-2 flex-wrap">
+                <span
+                  className={`px-2 py-1 rounded-full text-xs font-medium border ${getSkillLevelColor(
+                    team.skillLevel
+                  )}`}
+                >
+                  {getSkillLevelLabel(team.skillLevel)}
+                </span>
+                <span className="text-sm text-gray-600">
+                  {teamMood.emoji} {teamMood.text}
+                </span>
               </div>
             </div>
           </div>
         </div>
+      </div>
 
+      {/* Contenu principal */}
+      <div className="pt-14 p-6">
         {/* Description */}
         {team.description && (
-          <p className="text-white/90 text-sm mb-3 line-clamp-2 leading-relaxed">
+          <p className="text-gray-600 text-sm mb-4 line-clamp-2 leading-relaxed">
             {team.description}
           </p>
         )}
 
         {/* Informations rapides */}
-        <div className="grid grid-cols-2 gap-4 text-sm">
-          <div className="flex items-center text-white/80">
-            <Users className="w-4 h-4 mr-2" />
+        <div className="grid grid-cols-2 gap-3 mb-4 text-sm">
+          <div className="flex items-center text-gray-600">
+            <Users className="w-4 h-4 mr-2 text-green-500" />
             <span>
               {team.currentPlayers}/{team.maxPlayers} joueurs
             </span>
           </div>
 
           {team.locationCity && (
-            <div className="flex items-center text-white/80">
-              <MapPin className="w-4 h-4 mr-2" />
+            <div className="flex items-center text-gray-600">
+              <MapPin className="w-4 h-4 mr-2 text-blue-500" />
               <span>{team.locationCity}</span>
             </div>
           )}
         </div>
 
         {/* Barre de progression des membres */}
-        <div className="mt-3">
-          <div className="flex justify-between text-xs text-white/70 mb-1">
+        <div className="mb-6">
+          <div className="flex justify-between text-xs text-gray-600 mb-1">
             <span>Effectif</span>
-            <span>{occupancyPercentage}%</span>
+            <span className="font-medium">{occupancyPercentage}%</span>
           </div>
-          <div className="w-full bg-white/20 rounded-full h-2">
+          <div className="w-full bg-gray-200 rounded-full h-2">
             <div
               className={`h-2 rounded-full transition-all duration-500 ${
                 occupancyPercentage >= 80
-                  ? "bg-red-400"
+                  ? "bg-red-500"
                   : occupancyPercentage >= 60
-                  ? "bg-yellow-400"
-                  : "bg-green-400"
+                  ? "bg-yellow-500"
+                  : "bg-green-500"
               }`}
               style={{ width: `${occupancyPercentage}%` }}
             ></div>
           </div>
         </div>
-      </div>
 
-      {/* Statistiques détaillées */}
-      <div className="p-6">
-        <div className="grid grid-cols-4 gap-4 mb-6">
+        {/* Statistiques détaillées */}
+        <div className="grid grid-cols-4 gap-3 mb-6">
           <div className="text-center">
             <div className="text-2xl font-bold text-gray-900">
               {team.stats.matchesPlayed}

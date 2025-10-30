@@ -24,6 +24,8 @@ import {
   Phone,
   MoreVertical,
   Eye,
+  Image,
+  CheckCircle,
 } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
 import toast from "react-hot-toast";
@@ -32,6 +34,7 @@ import EditTeamModal from "./EditTeamModal";
 import DeleteTeamModal from "./DeleteTeamModal";
 import InvitePlayerModal from "./InvitePlayerModal";
 import TeamInvitations from "./TeamInvitations";
+import TeamMediaManager from "./TeamMediaManager";
 
 const API_BASE_URL =
   process.env.REACT_APP_API_URL || "http://localhost:5000/api";
@@ -65,6 +68,7 @@ const TeamDetails = () => {
       setLoading(true);
       const response = await axios.get(`${API_BASE_URL}/teams/${teamId}`);
       setTeam(response.data);
+      console.log("response", response.data);
     } catch (error) {
       console.error("Error loading team details:", error);
       toast.error("Erreur lors du chargement de l'équipe");
@@ -80,6 +84,7 @@ const TeamDetails = () => {
         `${API_BASE_URL}/matches?teamId=${teamId}&limit=50`
       );
       setMatches(response.data);
+      console.log("responseMatches", response.data);
     } catch (error) {
       console.error("Error loading team matches:", error);
     }
@@ -137,6 +142,7 @@ const TeamDetails = () => {
     { id: "members", label: "Membres", icon: Users },
     { id: "matches", label: "Matchs", icon: Calendar },
     { id: "stats", label: "Statistiques", icon: TrendingUp },
+    { id: "media", label: "Médias", icon: Image }, // 👈 NOUVEAU
     ...(isOwner
       ? [{ id: "invitations", label: "Invitations", icon: UserPlus }]
       : []),
@@ -160,8 +166,8 @@ const TeamDetails = () => {
 
   return (
     <div className="max-w-6xl mx-auto">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-8">
+      {/* Bouton retour */}
+      <div className="flex items-center justify-between mb-6">
         <button
           onClick={() => navigate("/teams")}
           className="flex items-center text-gray-600 hover:text-gray-800 transition-colors"
@@ -169,160 +175,193 @@ const TeamDetails = () => {
           <ArrowLeft className="w-5 h-5 mr-2" />
           Retour aux équipes
         </button>
-
-        {/* Menu actions (visible seulement pour les membres) */}
-        {isMember && (
-          <div className="relative">
-            <button
-              onClick={() => setShowMenu(!showMenu)}
-              className="flex items-center px-4 py-2 text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-            >
-              <MoreVertical className="w-4 h-4 mr-2" />
-              Actions
-            </button>
-
-            {showMenu && (
-              <div className="absolute right-0 top-full mt-2 w-48 bg-white rounded-lg shadow-lg border z-10">
-                {isOwner ? (
-                  <>
-                    <button
-                      onClick={() => {
-                        setShowEditModal(true);
-                        setShowMenu(false);
-                      }}
-                      className="w-full text-left px-4 py-2 text-gray-700 hover:bg-gray-50 flex items-center rounded-t-lg"
-                    >
-                      <Edit className="w-4 h-4 mr-2" />
-                      Modifier l'équipe
-                    </button>
-                    <button
-                      onClick={() => {
-                        setShowInviteModal(true);
-                        setShowMenu(false);
-                      }}
-                      className="w-full text-left px-4 py-2 text-gray-700 hover:bg-gray-50 flex items-center"
-                    >
-                      <UserPlus className="w-4 h-4 mr-2" />
-                      Inviter un joueur
-                    </button>
-                    <hr className="my-1" />
-                    <button
-                      onClick={() => {
-                        setShowDeleteModal(true);
-                        setShowMenu(false);
-                      }}
-                      className="w-full text-left px-4 py-2 text-red-600 hover:bg-red-50 flex items-center rounded-b-lg"
-                    >
-                      <Trash2 className="w-4 h-4 mr-2" />
-                      Supprimer l'équipe
-                    </button>
-                  </>
-                ) : (
-                  <button
-                    onClick={() => {
-                      handleLeaveTeam();
-                      setShowMenu(false);
-                    }}
-                    className="w-full text-left px-4 py-2 text-red-600 hover:bg-red-50 flex items-center rounded-lg"
-                  >
-                    <UserMinus className="w-4 h-4 mr-2" />
-                    Quitter l'équipe
-                  </button>
-                )}
-              </div>
-            )}
-          </div>
-        )}
       </div>
 
-      {/* En-tête de l'équipe */}
-      <div className="bg-white rounded-lg shadow-md overflow-hidden mb-8">
-        <div
-          className={`p-8 bg-gradient-to-r ${
-            isOwner
-              ? "from-yellow-400 via-orange-500 to-red-500"
-              : "from-blue-500 via-purple-500 to-indigo-600"
-          } text-white`}
-        >
-          <div className="flex items-start justify-between">
-            <div className="flex-1">
-              <div className="flex items-center mb-4">
-                <h1 className="text-4xl font-bold mr-4">{team.name}</h1>
-                {isOwner && <Crown className="w-8 h-8 text-yellow-200" />}
-              </div>
+      {/* ==================== HEADER AVEC BANNIÈRE ET LOGO ==================== */}
+      <div className="relative bg-white rounded-lg shadow-md overflow-hidden mb-8">
+        {/* Bannière */}
+        {team.banner_id ? (
+          <div className="h-48 relative overflow-hidden">
+            <img
+              src={`${API_BASE_URL}/uploads/teams/${team.banner_id}`}
+              alt="Bannière"
+              className="w-full h-full object-cover"
+              style={{
+                objectPosition: team.banner_position || "center",
+              }}
+            />
+            <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-black/40" />
+          </div>
+        ) : (
+          <div
+            className={`h-48 relative bg-gradient-to-r ${
+              isOwner
+                ? "from-yellow-400 via-orange-500 to-red-500"
+                : "from-blue-500 via-purple-500 to-indigo-600"
+            }`}
+          >
+            <div className="absolute inset-0 bg-gradient-to-b from-transparent to-black/40" />
+          </div>
+        )}
 
-              {team.description && (
-                <p className="text-white/90 text-lg mb-4 max-w-2xl">
-                  {team.description}
-                </p>
-              )}
-
-              <div className="flex items-center space-x-6 text-white/80">
-                <div className="flex items-center">
-                  <Users className="w-5 h-5 mr-2" />
-                  <span>
-                    {team.currentPlayers}/{team.maxPlayers} joueurs
-                  </span>
-                </div>
-
-                {team.locationCity && (
-                  <div className="flex items-center">
-                    <MapPin className="w-5 h-5 mr-2" />
-                    <span>{team.locationCity}</span>
+        {/* Logo + Infos + Menu */}
+        <div className="relative px-8 pb-6">
+          <div className="flex items-end justify-between -mt-16 mb-4">
+            <div className="flex items-end space-x-6">
+              {/* Logo */}
+              <div className="relative">
+                {team.logo_id ? (
+                  <img
+                    src={`${API_BASE_URL}/uploads/teams/${team.logo_id}`}
+                    alt="Logo"
+                    className="w-32 h-32 rounded-full border-4 border-white shadow-lg object-cover bg-white"
+                  />
+                ) : (
+                  <div className="w-32 h-32 bg-white rounded-full border-4 border-white shadow-lg flex items-center justify-center">
+                    <Shield className="w-16 h-16 text-gray-400" />
                   </div>
                 )}
+                {team.verified && (
+                  <div className="absolute bottom-2 right-2 bg-blue-500 rounded-full p-1">
+                    <CheckCircle className="w-5 h-5 text-white" />
+                  </div>
+                )}
+              </div>
 
-                <div className="flex items-center">
-                  <Trophy className="w-5 h-5 mr-2" />
-                  <span className="capitalize">
+              {/* Nom et description */}
+              <div className="flex-1 pb-2">
+                <h1 className="text-3xl font-bold text-gray-900 flex items-center mb-2">
+                  {team.name}
+                  {isOwner && (
+                    <Crown className="w-7 h-7 ml-3 text-yellow-500" />
+                  )}
+                </h1>
+                {team.description && (
+                  <p className="text-gray-600 mb-2 max-w-2xl">
+                    {team.description}
+                  </p>
+                )}
+                <div className="flex items-center space-x-4 text-sm text-gray-600">
+                  {team.locationCity && (
+                    <span className="flex items-center">
+                      <MapPin className="w-4 h-4 mr-1" />
+                      {team.locationCity}
+                    </span>
+                  )}
+                  <span className="flex items-center">
+                    <Users className="w-4 h-4 mr-1" />
+                    {team.currentPlayers}/{team.maxPlayers} joueurs
+                  </span>
+                  <span className="flex items-center">
+                    <Trophy className="w-4 h-4 mr-1" />
                     {getSkillLevelLabel(team.skillLevel)}
                   </span>
                 </div>
               </div>
             </div>
 
-            {/* Statistiques rapides */}
-            <div className="bg-white/20 rounded-lg p-4 min-w-[200px]">
-              <h3 className="font-semibold mb-3 text-center">Performances</h3>
-              <div className="grid grid-cols-2 gap-3 text-sm">
-                <div className="text-center">
-                  <div className="text-xl font-bold">
-                    {team.stats.matchesPlayed}
+            {/* Menu actions */}
+            {isMember && (
+              <div className="relative pb-2">
+                <button
+                  onClick={() => setShowMenu(!showMenu)}
+                  className="flex items-center px-4 py-2 text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors shadow-sm"
+                >
+                  <MoreVertical className="w-4 h-4 mr-2" />
+                  Actions
+                </button>
+
+                {showMenu && (
+                  <div className="absolute right-0 top-full mt-2 w-48 bg-white rounded-lg shadow-lg border z-10">
+                    {isOwner ? (
+                      <>
+                        <button
+                          onClick={() => {
+                            setShowEditModal(true);
+                            setShowMenu(false);
+                          }}
+                          className="w-full text-left px-4 py-2 text-gray-700 hover:bg-gray-50 flex items-center rounded-t-lg"
+                        >
+                          <Edit className="w-4 h-4 mr-2" />
+                          Modifier l'équipe
+                        </button>
+                        <button
+                          onClick={() => {
+                            setShowInviteModal(true);
+                            setShowMenu(false);
+                          }}
+                          className="w-full text-left px-4 py-2 text-gray-700 hover:bg-gray-50 flex items-center"
+                        >
+                          <UserPlus className="w-4 h-4 mr-2" />
+                          Inviter un joueur
+                        </button>
+                        <hr className="my-1" />
+                        <button
+                          onClick={() => {
+                            setShowDeleteModal(true);
+                            setShowMenu(false);
+                          }}
+                          className="w-full text-left px-4 py-2 text-red-600 hover:bg-red-50 flex items-center rounded-b-lg"
+                        >
+                          <Trash2 className="w-4 h-4 mr-2" />
+                          Supprimer l'équipe
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        onClick={() => {
+                          handleLeaveTeam();
+                          setShowMenu(false);
+                        }}
+                        className="w-full text-left px-4 py-2 text-red-600 hover:bg-red-50 flex items-center rounded-lg"
+                      >
+                        <UserMinus className="w-4 h-4 mr-2" />
+                        Quitter l'équipe
+                      </button>
+                    )}
                   </div>
-                  <div className="text-white/70">Matchs</div>
-                </div>
-                <div className="text-center">
-                  <div className="text-xl font-bold">
-                    {team.stats.matchesWon}
-                  </div>
-                  <div className="text-white/70">Victoires</div>
-                </div>
-                <div className="text-center">
-                  <div className="text-xl font-bold">
-                    {team.stats.matchesPlayed > 0
-                      ? Math.round(
-                          (team.stats.matchesWon / team.stats.matchesPlayed) *
-                            100
-                        )
-                      : 0}
-                    %
-                  </div>
-                  <div className="text-white/70">Réussite</div>
-                </div>
-                <div className="text-center">
-                  <div className="text-xl font-bold">
-                    {team.stats.averageRating > 0
-                      ? team.stats.averageRating.toFixed(1)
-                      : "-"}
-                  </div>
-                  <div className="text-white/70">Rating</div>
-                </div>
+                )}
               </div>
+            )}
+          </div>
+
+          {/* Stats rapides */}
+          <div className="grid grid-cols-4 gap-4 pt-4 border-t border-gray-100">
+            <div className="text-center">
+              <div className="text-2xl font-bold text-gray-900">
+                {team.stats?.matchesPlayed || 0}
+              </div>
+              <div className="text-sm text-gray-600">Matchs joués</div>
+            </div>
+            <div className="text-center">
+              <div className="text-2xl font-bold text-green-600">
+                {team.stats?.matchesWon || 0}
+              </div>
+              <div className="text-sm text-gray-600">Victoires</div>
+            </div>
+            <div className="text-center">
+              <div className="text-2xl font-bold text-blue-600">
+                {team.stats?.matchesPlayed > 0
+                  ? Math.round(
+                      (team.stats.matchesWon / team.stats.matchesPlayed) * 100
+                    )
+                  : 0}
+                %
+              </div>
+              <div className="text-sm text-gray-600">Taux victoire</div>
+            </div>
+            <div className="text-center">
+              <div className="text-2xl font-bold text-yellow-500">
+                {team.stats?.averageRating > 0
+                  ? team.stats.averageRating.toFixed(1)
+                  : "-"}
+              </div>
+              <div className="text-sm text-gray-600">Rating moyen</div>
             </div>
           </div>
         </div>
 
-        {/* Onglets */}
+        {/* ==================== ONGLETS ==================== */}
         <div className="border-b">
           <nav className="flex space-x-8 px-8">
             {tabs.map((tab) => {
@@ -351,9 +390,10 @@ const TeamDetails = () => {
           </nav>
         </div>
 
-        {/* Contenu des onglets */}
+        {/* ==================== CONTENU DES ONGLETS ==================== */}
         <div className="p-8">
           {activeTab === "overview" && <OverviewTab team={team} />}
+
           {activeTab === "members" && (
             <MembersTab
               team={team}
@@ -362,17 +402,29 @@ const TeamDetails = () => {
               onInvitePlayer={() => setShowInviteModal(true)}
             />
           )}
+
           {activeTab === "matches" && (
             <MatchesTab matches={matches} team={team} />
           )}
+
           {activeTab === "stats" && <StatsTab team={team} matches={matches} />}
+
+          {/* 👇 NOUVEAU ONGLET MÉDIAS */}
+          {activeTab === "media" && (
+            <TeamMediaManager
+              team={team}
+              isCapta={isOwner}
+              onUpdate={loadTeamDetails}
+            />
+          )}
+
           {activeTab === "invitations" && isOwner && (
             <TeamInvitations teamId={team.id} teamName={team.name} />
           )}
         </div>
       </div>
 
-      {/* Modals */}
+      {/* ==================== MODALS ==================== */}
       {showEditModal && (
         <EditTeamModal
           team={team}

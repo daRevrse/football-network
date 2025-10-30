@@ -310,7 +310,9 @@ const Navbar = () => {
                                   profilePictureUrl ? "hidden" : "flex"
                                 }`}
                               >
-                                {user?.firstName?.[0]?.toUpperCase() || "U"}
+                                {user?.first_name?.[0]?.toUpperCase() ||
+                                  user?.last_name?.[0]?.toUpperCase() ||
+                                  "U"}
                               </div>
 
                               {/* Badge en ligne */}

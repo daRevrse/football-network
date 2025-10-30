@@ -26,6 +26,7 @@ import PlayerInvitations from "./components/invitations/PlayerInvitations";
 import MatchValidation from "./components/matches/MatchValidation";
 import PendingValidations from "./components/matches/PendingValidations";
 import Feed from "./components/Feed";
+import LandingFeed from "./components/LandingFeed";
 import { UserProfileProvider } from "./contexts/UserContext";
 
 // Composant de protection des routes
@@ -67,7 +68,8 @@ function App() {
             <Navbar />
             <main className="container mx-auto px-4 py-8">
               <Routes>
-                <Route path="/" element={<Navigate to="/dashboard" />} />
+                {/* <Route path="/" element={<Navigate to="/dashboard" />} /> */}
+                <Route path="/" element={<LandingFeed />} />
                 <Route
                   path="/login"
                   element={

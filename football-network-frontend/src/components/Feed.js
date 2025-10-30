@@ -1,7 +1,3 @@
-// ============================
-// Feed.js - Composant Web du Feed Public
-// ============================
-
 import React, { useState, useEffect } from "react";
 import axios from "axios";
 import { useAuth } from "../contexts/AuthContext";
