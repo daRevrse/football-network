@@ -19,42 +19,22 @@ import { useAuth } from "../../contexts/AuthContext";
 import { useNotifications } from "../../hooks/useNotifications";
 import NotificationCenter from "../notifications/NotificationCenter";
 import axios from "axios";
+import { useUserProfile } from "../../contexts/UserContext";
 
 const API_BASE_URL =
   process.env.REACT_APP_API_URL || "http://localhost:5000/api";
 
 const Navbar = () => {
   const { user, logout } = useAuth();
+  const { profilePictureUrl } = useUserProfile();
   const location = useLocation();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [pendingPlayerInvitations, setPendingPlayerInvitations] = useState(0);
   const [showNotifications, setShowNotifications] = useState(false);
   const [showUserDropdown, setShowUserDropdown] = useState(false);
-  const [profilePictureUrl, setProfilePictureUrl] = useState(null);
 
   // Hook pour les notifications temps réel
   const { unreadCount, isConnected } = useNotifications();
-
-  // Charger la photo de profil
-  useEffect(() => {
-    if (user) {
-      loadProfilePicture();
-    }
-  }, [user]);
-
-  const loadProfilePicture = async () => {
-    try {
-      const response = await axios.get(`${API_BASE_URL}/users/profile`);
-      if (response.data.profilePictureUrl) {
-        const fullUrl = `${API_BASE_URL.replace("/api", "")}${
-          response.data.profilePictureUrl
-        }`;
-        setProfilePictureUrl(fullUrl);
-      }
-    } catch (error) {
-      console.error("Error loading profile picture:", error);
-    }
-  };
 
   // Fermer le dropdown utilisateur quand on clique ailleurs
   useEffect(() => {
@@ -259,7 +239,9 @@ const Navbar = () => {
                           profilePictureUrl ? "hidden" : "flex"
                         }`}
                       >
-                        {user?.firstName?.[0]?.toUpperCase() || "U"}
+                        {user?.first_name?.[0]?.toUpperCase() ||
+                          user?.last_name?.[0]?.toUpperCase() ||
+                          "U"}
                       </div>
 
                       {/* Indicateur de connexion (petit point vert) */}

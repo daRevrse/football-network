@@ -12,20 +12,22 @@ import {
   Edit3,
   X,
   Camera,
-  Upload,
   Trash2,
   Award,
   Users as UsersIcon,
   TrendingUp,
+  Shield,
+  Clock,
 } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
+import { useUserProfile } from "../contexts/UserContext";
 import toast from "react-hot-toast";
 import axios from "axios";
 
 const API_BASE_URL =
   process.env.REACT_APP_API_URL || "http://localhost:5000/api";
 
-// Schema de validation pour le profil
+// Schema de validation
 const profileSchema = yup.object({
   firstName: yup
     .string()
@@ -42,13 +44,18 @@ const profileSchema = yup.object({
 
 const Profile = () => {
   const { user, updateUser } = useAuth();
+  const {
+    profilePictureUrl,
+    coverPhotoUrl,
+    refreshProfilePicture,
+    refreshCoverPhoto,
+  } = useUserProfile();
+
   const [profileData, setProfileData] = useState(null);
   const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
-  const [profilePictureUrl, setProfilePictureUrl] = useState(null);
-  const [coverPhotoUrl, setCoverPhotoUrl] = useState(null);
   const [stats, setStats] = useState({
     teamsCount: 0,
     matchesCount: 0,
@@ -84,6 +91,7 @@ const Profile = () => {
     { value: "semi_pro", label: "Semi-professionnel" },
   ];
 
+  // Chargement initial
   useEffect(() => {
     loadProfile();
     loadStats();
@@ -96,18 +104,6 @@ const Profile = () => {
       const profile = response.data;
 
       setProfileData(profile);
-
-      // Charger les URLs des photos
-      if (profile.profilePictureUrl) {
-        setProfilePictureUrl(
-          `${API_BASE_URL.replace("/api", "")}${profile.profilePictureUrl}`
-        );
-      }
-      if (profile.coverPhotoUrl) {
-        setCoverPhotoUrl(
-          `${API_BASE_URL.replace("/api", "")}${profile.coverPhotoUrl}`
-        );
-      }
 
       // Pré-remplir le formulaire
       reset({
@@ -130,12 +126,11 @@ const Profile = () => {
 
   const loadStats = async () => {
     try {
-      // Charger les statistiques de l'utilisateur
       const response = await axios.get(`${API_BASE_URL}/users/stats`);
       setStats(response.data);
     } catch (error) {
       console.error("Load stats error:", error);
-      // Les stats ne sont pas critiques, on ne fait pas de toast
+      // Stats non critiques
     }
   };
 
@@ -143,7 +138,7 @@ const Profile = () => {
     try {
       setSaving(true);
 
-      // Nettoyer les données (enlever les champs vides)
+      // Nettoyer les données vides
       const cleanData = Object.fromEntries(
         Object.entries(data).filter(
           ([_, value]) => value !== "" && value !== null
@@ -156,7 +151,7 @@ const Profile = () => {
       setIsEditing(false);
       await loadProfile();
 
-      // Mettre à jour le contexte Auth si nécessaire
+      // Mettre à jour le contexte Auth
       if (updateUser) {
         updateUser({
           ...user,
@@ -178,7 +173,7 @@ const Profile = () => {
     try {
       setUploadingPhoto(true);
 
-      // Validation du fichier
+      // Validation
       if (!file.type.startsWith("image/")) {
         toast.error("Veuillez sélectionner une image");
         return;
@@ -193,11 +188,10 @@ const Profile = () => {
       const formData = new FormData();
       formData.append("files", file);
 
-      // ✅ IMPORTANT: Passer le contexte en QUERY PARAM, pas dans formData
       const uploadContext = isProfilePicture ? "user_profile" : "user_cover";
 
       const uploadResponse = await axios.post(
-        `${API_BASE_URL}/uploads?upload_context=${uploadContext}`, // ← QUERY PARAM ICI
+        `${API_BASE_URL}/uploads?upload_context=${uploadContext}`,
         formData,
         {
           headers: {
@@ -214,16 +208,22 @@ const Profile = () => {
         ? "/users/profile/picture"
         : "/users/profile/cover";
 
-      await axios.post(`${API_BASE_URL}${endpoint}`, { uploadId });
+      const response = await axios.post(`${API_BASE_URL}${endpoint}`, {
+        uploadId,
+      });
 
-      // Mettre à jour l'affichage local
-      const fullUrl = `${API_BASE_URL.replace("/api", "")}${uploadUrl}`;
+      // Étape 3: Mettre à jour le contexte avec l'URL retournée par le backend
+      const photoUrl = isProfilePicture
+        ? response.data.profilePictureUrl
+        : response.data.coverPhotoUrl;
+
+      const fullUrl = `${API_BASE_URL.replace("/api", "")}${photoUrl}`;
 
       if (isProfilePicture) {
-        setProfilePictureUrl(fullUrl);
+        refreshProfilePicture(fullUrl);
         toast.success("Photo de profil mise à jour !");
       } else {
-        setCoverPhotoUrl(fullUrl);
+        refreshCoverPhoto(fullUrl);
         toast.success("Photo de couverture mise à jour !");
       }
 
@@ -239,6 +239,17 @@ const Profile = () => {
   };
 
   const handleRemovePhoto = async (isProfilePicture = true) => {
+    const photoType = isProfilePicture
+      ? "photo de profil"
+      : "photo de couverture";
+
+    // Confirmation avant suppression
+    if (
+      !window.confirm(`Êtes-vous sûr de vouloir supprimer votre ${photoType} ?`)
+    ) {
+      return;
+    }
+
     try {
       const endpoint = isProfilePicture
         ? "/users/profile/picture"
@@ -246,17 +257,20 @@ const Profile = () => {
 
       await axios.delete(`${API_BASE_URL}${endpoint}`);
 
+      // Mettre à jour le contexte
       if (isProfilePicture) {
-        setProfilePictureUrl(null);
+        refreshProfilePicture(null);
         toast.success("Photo de profil supprimée");
       } else {
-        setCoverPhotoUrl(null);
+        refreshCoverPhoto(null);
         toast.success("Photo de couverture supprimée");
       }
 
       await loadProfile();
     } catch (error) {
-      toast.error("Erreur lors de la suppression");
+      const errorMsg =
+        error.response?.data?.error || "Erreur lors de la suppression";
+      toast.error(errorMsg);
       console.error("Remove photo error:", error);
     }
   };
@@ -268,46 +282,88 @@ const Profile = () => {
 
   const formatDate = (dateString) => {
     if (!dateString) return "Non renseigné";
-    return new Date(dateString).toLocaleDateString("fr-FR");
+    return new Date(dateString).toLocaleDateString("fr-FR", {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    });
   };
 
   const getPositionLabel = (position) => {
-    return positions.find((p) => p.value === position)?.label || position;
+    return (
+      positions.find((p) => p.value === position)?.label ||
+      position ||
+      "Non renseigné"
+    );
   };
 
   const getSkillLevelLabel = (skillLevel) => {
-    return skillLevels.find((s) => s.value === skillLevel)?.label || skillLevel;
+    return (
+      skillLevels.find((s) => s.value === skillLevel)?.label ||
+      skillLevel ||
+      "Non renseigné"
+    );
+  };
+
+  const getMemberSince = (createdAt) => {
+    if (!createdAt) return "";
+    return new Date(createdAt).toLocaleDateString("fr-FR", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    });
   };
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-500"></div>
+      <div className="flex justify-center items-center min-h-[500px]">
+        <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-green-500"></div>
       </div>
     );
   }
 
   return (
-    <div className="max-w-5xl mx-auto">
-      <div className="bg-white rounded-lg shadow-md overflow-hidden">
-        {/* Photo de couverture */}
-        <div className="relative h-48 bg-gradient-to-r from-green-500 to-green-600">
-          {coverPhotoUrl ? (
+    <div className="max-w-6xl mx-auto pb-8">
+      <div className="bg-white rounded-xl shadow-lg overflow-hidden">
+        {/* Photo de couverture avec nom et bouton modifier */}
+        <div className="relative h-64 bg-gradient-to-r from-green-500 via-green-600 to-green-700">
+          {coverPhotoUrl && (
             <img
               src={coverPhotoUrl}
               alt="Couverture"
               className="w-full h-full object-cover"
             />
-          ) : null}
+          )}
 
-          <div className="absolute inset-0 bg-gradient-to-b from-transparent to-black/30"></div>
+          <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-black/40"></div>
 
-          {/* Boutons pour changer la couverture */}
+          {/* Nom de l'utilisateur sur la couverture */}
+          <div className="absolute bottom-8 left-8">
+            <h1 className="text-4xl font-bold text-white drop-shadow-lg">
+              {profileData?.firstName} {profileData?.lastName}
+            </h1>
+            <p className="text-white/90 text-sm mt-1 drop-shadow">
+              {profileData?.email}
+            </p>
+          </div>
+
+          {/* Bouton modifier en haut à droite */}
+          {!isEditing && (
+            <button
+              onClick={() => setIsEditing(true)}
+              className="absolute top-6 right-6 flex items-center gap-2 bg-white text-green-700 px-5 py-2.5 rounded-lg hover:bg-gray-50 transition-all shadow-lg font-semibold"
+            >
+              <Edit3 className="w-4 h-4" />
+              Modifier le profil
+            </button>
+          )}
+
+          {/* Boutons pour la couverture */}
           <div className="absolute bottom-4 right-4 flex gap-2">
             <button
               onClick={() => coverInputRef.current?.click()}
               disabled={uploadingPhoto}
-              className="bg-white/90 hover:bg-white p-2 rounded-lg transition-colors shadow-lg"
+              className="bg-white/95 hover:bg-white p-3 rounded-lg transition-all shadow-lg hover:shadow-xl disabled:opacity-50"
               title="Changer la photo de couverture"
             >
               <Camera className="w-5 h-5 text-gray-700" />
@@ -315,7 +371,7 @@ const Profile = () => {
             {coverPhotoUrl && (
               <button
                 onClick={() => handleRemovePhoto(false)}
-                className="bg-red-500/90 hover:bg-red-600 p-2 rounded-lg transition-colors shadow-lg text-white"
+                className="bg-red-500/95 hover:bg-red-600 p-3 rounded-lg transition-all shadow-lg hover:shadow-xl text-white"
                 title="Supprimer la photo de couverture"
               >
                 <Trash2 className="w-5 h-5" />
@@ -335,12 +391,12 @@ const Profile = () => {
           />
         </div>
 
-        {/* Header avec photo de profil */}
-        <div className="px-6 pb-6 relative">
-          <div className="flex flex-col sm:flex-row items-start sm:items-end gap-4 -mt-16">
+        {/* Photo de profil et statistiques */}
+        <div className="px-6 sm:px-8 pb-6">
+          <div className="flex flex-col sm:flex-row gap-6 -mt-16">
             {/* Photo de profil */}
-            <div className="relative">
-              <div className="w-32 h-32 rounded-full border-4 border-white bg-white shadow-lg overflow-hidden">
+            <div className="relative flex-shrink-0">
+              <div className="w-40 h-40 rounded-full border-4 border-white bg-white shadow-xl overflow-hidden">
                 {profilePictureUrl ? (
                   <img
                     src={profilePictureUrl}
@@ -349,24 +405,36 @@ const Profile = () => {
                   />
                 ) : (
                   <div className="w-full h-full bg-gradient-to-br from-green-400 to-green-600 flex items-center justify-center">
-                    <User className="w-16 h-16 text-white" />
+                    <User className="w-20 h-20 text-white" />
                   </div>
                 )}
               </div>
 
-              {/* Bouton pour changer la photo de profil */}
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                disabled={uploadingPhoto}
-                className="absolute bottom-0 right-0 bg-white hover:bg-gray-50 p-2 rounded-full shadow-lg border-2 border-gray-200 transition-colors"
-                title="Changer la photo de profil"
-              >
-                {uploadingPhoto ? (
-                  <div className="animate-spin w-5 h-5 border-2 border-green-500 border-t-transparent rounded-full"></div>
-                ) : (
-                  <Camera className="w-5 h-5 text-gray-700" />
+              {/* Boutons pour gérer la photo de profil */}
+              <div className="absolute bottom-2 right-2 flex gap-2">
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={uploadingPhoto}
+                  className="bg-white hover:bg-gray-50 p-2 rounded-full shadow-lg border-2 border-gray-200 transition-all hover:scale-110 disabled:opacity-50"
+                  title="Changer la photo de profil"
+                >
+                  {uploadingPhoto ? (
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-green-500" />
+                  ) : (
+                    <Camera className="w-4 h-4 text-gray-700" />
+                  )}
+                </button>
+
+                {profilePictureUrl && (
+                  <button
+                    onClick={() => handleRemovePhoto(true)}
+                    className="bg-red-500 hover:bg-red-600 p-2 rounded-full shadow-lg transition-all hover:scale-110 text-white"
+                    title="Supprimer la photo de profil"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
                 )}
-              </button>
+              </div>
 
               <input
                 ref={fileInputRef}
@@ -380,299 +448,289 @@ const Profile = () => {
               />
             </div>
 
-            {/* Infos utilisateur */}
-            <div className="flex-1">
-              <div className="flex items-start justify-between">
-                <div>
-                  <h1 className="text-3xl font-bold text-gray-900">
-                    {profileData?.firstName} {profileData?.lastName}
-                  </h1>
-                  <p className="text-gray-600 mt-1">
-                    {getPositionLabel(profileData?.position)} •{" "}
-                    {getSkillLevelLabel(profileData?.skillLevel)}
-                  </p>
-                  <p className="text-gray-500 text-sm mt-1">
-                    <Calendar className="inline w-4 h-4 mr-1" />
-                    Membre depuis {formatDate(profileData?.createdAt)}
-                  </p>
-                </div>
-
-                {!isEditing && (
-                  <button
-                    onClick={() => setIsEditing(true)}
-                    className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
-                  >
-                    <Edit3 className="w-4 h-4" />
-                    Modifier le profil
-                  </button>
-                )}
-              </div>
+            {/* Statistiques et date d'inscription */}
+            <div className="flex-1 flex flex-col justify-end pb-2">
+              {/* Date d'inscription */}
+              {profileData?.createdAt && (
+                <p className="text-sm text-gray-500 mb-4 flex items-center gap-1.5">
+                  <Calendar className="w-4 h-4" />
+                  Membre depuis {getMemberSince(profileData.createdAt)}
+                </p>
+              )}
 
               {/* Statistiques en ligne */}
-              <div className="flex gap-6 mt-4">
-                <div className="text-center">
-                  <div className="flex items-center gap-1 text-gray-600">
-                    <UsersIcon className="w-4 h-4" />
-                    <span className="text-sm">Équipes</span>
+              <div className="flex flex-wrap gap-6">
+                <div className="flex items-center gap-2">
+                  <UsersIcon className="w-5 h-5 text-gray-500" />
+                  <div>
+                    <p className="text-xs text-gray-500">Équipes</p>
+                    <p className="text-2xl font-bold text-gray-900">
+                      {stats.teamsCount}
+                    </p>
                   </div>
-                  <p className="text-2xl font-bold text-gray-900">
-                    {stats.teamsCount || 0}
-                  </p>
                 </div>
-                <div className="text-center">
-                  <div className="flex items-center gap-1 text-gray-600">
-                    <Award className="w-4 h-4" />
-                    <span className="text-sm">Matchs</span>
+
+                <div className="flex items-center gap-2">
+                  <Shield className="w-5 h-5 text-gray-500" />
+                  <div>
+                    <p className="text-xs text-gray-500">Matchs</p>
+                    <p className="text-2xl font-bold text-gray-900">
+                      {stats.matchesCount}
+                    </p>
                   </div>
-                  <p className="text-2xl font-bold text-gray-900">
-                    {stats.matchesCount || 0}
-                  </p>
                 </div>
-                <div className="text-center">
-                  <div className="flex items-center gap-1 text-gray-600">
-                    <TrendingUp className="w-4 h-4" />
-                    <span className="text-sm">Victoires</span>
+
+                <div className="flex items-center gap-2">
+                  <TrendingUp className="w-5 h-5 text-gray-500" />
+                  <div>
+                    <p className="text-xs text-gray-500">Victoires</p>
+                    <p className="text-2xl font-bold text-green-600">
+                      {stats.winRate}%
+                    </p>
                   </div>
-                  <p className="text-2xl font-bold text-green-600">
-                    {stats.winRate ? `${stats.winRate}%` : "0%"}
-                  </p>
                 </div>
               </div>
             </div>
           </div>
-        </div>
 
-        {/* Contenu */}
-        <div className="p-6 border-t">
-          <form onSubmit={handleSubmit(onSubmit)}>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-              {/* Informations personnelles */}
-              <div className="space-y-6">
-                <h2 className="text-xl font-semibold text-gray-900 border-b pb-2">
-                  Informations personnelles
-                </h2>
+          {/* Formulaire */}
+          <div className="px-6 sm:px-8 pb-8 pt-6">
+            <form onSubmit={handleSubmit(onSubmit)}>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                {/* Section Informations personnelles */}
+                <div className="space-y-6">
+                  <h2 className="text-2xl font-bold text-gray-900 pb-3 border-b-2 border-gray-200">
+                    Informations personnelles
+                  </h2>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        Prénom *
+                      </label>
+                      {isEditing ? (
+                        <input
+                          type="text"
+                          {...register("firstName")}
+                          className={`w-full px-4 py-3 border-2 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all ${
+                            errors.firstName
+                              ? "border-red-500"
+                              : "border-gray-300"
+                          }`}
+                        />
+                      ) : (
+                        <p className="px-4 py-3 bg-gray-50 rounded-lg font-medium text-gray-900">
+                          {profileData?.firstName}
+                        </p>
+                      )}
+                      {errors.firstName && (
+                        <p className="text-red-500 text-sm mt-1">
+                          {errors.firstName.message}
+                        </p>
+                      )}
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        Nom *
+                      </label>
+                      {isEditing ? (
+                        <input
+                          type="text"
+                          {...register("lastName")}
+                          className={`w-full px-4 py-3 border-2 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all ${
+                            errors.lastName
+                              ? "border-red-500"
+                              : "border-gray-300"
+                          }`}
+                        />
+                      ) : (
+                        <p className="px-4 py-3 bg-gray-50 rounded-lg font-medium text-gray-900">
+                          {profileData?.lastName}
+                        </p>
+                      )}
+                      {errors.lastName && (
+                        <p className="text-red-500 text-sm mt-1">
+                          {errors.lastName.message}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Prénom *
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      <Mail className="inline w-4 h-4 mr-2" />
+                      Email
+                    </label>
+                    <div className="px-4 py-3 bg-gray-100 rounded-lg border-2 border-gray-200">
+                      <p className="text-gray-700 font-medium">
+                        {profileData?.email}
+                      </p>
+                      <span className="text-xs text-gray-500 block mt-1">
+                        L'email ne peut pas être modifié
+                      </span>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      <Phone className="inline w-4 h-4 mr-2" />
+                      Téléphone
                     </label>
                     {isEditing ? (
                       <input
-                        type="text"
-                        {...register("firstName")}
-                        className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent ${
-                          errors.firstName
-                            ? "border-red-500"
-                            : "border-gray-300"
-                        }`}
+                        type="tel"
+                        {...register("phone")}
+                        className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all"
+                        placeholder="06 12 34 56 78"
                       />
                     ) : (
-                      <p className="px-3 py-2 bg-gray-50 rounded-lg">
-                        {profileData?.firstName}
-                      </p>
-                    )}
-                    {errors.firstName && (
-                      <p className="text-red-500 text-sm mt-1">
-                        {errors.firstName.message}
+                      <p className="px-4 py-3 bg-gray-50 rounded-lg text-gray-900">
+                        {profileData?.phone || "Non renseigné"}
                       </p>
                     )}
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Nom *
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      <Calendar className="inline w-4 h-4 mr-2" />
+                      Date de naissance
+                    </label>
+                    {isEditing ? (
+                      <input
+                        type="date"
+                        {...register("birthDate")}
+                        className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all"
+                      />
+                    ) : (
+                      <p className="px-4 py-3 bg-gray-50 rounded-lg text-gray-900">
+                        {formatDate(profileData?.birthDate)}
+                      </p>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      <MapPin className="inline w-4 h-4 mr-2" />
+                      Ville
                     </label>
                     {isEditing ? (
                       <input
                         type="text"
-                        {...register("lastName")}
-                        className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent ${
-                          errors.lastName ? "border-red-500" : "border-gray-300"
-                        }`}
+                        {...register("locationCity")}
+                        className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all"
+                        placeholder="Paris, Lyon, Marseille..."
                       />
                     ) : (
-                      <p className="px-3 py-2 bg-gray-50 rounded-lg">
-                        {profileData?.lastName}
-                      </p>
-                    )}
-                    {errors.lastName && (
-                      <p className="text-red-500 text-sm mt-1">
-                        {errors.lastName.message}
+                      <p className="px-4 py-3 bg-gray-50 rounded-lg text-gray-900">
+                        {profileData?.locationCity || "Non renseignée"}
                       </p>
                     )}
                   </div>
                 </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    <Mail className="inline w-4 h-4 mr-1" />
-                    Email
-                  </label>
-                  <p className="px-3 py-2 bg-gray-100 rounded-lg text-gray-600">
-                    {profileData?.email}
-                    <span className="text-xs text-gray-500 block mt-1">
-                      (non modifiable)
-                    </span>
-                  </p>
-                </div>
+                {/* Section Profil football */}
+                <div className="space-y-6">
+                  <h2 className="text-2xl font-bold text-gray-900 pb-3 border-b-2 border-gray-200">
+                    Profil football
+                  </h2>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    <Phone className="inline w-4 h-4 mr-1" />
-                    Téléphone
-                  </label>
-                  {isEditing ? (
-                    <input
-                      type="tel"
-                      {...register("phone")}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                      placeholder="06 12 34 56 78"
-                    />
-                  ) : (
-                    <p className="px-3 py-2 bg-gray-50 rounded-lg">
-                      {profileData?.phone || "Non renseigné"}
-                    </p>
-                  )}
-                </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Position préférée
+                    </label>
+                    {isEditing ? (
+                      <select
+                        {...register("position")}
+                        className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all bg-white"
+                      >
+                        {positions.map((position) => (
+                          <option key={position.value} value={position.value}>
+                            {position.label}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <p className="px-4 py-3 bg-gray-50 rounded-lg text-gray-900">
+                        {getPositionLabel(profileData?.position)}
+                      </p>
+                    )}
+                  </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    <Calendar className="inline w-4 h-4 mr-1" />
-                    Date de naissance
-                  </label>
-                  {isEditing ? (
-                    <input
-                      type="date"
-                      {...register("birthDate")}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                    />
-                  ) : (
-                    <p className="px-3 py-2 bg-gray-50 rounded-lg">
-                      {formatDate(profileData?.birthDate)}
-                    </p>
-                  )}
-                </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Niveau de jeu
+                    </label>
+                    {isEditing ? (
+                      <select
+                        {...register("skillLevel")}
+                        className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all bg-white"
+                      >
+                        {skillLevels.map((level) => (
+                          <option key={level.value} value={level.value}>
+                            {level.label}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <p className="px-4 py-3 bg-gray-50 rounded-lg text-gray-900">
+                        {getSkillLevelLabel(profileData?.skillLevel)}
+                      </p>
+                    )}
+                  </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    <MapPin className="inline w-4 h-4 mr-1" />
-                    Ville
-                  </label>
-                  {isEditing ? (
-                    <input
-                      type="text"
-                      {...register("locationCity")}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                      placeholder="Paris, Lyon, Marseille..."
-                    />
-                  ) : (
-                    <p className="px-3 py-2 bg-gray-50 rounded-lg">
-                      {profileData?.locationCity || "Non renseignée"}
-                    </p>
-                  )}
-                </div>
-              </div>
-
-              {/* Informations football */}
-              <div className="space-y-6">
-                <h2 className="text-xl font-semibold text-gray-900 border-b pb-2">
-                  Profil football
-                </h2>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Position préférée
-                  </label>
-                  {isEditing ? (
-                    <select
-                      {...register("position")}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                    >
-                      {positions.map((position) => (
-                        <option key={position.value} value={position.value}>
-                          {position.label}
-                        </option>
-                      ))}
-                    </select>
-                  ) : (
-                    <p className="px-3 py-2 bg-gray-50 rounded-lg">
-                      {getPositionLabel(profileData?.position)}
-                    </p>
-                  )}
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Niveau de jeu
-                  </label>
-                  {isEditing ? (
-                    <select
-                      {...register("skillLevel")}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                    >
-                      {skillLevels.map((level) => (
-                        <option key={level.value} value={level.value}>
-                          {level.label}
-                        </option>
-                      ))}
-                    </select>
-                  ) : (
-                    <p className="px-3 py-2 bg-gray-50 rounded-lg">
-                      {getSkillLevelLabel(profileData?.skillLevel)}
-                    </p>
-                  )}
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Biographie
-                  </label>
-                  {isEditing ? (
-                    <textarea
-                      {...register("bio")}
-                      rows={6}
-                      className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent resize-none ${
-                        errors.bio ? "border-red-500" : "border-gray-300"
-                      }`}
-                      placeholder="Parlez-nous de votre parcours footballistique, vos préférences de jeu..."
-                    />
-                  ) : (
-                    <p className="px-3 py-2 bg-gray-50 rounded-lg min-h-[140px] whitespace-pre-wrap">
-                      {profileData?.bio || "Aucune biographie renseignée"}
-                    </p>
-                  )}
-                  {errors.bio && (
-                    <p className="text-red-500 text-sm mt-1">
-                      {errors.bio.message}
-                    </p>
-                  )}
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Biographie
+                    </label>
+                    {isEditing ? (
+                      <textarea
+                        {...register("bio")}
+                        rows={8}
+                        className={`w-full px-4 py-3 border-2 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent resize-none transition-all ${
+                          errors.bio ? "border-red-500" : "border-gray-300"
+                        }`}
+                        placeholder="Parlez-nous de votre parcours footballistique, vos préférences de jeu, vos expériences..."
+                      />
+                    ) : (
+                      <div className="px-4 py-3 bg-gray-50 rounded-lg min-h-[200px]">
+                        <p className="text-gray-900 whitespace-pre-wrap">
+                          {profileData?.bio || "Aucune biographie renseignée"}
+                        </p>
+                      </div>
+                    )}
+                    {errors.bio && (
+                      <p className="text-red-500 text-sm mt-1">
+                        {errors.bio.message}
+                      </p>
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
 
-            {/* Boutons d'action */}
-            {isEditing && (
-              <div className="mt-8 flex justify-end space-x-4 pt-6 border-t">
-                <button
-                  type="button"
-                  onClick={handleCancel}
-                  className="flex items-center px-4 py-2 text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
-                >
-                  <X className="w-4 h-4 mr-2" />
-                  Annuler
-                </button>
-                <button
-                  type="submit"
-                  disabled={saving}
-                  className="flex items-center px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 transition-colors"
-                >
-                  <Save className="w-4 h-4 mr-2" />
-                  {saving ? "Enregistrement..." : "Enregistrer"}
-                </button>
-              </div>
-            )}
-          </form>
+              {/* Boutons d'action */}
+              {isEditing && (
+                <div className="mt-8 flex justify-end gap-4 pt-6 border-t-2 border-gray-200">
+                  <button
+                    type="button"
+                    onClick={handleCancel}
+                    className="flex items-center gap-2 px-6 py-3 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-all font-medium"
+                  >
+                    <X className="w-5 h-5" />
+                    Annuler
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={saving}
+                    className="flex items-center gap-2 px-8 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md hover:shadow-lg font-medium"
+                  >
+                    <Save className="w-5 h-5" />
+                    {saving ? "Enregistrement..." : "Enregistrer"}
+                  </button>
+                </div>
+              )}
+            </form>
+          </div>
         </div>
       </div>
     </div>

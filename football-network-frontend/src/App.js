@@ -26,6 +26,7 @@ import PlayerInvitations from "./components/invitations/PlayerInvitations";
 import MatchValidation from "./components/matches/MatchValidation";
 import PendingValidations from "./components/matches/PendingValidations";
 import Feed from "./components/Feed";
+import { UserProfileProvider } from "./contexts/UserContext";
 
 // Composant de protection des routes
 const ProtectedRoute = ({ children }) => {
@@ -60,138 +61,140 @@ const PublicRoute = ({ children }) => {
 function App() {
   return (
     <AuthProvider>
-      <Router>
-        <div className="min-h-screen bg-gray-50">
-          <Navbar />
-          <main className="container mx-auto px-4 py-8">
-            <Routes>
-              <Route path="/" element={<Navigate to="/dashboard" />} />
-              <Route
-                path="/login"
-                element={
-                  <PublicRoute>
-                    <Login />
-                  </PublicRoute>
-                }
-              />
-              <Route
-                path="/signup"
-                element={
-                  <PublicRoute>
-                    <Signup />
-                  </PublicRoute>
-                }
-              />
-              <Route
-                path="/dashboard"
-                element={
-                  <ProtectedRoute>
-                    <Dashboard />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/profile"
-                element={
-                  <ProtectedRoute>
-                    <Profile />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/feed"
-                element={
-                  <ProtectedRoute>
-                    <Feed />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/teams"
-                element={
-                  <ProtectedRoute>
-                    <MyTeams />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/teams/:teamId"
-                element={
-                  <ProtectedRoute>
-                    <TeamDetails />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/teams/search"
-                element={
-                  <ProtectedRoute>
-                    <SearchTeams />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/invitations"
-                element={
-                  <ProtectedRoute>
-                    <Invitations />
-                  </ProtectedRoute>
-                }
-              />
-              {/* NOUVELLE ROUTE : Invitations de joueurs */}
-              <Route
-                path="/player-invitations"
-                element={
-                  <ProtectedRoute>
-                    <PlayerInvitations />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/matches"
-                element={
-                  <ProtectedRoute>
-                    <Matches />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/matches/:matchId"
-                element={
-                  <ProtectedRoute>
-                    <MatchDetails />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/matches/:matchId/validate"
-                element={
-                  <ProtectedRoute>
-                    <MatchValidation />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/pending-validations"
-                element={
-                  <ProtectedRoute>
-                    <PendingValidations />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/calendar"
-                element={
-                  <ProtectedRoute>
-                    <Calendar />
-                  </ProtectedRoute>
-                }
-              />
-            </Routes>
-          </main>
-          <Toaster position="top-right" />
-        </div>
-      </Router>
+      <UserProfileProvider>
+        <Router>
+          <div className="min-h-screen bg-gray-50">
+            <Navbar />
+            <main className="container mx-auto px-4 py-8">
+              <Routes>
+                <Route path="/" element={<Navigate to="/dashboard" />} />
+                <Route
+                  path="/login"
+                  element={
+                    <PublicRoute>
+                      <Login />
+                    </PublicRoute>
+                  }
+                />
+                <Route
+                  path="/signup"
+                  element={
+                    <PublicRoute>
+                      <Signup />
+                    </PublicRoute>
+                  }
+                />
+                <Route
+                  path="/dashboard"
+                  element={
+                    <ProtectedRoute>
+                      <Dashboard />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/profile"
+                  element={
+                    <ProtectedRoute>
+                      <Profile />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/feed"
+                  element={
+                    <ProtectedRoute>
+                      <Feed />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/teams"
+                  element={
+                    <ProtectedRoute>
+                      <MyTeams />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/teams/:teamId"
+                  element={
+                    <ProtectedRoute>
+                      <TeamDetails />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/teams/search"
+                  element={
+                    <ProtectedRoute>
+                      <SearchTeams />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/invitations"
+                  element={
+                    <ProtectedRoute>
+                      <Invitations />
+                    </ProtectedRoute>
+                  }
+                />
+                {/* NOUVELLE ROUTE : Invitations de joueurs */}
+                <Route
+                  path="/player-invitations"
+                  element={
+                    <ProtectedRoute>
+                      <PlayerInvitations />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/matches"
+                  element={
+                    <ProtectedRoute>
+                      <Matches />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/matches/:matchId"
+                  element={
+                    <ProtectedRoute>
+                      <MatchDetails />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/matches/:matchId/validate"
+                  element={
+                    <ProtectedRoute>
+                      <MatchValidation />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/pending-validations"
+                  element={
+                    <ProtectedRoute>
+                      <PendingValidations />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/calendar"
+                  element={
+                    <ProtectedRoute>
+                      <Calendar />
+                    </ProtectedRoute>
+                  }
+                />
+              </Routes>
+            </main>
+            <Toaster position="top-right" />
+          </div>
+        </Router>
+      </UserProfileProvider>
     </AuthProvider>
   );
 }
