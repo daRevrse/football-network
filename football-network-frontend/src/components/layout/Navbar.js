@@ -13,6 +13,7 @@ import {
   UserPlus,
   Wifi,
   WifiOff,
+  Hash,
 } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
 import { useNotifications } from "../../hooks/useNotifications";
@@ -28,9 +29,25 @@ const Navbar = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [pendingPlayerInvitations, setPendingPlayerInvitations] = useState(0);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [showUserDropdown, setShowUserDropdown] = useState(false);
 
   // Hook pour les notifications temps réel
   const { unreadCount, isConnected } = useNotifications();
+
+  // Fermer le dropdown utilisateur quand on clique ailleurs
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (
+        showUserDropdown &&
+        !event.target.closest(".user-dropdown-container")
+      ) {
+        setShowUserDropdown(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [showUserDropdown]);
 
   // Charger le nombre d'invitations en attente (backup)
   useEffect(() => {
@@ -76,6 +93,7 @@ const Navbar = () => {
     logout();
     setIsMenuOpen(false);
     setShowNotifications(false);
+    setShowUserDropdown(false);
   };
 
   const isActive = (path) => {
@@ -92,6 +110,11 @@ const Navbar = () => {
       path: "/teams",
       icon: Users,
       label: "Équipes",
+    },
+    {
+      path: "/feed",
+      icon: Hash,
+      label: "Le Terrain",
     },
     {
       path: "/invitations",
@@ -123,23 +146,25 @@ const Navbar = () => {
 
             {/* Navigation Desktop */}
             {user && (
-              <div className="hidden md:flex items-center space-x-6">
+              <div className="hidden md:flex items-center space-x-2">
                 {navItems.map((item) => {
                   const Icon = item.icon;
                   return (
                     <Link
                       key={item.path}
                       to={item.path}
-                      className={`flex items-center space-x-1 px-3 py-2 rounded-md text-sm font-medium transition-colors relative ${
+                      className={`flex flex-col items-center justify-center px-4 py-2 rounded-md text-xs font-medium transition-colors relative min-w-[80px] ${
                         isActive(item.path)
                           ? "text-green-600 bg-green-50"
                           : "text-gray-700 hover:text-green-600 hover:bg-gray-50"
                       }`}
                     >
-                      <Icon className="h-4 w-4" />
-                      <span>{item.label}</span>
+                      <Icon className="h-5 w-5 mb-1" />
+                      <span className="text-center leading-tight">
+                        {item.label}
+                      </span>
                       {item.badge && (
-                        <span className="absolute -top-1 -right-1 h-5 w-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center">
+                        <span className="absolute top-1 right-1 h-5 w-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center">
                           {item.badge}
                         </span>
                       )}
@@ -151,24 +176,26 @@ const Navbar = () => {
                 <div className="relative">
                   <button
                     onClick={() => setShowNotifications(!showNotifications)}
-                    className={`flex items-center space-x-1 px-3 py-2 rounded-md text-sm font-medium transition-colors relative ${
+                    className={`flex flex-col items-center justify-center px-4 py-2 rounded-md text-xs font-medium transition-colors relative min-w-[80px] ${
                       showNotifications
                         ? "text-blue-600 bg-blue-50"
                         : "text-gray-700 hover:text-blue-600 hover:bg-blue-50"
                     }`}
                   >
-                    <Bell className="h-4 w-4" />
-                    <span className="hidden lg:inline">Notifications</span>
+                    <Bell className="h-5 w-5 mb-1" />
+                    <span className="text-center leading-tight hidden lg:inline">
+                      Notifications
+                    </span>
 
                     {/* Badge notifications */}
                     {unreadCount > 0 && (
-                      <span className="absolute -top-1 -right-1 h-5 w-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center">
+                      <span className="absolute top-1 right-1 h-5 w-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center">
                         {unreadCount > 99 ? "99+" : unreadCount}
                       </span>
                     )}
 
                     {/* Indicateur de connexion */}
-                    <div className="absolute -bottom-1 -right-1">
+                    <div className="absolute bottom-1 right-1">
                       {isConnected ? (
                         <Wifi className="h-3 w-3 text-green-500" />
                       ) : (
@@ -178,28 +205,120 @@ const Navbar = () => {
                   </button>
                 </div>
 
-                {/* Menu utilisateur */}
-                <div className="flex items-center space-x-4 ml-6 pl-6 border-l border-gray-200">
-                  <Link
-                    to="/profile"
-                    className={`flex items-center space-x-2 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-                      isActive("/profile")
-                        ? "text-green-600 bg-green-50"
-                        : "text-gray-700 hover:text-green-600 hover:bg-gray-50"
+                {/* Menu utilisateur dropdown */}
+                <div className="relative ml-4 pl-4 border-l border-gray-200 user-dropdown-container">
+                  <button
+                    onClick={() => setShowUserDropdown(!showUserDropdown)}
+                    className={`flex items-center space-x-3 px-3 py-2 rounded-lg transition-all duration-200 ${
+                      showUserDropdown
+                        ? "bg-green-50 ring-2 ring-green-500 ring-opacity-50"
+                        : "hover:bg-gray-50"
                     }`}
                   >
-                    <User className="h-4 w-4" />
-                    <span>
-                      {user.firstName} {user.lastName}
-                    </span>
-                  </Link>
-                  <button
-                    onClick={handleLogout}
-                    className="flex items-center space-x-1 px-3 py-2 text-gray-700 hover:text-red-600 hover:bg-red-50 rounded-md text-sm font-medium transition-colors"
-                  >
-                    <LogOut className="h-4 w-4" />
-                    <span>Déconnexion</span>
+                    <div className="w-9 h-9 rounded-full bg-gradient-to-br from-green-500 to-green-600 flex items-center justify-center text-white font-bold text-sm shadow-md">
+                      {user.firstName?.charAt(0).toUpperCase()}
+                      {user.lastName?.charAt(0).toUpperCase()}
+                    </div>
+                    <div className="hidden xl:block text-left">
+                      <p className="text-sm font-semibold text-gray-900 leading-tight">
+                        {user.firstName} {user.lastName}
+                      </p>
+                      <p className="text-xs text-gray-500">Mon compte</p>
+                    </div>
+                    <svg
+                      className={`w-4 h-4 text-gray-500 transition-transform duration-200 hidden xl:block ${
+                        showUserDropdown ? "rotate-180" : ""
+                      }`}
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M19 9l-7 7-7-7"
+                      />
+                    </svg>
                   </button>
+
+                  {/* Dropdown menu */}
+                  {showUserDropdown && (
+                    <>
+                      {/* Overlay pour fermer en cliquant à l'extérieur */}
+                      <div
+                        className="fixed inset-0 z-40"
+                        onClick={() => setShowUserDropdown(false)}
+                      ></div>
+
+                      <div className="absolute right-0 mt-3 w-72 bg-white rounded-xl shadow-2xl border border-gray-100 overflow-hidden z-50 animate-in fade-in slide-in-from-top-2 duration-200">
+                        {/* Header du dropdown */}
+                        <div className="px-5 py-4 bg-gradient-to-br from-green-50 to-blue-50 border-b border-gray-100">
+                          <div className="flex items-center space-x-3">
+                            <div className="w-12 h-12 rounded-full bg-gradient-to-br from-green-500 to-green-600 flex items-center justify-center text-white font-bold text-lg shadow-lg ring-4 ring-white">
+                              {user.firstName?.charAt(0).toUpperCase()}
+                              {user.lastName?.charAt(0).toUpperCase()}
+                            </div>
+                            <div className="flex-1">
+                              <p className="text-base font-bold text-gray-900">
+                                {user.firstName} {user.lastName}
+                              </p>
+                              <p className="text-xs text-gray-600 mt-0.5">
+                                {user.email}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Menu items */}
+                        <div className="py-2">
+                          <Link
+                            to="/profile"
+                            onClick={() => setShowUserDropdown(false)}
+                            className={`flex items-center space-x-3 px-5 py-3 text-sm transition-all duration-150 group ${
+                              isActive("/profile")
+                                ? "text-green-600 bg-green-50 border-l-4 border-green-600"
+                                : "text-gray-700 hover:bg-gray-50 border-l-4 border-transparent hover:border-green-400"
+                            }`}
+                          >
+                            <div
+                              className={`p-2 rounded-lg ${
+                                isActive("/profile")
+                                  ? "bg-green-100"
+                                  : "bg-gray-100 group-hover:bg-green-100"
+                              }`}
+                            >
+                              <User className="h-4 w-4" />
+                            </div>
+                            <div className="flex-1">
+                              <p className="font-medium">Mon Profil</p>
+                              <p className="text-xs text-gray-500">
+                                Gérer mes informations
+                              </p>
+                            </div>
+                          </Link>
+                        </div>
+
+                        {/* Footer avec déconnexion */}
+                        <div className="border-t border-gray-100 bg-gray-50 p-2">
+                          <button
+                            onClick={handleLogout}
+                            className="w-full flex items-center space-x-3 px-5 py-3 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-all duration-150 group"
+                          >
+                            <div className="p-2 rounded-lg bg-red-50 group-hover:bg-red-100">
+                              <LogOut className="h-4 w-4" />
+                            </div>
+                            <div className="flex-1 text-left">
+                              <p className="font-medium">Déconnexion</p>
+                              <p className="text-xs text-red-500">
+                                Quitter mon compte
+                              </p>
+                            </div>
+                          </button>
+                        </div>
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
             )}

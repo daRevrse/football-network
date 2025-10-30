@@ -25,6 +25,7 @@ import TeamDetails from "./components/teams/TeamDetails";
 import PlayerInvitations from "./components/invitations/PlayerInvitations";
 import MatchValidation from "./components/matches/MatchValidation";
 import PendingValidations from "./components/matches/PendingValidations";
+import Feed from "./components/Feed";
 
 // Composant de protection des routes
 const ProtectedRoute = ({ children }) => {
@@ -94,6 +95,14 @@ function App() {
                 element={
                   <ProtectedRoute>
                     <Profile />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/feed"
+                element={
+                  <ProtectedRoute>
+                    <Feed />
                   </ProtectedRoute>
                 }
               />
