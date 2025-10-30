@@ -49,6 +49,7 @@ const MyTeams = () => {
       setLoading(true);
       const response = await axios.get(`${API_BASE_URL}/teams/my`);
       setTeams(response.data);
+      console.log("response.data", response.data);
     } catch (error) {
       toast.error("Erreur lors du chargement des équipes");
       console.error("Load teams error:", error);

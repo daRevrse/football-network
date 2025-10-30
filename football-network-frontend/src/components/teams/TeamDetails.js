@@ -210,9 +210,9 @@ const TeamDetails = () => {
             <div className="flex items-end space-x-6">
               {/* Logo */}
               <div className="relative">
-                {team.logo_id ? (
+                {team.logoUrl ? (
                   <img
-                    src={`${API_BASE_URL}/uploads/teams/${team.logo_id}`}
+                    src={`${API_BASE_URL.replace("/api", "")}${team.logoUrl}`}
                     alt="Logo"
                     className="w-32 h-32 rounded-full border-4 border-white shadow-lg object-cover bg-white"
                   />

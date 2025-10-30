@@ -154,9 +154,9 @@ const TeamCard = ({ team, onLeaveTeam, isOwner, onEditTeam, onDeleteTeam }) => {
         <div className="absolute -bottom-10 left-6 right-6">
           <div className="flex items-end space-x-4">
             {/* Logo de l'équipe */}
-            {team.logo_id ? (
+            {team.logoUrl ? (
               <img
-                src={`${API_BASE_URL}/uploads/teams/${team.logo_id}`}
+                src={`${API_BASE_URL.replace("/api", "")}${team.logoUrl}`}
                 alt={team.name}
                 className="w-20 h-20 rounded-full border-4 border-white shadow-lg object-cover bg-white"
               />

@@ -196,20 +196,83 @@ router.get("/", authenticateToken, async (req, res) => {
 });
 
 // GET /api/teams/my - Récupérer les équipes de l'utilisateur
+// router.get("/my", authenticateToken, async (req, res) => {
+//   try {
+//     const [teams] = await db.execute(
+//       `SELECT t.id, t.name, t.description, t.skill_level, t.max_players,
+//               t.location_city, t.created_at,
+//               tm.role,
+//               COUNT(tm2.user_id) as current_players,
+//               ts.matches_played, ts.matches_won, ts.average_rating
+//        FROM teams t
+//        JOIN team_members tm ON t.id = tm.team_id
+//        LEFT JOIN team_members tm2 ON t.id = tm2.team_id AND tm2.is_active = true
+//        LEFT JOIN team_stats ts ON t.id = ts.team_id
+//        WHERE tm.user_id = ? AND tm.is_active = true AND t.is_active = true
+//        GROUP BY t.id, tm.role, ts.matches_played, ts.matches_won, ts.average_rating
+//        ORDER BY tm.role DESC, t.created_at DESC`,
+//       [req.user.id]
+//     );
+
+//     const formattedTeams = teams.map((team) => ({
+//       id: team.id,
+//       name: team.name,
+//       description: team.description,
+//       skillLevel: team.skill_level,
+//       maxPlayers: team.max_players,
+//       currentPlayers: team.current_players,
+//       locationCity: team.location_city,
+//       role: team.role,
+//       stats: {
+//         matchesPlayed: team.matches_played || 0,
+//         matchesWon: team.matches_won || 0,
+//         averageRating: team.average_rating || 0,
+//       },
+//       createdAt: team.created_at,
+//     }));
+
+//     res.json(formattedTeams);
+//   } catch (error) {
+//     console.error("Get my teams error:", error);
+//     res.status(500).json({ error: "Internal server error" });
+//   }
+// });
+// GET /api/teams/my - Récupérer les équipes de l'utilisateur (avec logo)
 router.get("/my", authenticateToken, async (req, res) => {
   try {
     const [teams] = await db.execute(
-      `SELECT t.id, t.name, t.description, t.skill_level, t.max_players,
-              t.location_city, t.created_at,
-              tm.role,
-              COUNT(tm2.user_id) as current_players,
-              ts.matches_played, ts.matches_won, ts.average_rating
+      `SELECT 
+          t.id, 
+          t.name, 
+          t.description, 
+          t.skill_level, 
+          t.max_players,
+          t.location_city, 
+          t.created_at,
+          t.logo_id,
+          up.stored_filename AS logo_filename,
+          up.file_path AS logo_path,
+          tm.role,
+          COUNT(tm2.user_id) AS current_players,
+          ts.matches_played, 
+          ts.matches_won, 
+          ts.average_rating
        FROM teams t
        JOIN team_members tm ON t.id = tm.team_id
        LEFT JOIN team_members tm2 ON t.id = tm2.team_id AND tm2.is_active = true
        LEFT JOIN team_stats ts ON t.id = ts.team_id
-       WHERE tm.user_id = ? AND tm.is_active = true AND t.is_active = true
-       GROUP BY t.id, tm.role, ts.matches_played, ts.matches_won, ts.average_rating
+       LEFT JOIN uploads up ON t.logo_id = up.id AND up.is_active = true
+       WHERE tm.user_id = ? 
+         AND tm.is_active = true 
+         AND t.is_active = true
+       GROUP BY 
+         t.id, 
+         tm.role, 
+         ts.matches_played, 
+         ts.matches_won, 
+         ts.average_rating, 
+         up.stored_filename, 
+         up.file_path
        ORDER BY tm.role DESC, t.created_at DESC`,
       [req.user.id]
     );
@@ -223,6 +286,9 @@ router.get("/my", authenticateToken, async (req, res) => {
       currentPlayers: team.current_players,
       locationCity: team.location_city,
       role: team.role,
+      logoUrl: team.logo_filename
+        ? `/uploads/teams/${team.logo_filename}`
+        : null,
       stats: {
         matchesPlayed: team.matches_played || 0,
         matchesWon: team.matches_won || 0,
@@ -238,22 +304,109 @@ router.get("/my", authenticateToken, async (req, res) => {
   }
 });
 
-// GET /api/teams/:id - Récupérer les détails d'une équipe
+// // GET /api/teams/:id - Récupérer les détails d'une équipe
+// router.get("/:id", authenticateToken, async (req, res) => {
+//   try {
+//     const teamId = req.params.id;
+
+//     // Récupérer les informations de l'équipe
+//     const [teams] = await db.execute(
+//       `SELECT t.id, t.name, t.description, t.skill_level, t.max_players,
+//               t.location_city, t.location_lat, t.location_lng, t.created_at,
+//               u.id as captain_id, u.first_name as captain_first_name,
+//               u.last_name as captain_last_name, u.email as captain_email,
+//               ts.matches_played, ts.matches_won, ts.matches_drawn, ts.matches_lost,
+//               ts.goals_scored, ts.goals_conceded, ts.average_rating
+//        FROM teams t
+//        JOIN users u ON t.captain_id = u.id
+//        LEFT JOIN team_stats ts ON t.id = ts.team_id
+//        WHERE t.id = ? AND t.is_active = true`,
+//       [teamId]
+//     );
+
+//     if (teams.length === 0) {
+//       return res.status(404).json({ error: "Team not found" });
+//     }
+
+//     const team = teams[0];
+
+//     // Récupérer les membres de l'équipe
+//     const [members] = await db.execute(
+//       `SELECT u.id, u.first_name, u.last_name, u.position, u.skill_level,
+//               tm.role, tm.joined_at
+//        FROM team_members tm
+//        JOIN users u ON tm.user_id = u.id
+//        WHERE tm.team_id = ? AND tm.is_active = true
+//        ORDER BY tm.role DESC, tm.joined_at ASC`,
+//       [teamId]
+//     );
+
+//     // Vérifier si l'utilisateur fait partie de l'équipe
+//     const userMembership = members.find((member) => member.id === req.user.id);
+
+//     res.json({
+//       id: team.id,
+//       name: team.name,
+//       description: team.description,
+//       skillLevel: team.skill_level,
+//       maxPlayers: team.max_players,
+//       currentPlayers: members.length,
+//       locationCity: team.location_city,
+//       coordinates: {
+//         lat: team.location_lat,
+//         lng: team.location_lng,
+//       },
+//       captain: {
+//         id: team.captain_id,
+//         firstName: team.captain_first_name,
+//         lastName: team.captain_last_name,
+//         email: team.captain_email,
+//       },
+//       members: members.map((member) => ({
+//         id: member.id,
+//         firstName: member.first_name,
+//         lastName: member.last_name,
+//         position: member.position,
+//         skillLevel: member.skill_level,
+//         role: member.role,
+//         joinedAt: member.joined_at,
+//       })),
+//       stats: {
+//         matchesPlayed: team.matches_played || 0,
+//         matchesWon: team.matches_won || 0,
+//         matchesDrawn: team.matches_drawn || 0,
+//         matchesLost: team.matches_lost || 0,
+//         goalsScored: team.goals_scored || 0,
+//         goalsConceded: team.goals_conceded || 0,
+//         averageRating: team.average_rating || 0,
+//       },
+//       userRole: userMembership?.role || null,
+//       createdAt: team.created_at,
+//     });
+//   } catch (error) {
+//     console.error("Get team details error:", error);
+//     res.status(500).json({ error: "Internal server error" });
+//   }
+// });
+// GET /api/teams/:id - Récupérer les détails d'une équipe avec logo
 router.get("/:id", authenticateToken, async (req, res) => {
   try {
     const teamId = req.params.id;
 
-    // Récupérer les informations de l'équipe
+    // Récupérer les informations de l'équipe + logo
     const [teams] = await db.execute(
       `SELECT t.id, t.name, t.description, t.skill_level, t.max_players,
               t.location_city, t.location_lat, t.location_lng, t.created_at,
+              t.logo_id,
               u.id as captain_id, u.first_name as captain_first_name, 
               u.last_name as captain_last_name, u.email as captain_email,
               ts.matches_played, ts.matches_won, ts.matches_drawn, ts.matches_lost,
-              ts.goals_scored, ts.goals_conceded, ts.average_rating
+              ts.goals_scored, ts.goals_conceded, ts.average_rating,
+              up.stored_filename as logo_filename, up.file_path as logo_path
        FROM teams t
        JOIN users u ON t.captain_id = u.id
        LEFT JOIN team_stats ts ON t.id = ts.team_id
+       LEFT JOIN uploads up ON t.logo_id = up.id AND up.is_active = true
        WHERE t.id = ? AND t.is_active = true`,
       [teamId]
     );
@@ -263,6 +416,11 @@ router.get("/:id", authenticateToken, async (req, res) => {
     }
 
     const team = teams[0];
+
+    // Construire l'URL du logo (comme pour users.js)
+    const logoUrl = team.logo_filename
+      ? `/uploads/teams/${team.logo_filename}`
+      : null;
 
     // Récupérer les membres de l'équipe
     const [members] = await db.execute(
@@ -278,6 +436,7 @@ router.get("/:id", authenticateToken, async (req, res) => {
     // Vérifier si l'utilisateur fait partie de l'équipe
     const userMembership = members.find((member) => member.id === req.user.id);
 
+    // Réponse finale formatée
     res.json({
       id: team.id,
       name: team.name,
@@ -296,6 +455,7 @@ router.get("/:id", authenticateToken, async (req, res) => {
         lastName: team.captain_last_name,
         email: team.captain_email,
       },
+      logoUrl, // ✅ ajouté ici
       members: members.map((member) => ({
         id: member.id,
         firstName: member.first_name,
