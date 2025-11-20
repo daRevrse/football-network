@@ -1,13 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
-import {
-  Search,
-  Filter,
-  MapPin,
-  Users,
-  Star,
-  UserPlus,
-  Map,
-} from "lucide-react";
+import { Search, Filter, MapPin, Globe, SlidersHorizontal } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
 import toast from "react-hot-toast";
 import axios from "axios";
@@ -39,11 +31,9 @@ const SearchTeams = () => {
     offset: 0,
   });
 
-  // Pagination
-  const [currentPage, setCurrentPage] = useState(1);
   const [hasMoreResults, setHasMoreResults] = useState(true);
 
-  // Debounce pour la recherche en temps réel
+  // Debounce pour la recherche
   const debouncedSearch = useCallback(
     debounce((searchFilters) => {
       searchTeams(searchFilters, true);
@@ -52,10 +42,9 @@ const SearchTeams = () => {
   );
 
   useEffect(() => {
-    // Recherche initiale avec filtres par défaut
     searchTeams(filters, true);
 
-    // Demander la géolocalisation si le navigateur le supporte
+    // Géolocalisation
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (position) => {
@@ -65,19 +54,17 @@ const SearchTeams = () => {
             userLng: position.coords.longitude,
           }));
         },
-        (error) => {
-          console.log("Geolocation not available:", error);
-        }
+        (error) => console.log("Geo error:", error)
       );
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Effect pour la recherche automatique quand les filtres changent
   useEffect(() => {
     if (hasSearched) {
       debouncedSearch({ ...filters, offset: 0 });
-      setCurrentPage(1);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     filters.search,
     filters.skillLevel,
@@ -89,21 +76,13 @@ const SearchTeams = () => {
   const searchTeams = async (searchFilters = filters, resetResults = false) => {
     try {
       setLoading(true);
-      if (resetResults) {
-        setTeams([]);
-      }
-
       const params = new URLSearchParams();
 
       if (searchFilters.search) params.append("search", searchFilters.search);
       if (searchFilters.skillLevel)
         params.append("skillLevel", searchFilters.skillLevel);
       if (searchFilters.city) params.append("city", searchFilters.city);
-      if (
-        searchFilters.useLocation &&
-        searchFilters.userLat &&
-        searchFilters.userLng
-      ) {
+      if (searchFilters.useLocation && searchFilters.userLat) {
         params.append("lat", searchFilters.userLat);
         params.append("lng", searchFilters.userLng);
         params.append("radius", searchFilters.radius);
@@ -111,19 +90,14 @@ const SearchTeams = () => {
       params.append("limit", searchFilters.limit);
       params.append("offset", searchFilters.offset);
 
-      // Récupérer les équipes de recherche et les équipes de l'utilisateur en parallèle
       const [searchResponse, myTeamsResponse] = await Promise.all([
         axios.get(`${API_BASE_URL}/teams?${params}`),
         axios.get(`${API_BASE_URL}/teams/my`),
       ]);
 
       const searchResults = searchResponse.data;
-      const myTeamIds = new Set(myTeamsResponse.data.map((team) => team.id));
-
-      // Filtrer les équipes où l'utilisateur est déjà membre
-      const filteredTeams = searchResults.filter(
-        (team) => !myTeamIds.has(team.id)
-      );
+      const myTeamIds = new Set(myTeamsResponse.data.map((t) => t.id));
+      const filteredTeams = searchResults.filter((t) => !myTeamIds.has(t.id));
 
       if (resetResults) {
         setTeams(filteredTeams);
@@ -139,144 +113,121 @@ const SearchTeams = () => {
       );
       setHasSearched(true);
     } catch (error) {
-      toast.error("Erreur lors de la recherche");
-      console.error("Search teams error:", error);
+      toast.error("Erreur recherche");
     } finally {
       setLoading(false);
     }
   };
 
-  const handleFilterChange = (newFilters) => {
-    setFilters((prev) => ({
-      ...prev,
-      ...newFilters,
-      offset: 0,
-    }));
-    setCurrentPage(1);
+  const handleJoinTeam = async (teamId, teamName) => {
+    if (!window.confirm(`Rejoindre "${teamName}" ?`)) return;
+    try {
+      await axios.post(`${API_BASE_URL}/teams/${teamId}/join`);
+      toast.success("Demande envoyée !");
+      setTeams((prev) => prev.filter((t) => t.id !== teamId));
+      setTotalResults((prev) => prev - 1);
+    } catch (error) {
+      toast.error(error.response?.data?.error || "Erreur adhésion");
+    }
   };
 
   const handleLoadMore = () => {
-    const newOffset = currentPage * filters.limit;
+    const newOffset = filters.offset + filters.limit;
     setFilters((prev) => ({ ...prev, offset: newOffset }));
-    setCurrentPage((prev) => prev + 1);
     searchTeams({ ...filters, offset: newOffset }, false);
   };
 
-  const handleJoinTeam = async (teamId, teamName) => {
-    if (!window.confirm(`Voulez-vous rejoindre l'équipe "${teamName}" ?`)) {
-      return;
-    }
-
-    try {
-      await axios.post(`${API_BASE_URL}/teams/${teamId}/join`);
-      toast.success("Vous avez rejoint l'équipe !");
-
-      // Retirer l'équipe de la liste des résultats
-      setTeams((prev) => prev.filter((team) => team.id !== teamId));
-      setTotalResults((prev) => prev - 1);
-    } catch (error) {
-      const errorMessage =
-        error.response?.data?.error || "Erreur lors de l'inscription";
-
-      if (errorMessage.includes("Already a member")) {
-        toast.error("Vous êtes déjà membre de cette équipe");
-        // Retirer l'équipe de la liste car l'utilisateur en est déjà membre
-        setTeams((prev) => prev.filter((team) => team.id !== teamId));
-        setTotalResults((prev) => prev - 1);
-      } else {
-        toast.error(errorMessage);
-      }
-    }
-  };
-
   return (
-    <div className="max-w-7xl mx-auto">
-      {/* Header avec barre de recherche */}
-      <div className="bg-white rounded-lg shadow-md p-6 mb-8">
-        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">
-              Rechercher des équipes
-            </h1>
-            <p className="text-gray-600 mt-1">
-              Trouvez des équipes à rejoindre près de chez vous
-            </p>
+    <div className="max-w-7xl mx-auto space-y-8 pb-12">
+      {/* Hero Header */}
+      <div className="relative bg-gradient-to-br from-indigo-900 via-purple-900 to-slate-900 rounded-3xl p-8 md:p-12 overflow-hidden shadow-2xl text-center">
+        <div className="absolute top-0 left-0 w-full h-full bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10"></div>
+        <div className="relative z-10 max-w-2xl mx-auto">
+          <div className="inline-flex items-center justify-center p-3 bg-white/10 backdrop-blur-md rounded-2xl mb-6 shadow-inner">
+            <Globe className="w-8 h-8 text-blue-300" />
           </div>
+          <h1 className="text-3xl md:text-4xl font-bold text-white mb-4">
+            Trouvez votre prochaine équipe
+          </h1>
+          <p className="text-indigo-200 text-lg mb-8">
+            Rejoignez une communauté de passionnés et participez aux meilleurs
+            matchs de votre région.
+          </p>
 
-          {/* Barre de recherche */}
-          <div className="relative lg:w-96">
-            <Search className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
+          {/* Barre de recherche centrale */}
+          <div className="relative max-w-xl mx-auto">
             <input
               type="text"
               value={filters.search}
               onChange={(e) =>
                 setFilters((prev) => ({ ...prev, search: e.target.value }))
               }
-              className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-              placeholder="Rechercher par nom d'équipe..."
+              className="w-full pl-12 pr-4 py-4 bg-white rounded-xl shadow-lg text-gray-900 placeholder-gray-400 focus:ring-4 focus:ring-indigo-500/30 outline-none transition-all text-lg"
+              placeholder="Rechercher par nom, ville..."
             />
+            <Search className="absolute left-4 bottom-4 h-6 w-6 text-indigo-500" />
           </div>
-        </div>
-
-        {/* Bouton filtres et résultats */}
-        <div className="flex items-center justify-between mt-4 pt-4 border-t">
-          <button
-            onClick={() => setShowFilters(!showFilters)}
-            className={`flex items-center px-4 py-2 rounded-lg transition-colors ${
-              showFilters
-                ? "bg-green-100 text-green-700"
-                : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-            }`}
-          >
-            <Filter className="w-4 h-4 mr-2" />
-            Filtres avancés
-          </button>
-
-          {hasSearched && (
-            <p className="text-gray-600">
-              {totalResults} équipe{totalResults !== 1 ? "s" : ""} trouvée
-              {totalResults !== 1 ? "s" : ""}
-            </p>
-          )}
         </div>
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-4 gap-8">
-        {/* Panneau des filtres */}
-        {showFilters && (
-          <div className="xl:col-span-1">
+      <div className="grid grid-cols-1 xl:grid-cols-4 gap-8 px-4 md:px-0">
+        {/* Sidebar Filters */}
+        <div
+          className={`xl:col-span-1 ${
+            showFilters ? "block" : "hidden xl:block"
+          }`}
+        >
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 sticky top-24">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="font-bold text-gray-900 flex items-center">
+                <SlidersHorizontal className="w-5 h-5 mr-2" /> Filtres
+              </h3>
+              <button
+                onClick={() =>
+                  setFilters({
+                    ...filters,
+                    skillLevel: "",
+                    city: "",
+                    useLocation: false,
+                  })
+                }
+                className="text-xs text-indigo-600 hover:underline font-medium"
+              >
+                Réinitialiser
+              </button>
+            </div>
             <SearchFilters
               filters={filters}
-              onFilterChange={handleFilterChange}
-              onSearch={() => searchTeams({ ...filters, offset: 0 }, true)}
-              loading={loading}
+              onFilterChange={(newFilters) =>
+                setFilters((prev) => ({ ...prev, ...newFilters }))
+              }
             />
           </div>
-        )}
+        </div>
 
-        {/* Résultats */}
-        <div className={`${showFilters ? "xl:col-span-3" : "xl:col-span-4"}`}>
-          {!hasSearched && !loading ? (
-            <div className="text-center py-12 bg-white rounded-lg shadow-md">
-              <Search className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-              <h3 className="text-xl font-semibold text-gray-900 mb-2">
-                Recherchez des équipes à rejoindre
-              </h3>
-              <p className="text-gray-600">
-                Utilisez la barre de recherche ou les filtres pour trouver des
-                équipes
-              </p>
-            </div>
-          ) : (
-            <SearchResults
-              teams={teams}
-              loading={loading}
-              onJoinTeam={handleJoinTeam}
-              onLoadMore={handleLoadMore}
-              hasMoreResults={hasMoreResults}
-              showLoadMore={teams.length > 0 && hasMoreResults && !loading}
-            />
-          )}
+        {/* Results Grid */}
+        <div className="xl:col-span-3">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="font-bold text-gray-800 text-lg">
+              {totalResults > 0
+                ? `${totalResults} équipes trouvées`
+                : "Résultats"}
+            </h2>
+            <button
+              onClick={() => setShowFilters(!showFilters)}
+              className="xl:hidden flex items-center px-4 py-2 bg-white border border-gray-200 rounded-lg text-gray-700 shadow-sm"
+            >
+              <Filter className="w-4 h-4 mr-2" /> Filtres
+            </button>
+          </div>
+
+          <SearchResults
+            teams={teams}
+            loading={loading}
+            onJoinTeam={handleJoinTeam}
+            onLoadMore={handleLoadMore}
+            hasMore={hasMoreResults}
+          />
         </div>
       </div>
     </div>

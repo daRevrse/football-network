@@ -1,22 +1,17 @@
-// ====================================================================
-// Mise à jour du Dashboard pour afficher les validations en attente
-// football-network-frontend/src/components/Dashboard.js
-// ====================================================================
-
 import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import {
-  User,
   Users,
   Calendar,
   MessageSquare,
   Search,
-  Trophy,
-  CalendarIcon,
   UserPlus,
   Bell,
-  CheckCircle, // NOUVEAU
+  CheckCircle,
+  PlusCircle,
+  ArrowRight,
+  Trophy,
 } from "lucide-react";
 import axios from "axios";
 
@@ -26,11 +21,10 @@ const API_BASE_URL =
 const Dashboard = () => {
   const { user } = useAuth();
   const [stats, setStats] = useState({
-    pendingPlayerInvitations: 0,
-    pendingMatchInvitations: 0,
-    pendingValidations: 0, // NOUVEAU
-    teamsCount: 0,
-    matchesCount: 0,
+    playerInvites: 0,
+    matchInvites: 0,
+    validations: 0,
+    teams: 0,
   });
   const [loading, setLoading] = useState(true);
 
@@ -42,231 +36,208 @@ const Dashboard = () => {
     try {
       setLoading(true);
 
-      // Charger les invitations de joueurs
-      const playerInvitationsResponse = await axios.get(
-        `${API_BASE_URL}/player-invitations?status=pending&limit=50`
-      );
-
-      const pendingPlayerInvitations = playerInvitationsResponse.data.filter(
-        (inv) => inv.status === "pending"
-      ).length;
-
-      // Charger les invitations de matchs
-      let matchInvitationsCount = 0;
-      try {
-        const matchInvitationsResponse = await axios.get(
-          `${API_BASE_URL}/matches/invitations/received?status=pending&limit=1`
-        );
-        matchInvitationsCount = matchInvitationsResponse.data.length;
-      } catch (error) {
-        console.log("No match invitations");
-      }
-
-      // NOUVEAU : Charger les validations en attente
-      let pendingValidationsCount = 0;
-      try {
-        const validationsResponse = await axios.get(
-          `${API_BASE_URL}/matches/pending-validation/list`
-        );
-        pendingValidationsCount = validationsResponse.data.count || 0;
-      } catch (error) {
-        console.log("Error loading pending validations:", error);
-      }
-
-      // Charger les équipes
-      const teamsResponse = await axios.get(`${API_BASE_URL}/teams/my`);
+      // Promise.all pour charger toutes les stats en parallèle
+      const [playerInvites, matchInvites, validations, teams] =
+        await Promise.allSettled([
+          axios
+            .get(`${API_BASE_URL}/player-invitations?status=pending`)
+            .then(
+              (res) => res.data.filter((i) => i.status === "pending").length
+            ),
+          axios
+            .get(`${API_BASE_URL}/matches/invitations/received?status=pending`)
+            .then((res) => res.data.length),
+          axios
+            .get(`${API_BASE_URL}/matches/pending-validation/list`)
+            .then((res) => res.data.count || 0),
+          axios.get(`${API_BASE_URL}/teams/my`).then((res) => res.data.length),
+        ]);
 
       setStats({
-        pendingPlayerInvitations: pendingPlayerInvitations,
-        pendingMatchInvitations: matchInvitationsCount,
-        pendingValidations: pendingValidationsCount, // NOUVEAU
-        teamsCount: teamsResponse.data.length,
-        matchesCount: 0,
+        playerInvites:
+          playerInvites.status === "fulfilled" ? playerInvites.value : 0,
+        matchInvites:
+          matchInvites.status === "fulfilled" ? matchInvites.value : 0,
+        validations: validations.status === "fulfilled" ? validations.value : 0,
+        teams: teams.status === "fulfilled" ? teams.value : 0,
       });
     } catch (error) {
-      console.error("Error loading dashboard stats:", error);
+      console.error("Error loading dashboard:", error);
     } finally {
       setLoading(false);
     }
   };
 
-  return (
-    <div className="max-w-6xl mx-auto">
-      <div className="bg-white rounded-lg shadow-md p-8 mb-8">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">
-          Bienvenue, {user?.firstName} !
-        </h1>
-        <p className="text-gray-600 mb-6">
-          Gérez vos équipes, organisez des matchs et restez connecté avec la
-          communauté football.
+  const ActionCard = ({ to, icon: Icon, title, desc, color, count }) => (
+    <Link
+      to={to}
+      className="group relative bg-white p-6 rounded-2xl shadow-sm border border-gray-100 hover:shadow-md hover:border-gray-200 transition-all duration-200 flex flex-col h-full"
+    >
+      <div
+        className={`w-12 h-12 rounded-xl ${color} flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-200`}
+      >
+        <Icon className="w-6 h-6 text-white" />
+      </div>
+      <h3 className="text-lg font-bold text-gray-900 mb-1 flex items-center justify-between">
+        {title}
+        {count > 0 && (
+          <span className="bg-red-500 text-white text-xs px-2 py-1 rounded-full animate-pulse">
+            {count}
+          </span>
+        )}
+      </h3>
+      <p className="text-sm text-gray-500 mb-4 flex-1">{desc}</p>
+      <div className="flex items-center text-sm font-semibold text-gray-400 group-hover:text-gray-900 transition-colors">
+        Accéder{" "}
+        <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
+      </div>
+    </Link>
+  );
+
+  const StatCard = ({ label, value, icon: Icon, color }) => (
+    <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex items-center space-x-4">
+      <div className={`p-3 rounded-lg ${color} bg-opacity-10`}>
+        <Icon className={`w-6 h-6 ${color.replace("bg-", "text-")}`} />
+      </div>
+      <div>
+        <p className="text-sm text-gray-500">{label}</p>
+        <p className="text-2xl font-bold text-gray-900">
+          {loading ? "-" : value}
         </p>
+      </div>
+    </div>
+  );
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          <Link
-            to="/profile"
-            className="bg-blue-50 p-6 rounded-lg hover:bg-blue-100 transition-colors"
-          >
-            <div className="flex items-center mb-3">
-              <User className="w-8 h-8 text-blue-600 mr-3" />
-              <h3 className="text-lg font-semibold text-blue-800">
-                Mon Profil
-              </h3>
-            </div>
-            <p className="text-blue-600">
-              Gérez vos informations personnelles et préférences
-            </p>
-          </Link>
-
-          <Link
-            to="/teams"
-            className="bg-green-50 p-6 rounded-lg hover:bg-green-100 transition-colors"
-          >
-            <div className="flex items-center mb-3">
-              <Users className="w-8 h-8 text-green-600 mr-3" />
-              <h3 className="text-lg font-semibold text-green-800">
-                Mes Équipes
-              </h3>
-            </div>
-            <p className="text-green-600">Créez et gérez vos équipes</p>
-          </Link>
-
-          <Link
-            to="/teams/search"
-            className="bg-orange-50 p-6 rounded-lg hover:bg-orange-100 transition-colors"
-          >
-            <div className="flex items-center mb-3">
-              <Search className="w-8 h-8 text-orange-600 mr-3" />
-              <h3 className="text-lg font-semibold text-orange-800">
-                Rechercher
-              </h3>
-            </div>
-            <p className="text-orange-600">Trouvez des équipes à rejoindre</p>
-          </Link>
-
-          <Link
-            to="/player-invitations"
-            className="bg-purple-50 p-6 rounded-lg hover:bg-purple-100 transition-colors relative"
-          >
-            <div className="flex items-center mb-3">
-              <UserPlus className="w-8 h-8 text-purple-600 mr-3" />
-              <h3 className="text-lg font-semibold text-purple-800">
-                Invitations Équipes
-              </h3>
-              {stats.pendingPlayerInvitations > 0 && (
-                <span className="ml-2 bg-red-500 text-white text-xs px-2 py-1 rounded-full">
-                  {stats.pendingPlayerInvitations}
-                </span>
-              )}
-            </div>
-            <p className="text-purple-600">Gérez vos invitations d'équipes</p>
-          </Link>
-
-          <Link
-            to="/invitations"
-            className="bg-yellow-50 p-6 rounded-lg hover:bg-yellow-100 transition-colors relative"
-          >
-            <div className="flex items-center mb-3">
-              <MessageSquare className="w-8 h-8 text-yellow-600 mr-3" />
-              <h3 className="text-lg font-semibold text-yellow-800">
-                Invitations Matchs
-              </h3>
-              {stats.pendingMatchInvitations > 0 && (
-                <span className="ml-2 bg-red-500 text-white text-xs px-2 py-1 rounded-full">
-                  {stats.pendingMatchInvitations}
-                </span>
-              )}
-            </div>
-            <p className="text-yellow-600">
-              Organisez vos matchs et répondez aux invitations
-            </p>
-          </Link>
-
-          {/* NOUVEAU : Lien vers les validations en attente */}
-          <Link
-            to="/pending-validations"
-            className="bg-pink-50 p-6 rounded-lg hover:bg-pink-100 transition-colors relative"
-          >
-            <div className="flex items-center mb-3">
-              <CheckCircle className="w-8 h-8 text-pink-600 mr-3" />
-              <h3 className="text-lg font-semibold text-pink-800">
-                Validations Matchs
-              </h3>
-              {stats.pendingValidations > 0 && (
-                <span className="ml-2 bg-red-500 text-white text-xs px-2 py-1 rounded-full animate-pulse">
-                  {stats.pendingValidations}
-                </span>
-              )}
-            </div>
-            <p className="text-pink-600">
-              Validez les scores de vos matchs terminés
-            </p>
-          </Link>
-
-          <Link
-            to="/calendar"
-            className="bg-indigo-50 p-6 rounded-lg hover:bg-indigo-100 transition-colors"
-          >
-            <div className="flex items-center mb-3">
-              <CalendarIcon className="w-8 h-8 text-indigo-600 mr-3" />
-              <h3 className="text-lg font-semibold text-indigo-800">
-                Calendrier
-              </h3>
-            </div>
-            <p className="text-indigo-600">
-              Visualisez vos matchs et disponibilités
-            </p>
-          </Link>
+  return (
+    <div className="max-w-7xl mx-auto space-y-8">
+      {/* Header Section */}
+      <div className="bg-gradient-to-r from-gray-900 to-gray-800 rounded-3xl p-8 text-white shadow-xl relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-64 h-64 bg-white opacity-5 rounded-full -mr-16 -mt-16 blur-3xl"></div>
+        <div className="relative z-10">
+          <h1 className="text-3xl font-bold mb-2">
+            Bon retour, {user?.firstName} ! 👋
+          </h1>
+          <p className="text-gray-300 max-w-2xl">
+            Prêt pour le prochain match ? Consultez vos invitations en attente
+            ou organisez une nouvelle rencontre dès maintenant.
+          </p>
         </div>
       </div>
 
-      {/* Section statistiques rapides */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <div className="bg-white p-6 rounded-lg shadow-md">
-          <h3 className="text-lg font-semibold mb-2">Équipes</h3>
-          <div className="text-3xl font-bold text-green-600">
-            {loading ? "-" : stats.teamsCount}
-          </div>
-          <p className="text-gray-600 text-sm">équipes rejointes</p>
-        </div>
+      {/* Stats Row */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <StatCard
+          label="Équipes"
+          value={stats.teams}
+          icon={Users}
+          color="bg-blue-500"
+        />
+        <StatCard
+          label="Matchs Validés"
+          value="12"
+          icon={Trophy}
+          color="bg-yellow-500"
+        />
+        <StatCard
+          label="Invitations Joueurs"
+          value={stats.playerInvites}
+          icon={UserPlus}
+          color="bg-purple-500"
+        />
+        <StatCard
+          label="Invitations Matchs"
+          value={stats.matchInvites}
+          icon={Calendar}
+          color="bg-green-500"
+        />
+      </div>
 
-        <div className="bg-white p-6 rounded-lg shadow-md">
-          <h3 className="text-lg font-semibold mb-2 flex items-center">
-            Invitations Équipes
-            {stats.pendingPlayerInvitations > 0 && (
-              <Bell className="w-4 h-4 ml-2 text-red-500" />
+      {/* Actions Urgentes (Si nécessaire) */}
+      {(stats.validations > 0 ||
+        stats.playerInvites > 0 ||
+        stats.matchInvites > 0) && (
+        <div className="bg-orange-50 border border-orange-100 rounded-2xl p-6">
+          <h2 className="font-bold text-orange-800 flex items-center mb-4">
+            <Bell className="w-5 h-5 mr-2" /> Actions requises
+          </h2>
+          <div className="flex flex-wrap gap-3">
+            {stats.validations > 0 && (
+              <Link
+                to="/pending-validations"
+                className="flex items-center px-4 py-2 bg-white text-orange-700 border border-orange-200 rounded-lg hover:bg-orange-100 transition font-medium text-sm"
+              >
+                <CheckCircle className="w-4 h-4 mr-2 text-orange-500" />{" "}
+                {stats.validations} matchs à valider
+              </Link>
             )}
-          </h3>
-          <div className="text-3xl font-bold text-purple-600">
-            {loading ? "-" : stats.pendingPlayerInvitations}
+            {stats.matchInvites > 0 && (
+              <Link
+                to="/invitations"
+                className="flex items-center px-4 py-2 bg-white text-blue-700 border border-blue-200 rounded-lg hover:bg-blue-50 transition font-medium text-sm"
+              >
+                <Calendar className="w-4 h-4 mr-2 text-blue-500" />{" "}
+                {stats.matchInvites} invitations de match
+              </Link>
+            )}
+            {stats.playerInvites > 0 && (
+              <Link
+                to="/player-invitations"
+                className="flex items-center px-4 py-2 bg-white text-purple-700 border border-purple-200 rounded-lg hover:bg-purple-50 transition font-medium text-sm"
+              >
+                <UserPlus className="w-4 h-4 mr-2 text-purple-500" />{" "}
+                {stats.playerInvites} invitations d'équipe
+              </Link>
+            )}
           </div>
-          <p className="text-gray-600 text-sm">en attente</p>
         </div>
+      )}
 
-        <div className="bg-white p-6 rounded-lg shadow-md">
-          <h3 className="text-lg font-semibold mb-2 flex items-center">
-            Invitations Matchs
-            {stats.pendingMatchInvitations > 0 && (
-              <Bell className="w-4 h-4 ml-2 text-red-500" />
-            )}
-          </h3>
-          <div className="text-3xl font-bold text-yellow-600">
-            {loading ? "-" : stats.pendingMatchInvitations}
-          </div>
-          <p className="text-gray-600 text-sm">en attente</p>
-        </div>
-
-        {/* NOUVEAU : Statistique des validations */}
-        <div className="bg-white p-6 rounded-lg shadow-md">
-          <h3 className="text-lg font-semibold mb-2 flex items-center">
-            Validations Matchs
-            {stats.pendingValidations > 0 && (
-              <Bell className="w-4 h-4 ml-2 text-red-500 animate-pulse" />
-            )}
-          </h3>
-          <div className="text-3xl font-bold text-pink-600">
-            {loading ? "-" : stats.pendingValidations}
-          </div>
-          <p className="text-gray-600 text-sm">à valider</p>
+      {/* Main Grid */}
+      <div>
+        <h2 className="text-xl font-bold text-gray-900 mb-6">Accès Rapide</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <ActionCard
+            to="/matches"
+            icon={PlusCircle}
+            title="Organiser un match"
+            desc="Créez un match et invitez une équipe adverse."
+            color="bg-green-500"
+          />
+          <ActionCard
+            to="/teams"
+            icon={Users}
+            title="Mes Équipes"
+            desc="Gérez vos effectifs, compositions et statistiques."
+            color="bg-blue-600"
+          />
+          <ActionCard
+            to="/teams/search"
+            icon={Search}
+            title="Trouver une équipe"
+            desc="Rejoignez une nouvelle équipe ou défiez des adversaires."
+            color="bg-purple-500"
+          />
+          <ActionCard
+            to="/calendar"
+            icon={Calendar}
+            title="Calendrier"
+            desc="Vos prochains matchs et disponibilités."
+            color="bg-indigo-500"
+          />
+          <ActionCard
+            to="/profile"
+            icon={Trophy}
+            title="Mon Profil"
+            desc="Vos stats personnelles et historique."
+            color="bg-orange-500"
+          />
+          <ActionCard
+            to="/feed"
+            icon={MessageSquare}
+            title="Le Terrain"
+            desc="Fil d'actualité de la communauté."
+            color="bg-pink-500"
+          />
         </div>
       </div>
     </div>

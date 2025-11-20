@@ -5,10 +5,11 @@ import {
   Calendar,
   Star,
   Settings,
-  UserPlus,
-  LogOut,
   Search,
   Filter,
+  Trophy,
+  Shield,
+  ArrowUpRight,
 } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
 import toast from "react-hot-toast";
@@ -26,15 +27,17 @@ const MyTeams = () => {
   const [teams, setTeams] = useState([]);
   const [filteredTeams, setFilteredTeams] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  // Modals
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [selectedTeam, setSelectedTeam] = useState(null);
 
-  // Filtres et recherche
+  // Filtres
   const [searchTerm, setSearchTerm] = useState("");
-  const [filterRole, setFilterRole] = useState("all"); // all, captain, player
-  const [sortBy, setSortBy] = useState("name"); // name, created, matches, winRate
+  const [filterRole, setFilterRole] = useState("all");
+  const [sortBy, setSortBy] = useState("name");
 
   useEffect(() => {
     loadMyTeams();
@@ -49,10 +52,8 @@ const MyTeams = () => {
       setLoading(true);
       const response = await axios.get(`${API_BASE_URL}/teams/my`);
       setTeams(response.data);
-      console.log("response.data", response.data);
     } catch (error) {
       toast.error("Erreur lors du chargement des équipes");
-      console.error("Load teams error:", error);
     } finally {
       setLoading(false);
     }
@@ -61,7 +62,6 @@ const MyTeams = () => {
   const applyFiltersAndSort = () => {
     let filtered = [...teams];
 
-    // Filtrer par recherche
     if (searchTerm) {
       filtered = filtered.filter(
         (team) =>
@@ -70,12 +70,10 @@ const MyTeams = () => {
       );
     }
 
-    // Filtrer par rôle
     if (filterRole !== "all") {
       filtered = filtered.filter((team) => team.role === filterRole);
     }
 
-    // Trier
     filtered.sort((a, b) => {
       switch (sortBy) {
         case "name":
@@ -85,15 +83,15 @@ const MyTeams = () => {
         case "matches":
           return (b.stats?.matchesPlayed || 0) - (a.stats?.matchesPlayed || 0);
         case "winRate":
-          const aWinRate =
+          const aRate =
             a.stats?.matchesPlayed > 0
               ? a.stats.matchesWon / a.stats.matchesPlayed
               : 0;
-          const bWinRate =
+          const bRate =
             b.stats?.matchesPlayed > 0
               ? b.stats.matchesWon / b.stats.matchesPlayed
               : 0;
-          return bWinRate - aWinRate;
+          return bRate - aRate;
         default:
           return 0;
       }
@@ -102,10 +100,11 @@ const MyTeams = () => {
     setFilteredTeams(filtered);
   };
 
+  // --- Gestionnaires d'événements ---
   const handleTeamCreated = (newTeam) => {
     setTeams((prev) => [newTeam, ...prev]);
     setShowCreateModal(false);
-    toast.success("Équipe créée avec succès !");
+    toast.success("Équipe créée !");
   };
 
   const handleEditTeam = (team) => {
@@ -115,13 +114,11 @@ const MyTeams = () => {
 
   const handleTeamUpdated = (updatedTeam) => {
     setTeams((prev) =>
-      prev.map((team) =>
-        team.id === updatedTeam.id ? { ...team, ...updatedTeam } : team
-      )
+      prev.map((t) => (t.id === updatedTeam.id ? { ...t, ...updatedTeam } : t))
     );
     setShowEditModal(false);
     setSelectedTeam(null);
-    toast.success("Équipe mise à jour avec succès !");
+    toast.success("Équipe mise à jour !");
   };
 
   const handleDeleteTeam = (team) => {
@@ -132,163 +129,143 @@ const MyTeams = () => {
   const handleTeamDeleted = async (teamId) => {
     try {
       await axios.delete(`${API_BASE_URL}/teams/${teamId}`);
-      setTeams((prev) => prev.filter((team) => team.id !== teamId));
+      setTeams((prev) => prev.filter((t) => t.id !== teamId));
       setShowDeleteModal(false);
       setSelectedTeam(null);
-      toast.success("Équipe supprimée avec succès");
+      toast.success("Équipe supprimée");
     } catch (error) {
-      toast.error(
-        error.response?.data?.error || "Erreur lors de la suppression"
-      );
+      toast.error("Erreur suppression");
     }
   };
 
   const handleLeaveTeam = async (teamId, teamName) => {
-    if (
-      !window.confirm(
-        `Êtes-vous sûr de vouloir quitter l'équipe "${teamName}" ?`
-      )
-    ) {
-      return;
-    }
-
+    if (!window.confirm(`Quitter "${teamName}" ?`)) return;
     try {
       await axios.delete(`${API_BASE_URL}/teams/${teamId}/leave`);
       toast.success("Vous avez quitté l'équipe");
-      await loadMyTeams(); // Recharger la liste
+      loadMyTeams();
     } catch (error) {
-      toast.error(
-        error.response?.data?.error || "Erreur lors de la sortie de l'équipe"
-      );
+      toast.error("Erreur lors du départ");
     }
   };
 
-  // Statistiques globales
-  const totalStats = teams.reduce(
-    (acc, team) => {
-      return {
-        totalTeams: acc.totalTeams + 1,
-        captainTeams: acc.captainTeams + (team.role === "captain" ? 1 : 0),
-        totalMatches: acc.totalMatches + (team.stats?.matchesPlayed || 0),
-        totalWins: acc.totalWins + (team.stats?.matchesWon || 0),
-      };
-    },
+  // --- Stats Calculées ---
+  const stats = teams.reduce(
+    (acc, team) => ({
+      totalTeams: acc.totalTeams + 1,
+      captainTeams: acc.captainTeams + (team.role === "captain" ? 1 : 0),
+      totalMatches: acc.totalMatches + (team.stats?.matchesPlayed || 0),
+      totalWins: acc.totalWins + (team.stats?.matchesWon || 0),
+    }),
     { totalTeams: 0, captainTeams: 0, totalMatches: 0, totalWins: 0 }
   );
-
-  const globalWinRate =
-    totalStats.totalMatches > 0
-      ? Math.round((totalStats.totalWins / totalStats.totalMatches) * 100)
+  const winRate =
+    stats.totalMatches > 0
+      ? Math.round((stats.totalWins / stats.totalMatches) * 100)
       : 0;
+
+  // --- Composants UI ---
+  const StatBadge = ({ icon: Icon, value, label, color }) => (
+    <div className="flex items-center space-x-3 bg-white/10 backdrop-blur-sm rounded-xl p-3 border border-white/10">
+      <div className={`p-2 rounded-lg bg-white/10 ${color}`}>
+        <Icon className="w-5 h-5" />
+      </div>
+      <div>
+        <div className="text-xl font-bold text-white">{value}</div>
+        <div className="text-xs text-gray-300 font-medium uppercase tracking-wider">
+          {label}
+        </div>
+      </div>
+    </div>
+  );
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center h-64">
+      <div className="flex justify-center items-center h-96">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-500"></div>
       </div>
     );
   }
 
   return (
-    <div className="max-w-7xl mx-auto">
-      {/* Header avec statistiques */}
-      <div className="mb-8">
-        <div className="flex items-center justify-between mb-6">
+    <div className="max-w-7xl mx-auto space-y-8 pb-12">
+      {/* Header & Stats Area */}
+      <div className="relative bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 rounded-3xl p-8 overflow-hidden shadow-2xl">
+        {/* Background Pattern */}
+        <div className="absolute top-0 right-0 w-96 h-96 bg-green-500/10 rounded-full blur-3xl -mr-32 -mt-32"></div>
+        <div className="absolute bottom-0 left-0 w-64 h-64 bg-blue-500/10 rounded-full blur-3xl -ml-20 -mb-20"></div>
+
+        <div className="relative z-10 flex flex-col md:flex-row justify-between items-start md:items-end gap-6">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">Mes Équipes</h1>
-            <p className="text-gray-600 mt-1">
-              Gérez vos équipes et suivez leurs performances
+            <h1 className="text-3xl font-bold text-white mb-2 flex items-center">
+              <Shield className="w-8 h-8 mr-3 text-green-400" />
+              Mes Équipes
+            </h1>
+            <p className="text-gray-400 max-w-lg">
+              Gérez vos effectifs, consultez vos statistiques et organisez vos
+              prochains matchs depuis votre quartier général.
             </p>
+
+            {/* Quick Stats Row */}
+            <div className="flex flex-wrap gap-4 mt-6">
+              <StatBadge
+                icon={Users}
+                value={stats.totalTeams}
+                label="Équipes"
+                color="text-blue-300"
+              />
+              <StatBadge
+                icon={Trophy}
+                value={stats.captainTeams}
+                label="Capitaine"
+                color="text-yellow-300"
+              />
+              <StatBadge
+                icon={Calendar}
+                value={stats.totalMatches}
+                label="Matchs"
+                color="text-green-300"
+              />
+              <StatBadge
+                icon={ArrowUpRight}
+                value={`${winRate}%`}
+                label="Victoires"
+                color="text-purple-300"
+              />
+            </div>
           </div>
+
           <button
             onClick={() => setShowCreateModal(true)}
-            className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+            className="group flex items-center px-6 py-3 bg-green-500 text-white rounded-xl font-bold hover:bg-green-400 transition-all shadow-lg shadow-green-500/20 hover:shadow-green-500/40 transform hover:-translate-y-0.5"
           >
-            <Plus className="w-5 h-5 mr-2" />
+            <Plus className="w-5 h-5 mr-2 group-hover:rotate-90 transition-transform" />
             Créer une équipe
           </button>
         </div>
-
-        {/* Statistiques globales */}
-        {teams.length > 0 && (
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-            <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">
-              <div className="flex items-center">
-                <Users className="w-8 h-8 text-blue-600 mr-3" />
-                <div>
-                  <div className="text-2xl font-bold text-blue-900">
-                    {totalStats.totalTeams}
-                  </div>
-                  <div className="text-blue-700 text-sm">Équipes</div>
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-yellow-50 p-4 rounded-lg border border-yellow-100">
-              <div className="flex items-center">
-                <Star className="w-8 h-8 text-yellow-600 mr-3" />
-                <div>
-                  <div className="text-2xl font-bold text-yellow-900">
-                    {totalStats.captainTeams}
-                  </div>
-                  <div className="text-yellow-700 text-sm">Capitainats</div>
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-green-50 p-4 rounded-lg border border-green-100">
-              <div className="flex items-center">
-                <Calendar className="w-8 h-8 text-green-600 mr-3" />
-                <div>
-                  <div className="text-2xl font-bold text-green-900">
-                    {totalStats.totalMatches}
-                  </div>
-                  <div className="text-green-700 text-sm">Matchs joués</div>
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-purple-50 p-4 rounded-lg border border-purple-100">
-              <div className="flex items-center">
-                <Settings className="w-8 h-8 text-purple-600 mr-3" />
-                <div>
-                  <div className="text-2xl font-bold text-purple-900">
-                    {globalWinRate}%
-                  </div>
-                  <div className="text-purple-700 text-sm">
-                    Taux de réussite
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
 
-      {/* Filtres et recherche */}
-      {teams.length > 0 && (
-        <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-          <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
-            {/* Recherche */}
-            <div className="lg:col-span-2">
-              <div className="relative">
-                <Search className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
-                <input
-                  type="text"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                  placeholder="Rechercher une équipe..."
-                />
-              </div>
-            </div>
+      {/* Controls Bar */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 sticky top-20 z-30">
+        <div className="flex flex-col md:flex-row gap-4">
+          <div className="flex-1 relative">
+            <Search className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all outline-none"
+              placeholder="Rechercher une équipe..."
+            />
+          </div>
 
-            {/* Filtre par rôle */}
-            <div>
+          <div className="flex gap-3">
+            <div className="relative min-w-[160px]">
+              <Filter className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
               <select
                 value={filterRole}
                 onChange={(e) => setFilterRole(e.target.value)}
-                className="w-full px-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                className="w-full pl-9 pr-8 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-green-500 outline-none appearance-none cursor-pointer text-sm font-medium text-gray-700"
               >
                 <option value="all">Tous les rôles</option>
                 <option value="captain">Capitaine</option>
@@ -296,120 +273,71 @@ const MyTeams = () => {
               </select>
             </div>
 
-            {/* Tri */}
-            <div>
+            <div className="relative min-w-[160px]">
+              <Settings className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
               <select
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value)}
-                className="w-full px-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                className="w-full pl-9 pr-8 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-green-500 outline-none appearance-none cursor-pointer text-sm font-medium text-gray-700"
               >
-                <option value="name">Nom A-Z</option>
-                <option value="created">Plus récentes</option>
-                <option value="matches">Plus de matchs</option>
-                <option value="winRate">Meilleur taux</option>
+                <option value="name">Nom (A-Z)</option>
+                <option value="created">Récents</option>
+                <option value="matches">Activité</option>
+                <option value="winRate">Performance</option>
               </select>
             </div>
           </div>
-
-          {/* Résultats de recherche */}
-          {(searchTerm || filterRole !== "all") && (
-            <div className="mt-4 pt-4 border-t">
-              <p className="text-sm text-gray-600">
-                {filteredTeams.length} équipe
-                {filteredTeams.length !== 1 ? "s" : ""} trouvée
-                {filteredTeams.length !== 1 ? "s" : ""}
-                {searchTerm && ` pour "${searchTerm}"`}
-                {filterRole !== "all" &&
-                  ` (${filterRole === "captain" ? "Capitaine" : "Joueur"})`}
-              </p>
-            </div>
-          )}
         </div>
-      )}
+      </div>
 
-      {/* Liste des équipes */}
+      {/* Teams Grid */}
       {teams.length === 0 ? (
-        <div className="text-center py-12 bg-white rounded-lg shadow-md">
-          <Users className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-          <h3 className="text-xl font-semibold text-gray-900 mb-2">
-            Aucune équipe trouvée
+        <div className="text-center py-16 bg-white rounded-2xl shadow-sm border-2 border-dashed border-gray-200">
+          <div className="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-4">
+            <Users className="w-10 h-10 text-gray-300" />
+          </div>
+          <h3 className="text-xl font-bold text-gray-900 mb-2">
+            C'est un peu vide ici
           </h3>
-          <p className="text-gray-600 mb-6">
-            Créez votre première équipe pour commencer à organiser des matchs
+          <p className="text-gray-500 max-w-md mx-auto mb-6">
+            Vous ne faites partie d'aucune équipe pour le moment. Rejoignez une
+            équipe existante ou créez la vôtre pour commencer.
           </p>
           <button
             onClick={() => setShowCreateModal(true)}
-            className="flex items-center mx-auto px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+            className="text-green-600 font-bold hover:text-green-700 hover:underline"
           >
-            <Plus className="w-5 h-5 mr-2" />
-            Créer ma première équipe
+            Créer ma première équipe &rarr;
           </button>
         </div>
       ) : filteredTeams.length === 0 ? (
-        <div className="text-center py-12 bg-white rounded-lg shadow-md">
-          <Search className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-          <h3 className="text-xl font-semibold text-gray-900 mb-2">
-            Aucun résultat
-          </h3>
-          <p className="text-gray-600 mb-4">
-            Aucune équipe ne correspond à vos critères de recherche
+        <div className="text-center py-12">
+          <p className="text-gray-500">
+            Aucune équipe ne correspond à votre recherche.
           </p>
           <button
             onClick={() => {
               setSearchTerm("");
               setFilterRole("all");
             }}
-            className="text-green-600 hover:text-green-700 font-medium"
+            className="text-green-600 font-medium mt-2 hover:underline"
           >
             Réinitialiser les filtres
           </button>
         </div>
       ) : (
-        <>
-          {/* Compteur et actions rapides */}
-          <div className="flex items-center justify-between mb-6">
-            <div className="text-sm text-gray-600">
-              Affichage de {filteredTeams.length} équipe
-              {filteredTeams.length !== 1 ? "s" : ""} sur {teams.length}
-            </div>
-
-            {/* Actions rapides pour les capitaines */}
-            {totalStats.captainTeams > 0 && (
-              <div className="flex items-center space-x-2">
-                <button className="text-sm text-blue-600 hover:text-blue-700 font-medium">
-                  Exporter les stats
-                </button>
-                <span className="text-gray-300">•</span>
-                <button className="text-sm text-green-600 hover:text-green-700 font-medium">
-                  Invitations en masse
-                </button>
-              </div>
-            )}
-          </div>
-
-          {/* Grille des équipes */}
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-            {filteredTeams.map((team) => (
-              <TeamCard
-                key={team.id}
-                team={team}
-                onLeaveTeam={handleLeaveTeam}
-                onEditTeam={handleEditTeam}
-                onDeleteTeam={handleDeleteTeam}
-                isOwner={team.role === "captain"}
-              />
-            ))}
-          </div>
-
-          {/* Pagination si nécessaire */}
-          {teams.length > 12 && (
-            <div className="mt-8 flex justify-center">
-              <button className="px-4 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
-                Charger plus d'équipes
-              </button>
-            </div>
-          )}
-        </>
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+          {filteredTeams.map((team) => (
+            <TeamCard
+              key={team.id}
+              team={team}
+              onLeaveTeam={handleLeaveTeam}
+              onEditTeam={handleEditTeam}
+              onDeleteTeam={handleDeleteTeam}
+              isOwner={team.role === "captain"}
+            />
+          ))}
+        </div>
       )}
 
       {/* Modals */}
@@ -419,7 +347,6 @@ const MyTeams = () => {
           onTeamCreated={handleTeamCreated}
         />
       )}
-
       {showEditModal && selectedTeam && (
         <EditTeamModal
           team={selectedTeam}
@@ -430,7 +357,6 @@ const MyTeams = () => {
           onTeamUpdated={handleTeamUpdated}
         />
       )}
-
       {showDeleteModal && selectedTeam && (
         <DeleteTeamModal
           team={selectedTeam}

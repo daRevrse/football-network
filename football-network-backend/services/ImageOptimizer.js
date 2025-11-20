@@ -164,16 +164,36 @@ class ImageOptimizer {
   }
 
   async optimizeBanner(inputPath, position = "center") {
-    const variants = await this.generateVariants(inputPath, "banner");
+    await this.ensureDirectoryExists(this.outputDir);
 
-    for (const [sizeName, variant] of Object.entries(variants)) {
-      const variantPath = path.join(__dirname, "../", variant.path);
-      const optimized = await this.optimizeImage(variantPath, {
-        position,
-        fit: "cover",
-      });
+    const sizes = this.presets.banner;
+    const variants = {};
+    const filename = path.basename(inputPath, path.extname(inputPath));
 
-      await fs.writeFile(variantPath, optimized.buffer);
+    for (const [sizeName, dimensions] of Object.entries(sizes)) {
+      try {
+        const outputFilename = `${filename}_${sizeName}.jpg`;
+        const outputPath = path.join(this.outputDir, outputFilename);
+
+        const optimized = await this.optimizeImage(inputPath, {
+          ...dimensions,
+          format: "jpeg",
+          quality: sizeName === "large" ? 90 : 85,
+          fit: "cover",
+          position,
+        });
+
+        await fs.writeFile(outputPath, optimized.buffer);
+
+        variants[sizeName] = {
+          path: `/uploads/optimized/${outputFilename}`,
+          width: optimized.metadata.width,
+          height: optimized.metadata.height,
+          size: optimized.metadata.size,
+        };
+      } catch (error) {
+        console.error(`Failed to generate ${sizeName} banner variant:`, error);
+      }
     }
 
     return variants;

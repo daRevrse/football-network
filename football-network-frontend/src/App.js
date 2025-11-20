@@ -1,4 +1,4 @@
-// football-network-frontend/src/App.js - MISE À JOUR
+// football-network-frontend/src/App.js
 import React from "react";
 import {
   BrowserRouter as Router,
@@ -8,11 +8,15 @@ import {
 } from "react-router-dom";
 import { Toaster } from "react-hot-toast";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
+import { UserProfileProvider } from "./contexts/UserContext";
+
+// Importations des composants
 import Login from "./components/auth/Login";
 import Signup from "./components/auth/Signup";
+import ForgotPassword from "./components/auth/ForgotPassword";
+import ResetPassword from "./components/auth/ResetPassword";
 import Dashboard from "./components/Dashboard";
 import Navbar from "./components/layout/Navbar";
-import "./index.css";
 import Profile from "./components/Profile";
 import MyTeams from "./components/teams/MyTeams";
 import SearchTeams from "./components/teams/SearchTeams";
@@ -21,13 +25,12 @@ import MatchDetails from "./components/matches/MatchDetails";
 import Matches from "./components/matches/Matches";
 import Calendar from "./components/calendar/Calendar";
 import TeamDetails from "./components/teams/TeamDetails";
-// NOUVELLES IMPORTATIONS
 import PlayerInvitations from "./components/invitations/PlayerInvitations";
 import MatchValidation from "./components/matches/MatchValidation";
 import PendingValidations from "./components/matches/PendingValidations";
 import Feed from "./components/Feed";
 import LandingFeed from "./components/LandingFeed";
-import { UserProfileProvider } from "./contexts/UserContext";
+import "./index.css";
 
 // Composant de protection des routes
 const ProtectedRoute = ({ children }) => {
@@ -35,8 +38,8 @@ const ProtectedRoute = ({ children }) => {
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center h-screen">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-green-500"></div>
+      <div className="flex justify-center items-center h-screen bg-gray-50">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600"></div>
       </div>
     );
   }
@@ -44,14 +47,14 @@ const ProtectedRoute = ({ children }) => {
   return user ? children : <Navigate to="/login" />;
 };
 
-// Composant pour les routes publiques (redirect si connecté)
+// Composant pour les routes publiques
 const PublicRoute = ({ children }) => {
   const { user, loading } = useAuth();
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center h-screen">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-green-500"></div>
+      <div className="flex justify-center items-center h-screen bg-gray-50">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600"></div>
       </div>
     );
   }
@@ -64,12 +67,18 @@ function App() {
     <AuthProvider>
       <UserProfileProvider>
         <Router>
-          <div className="min-h-screen bg-gray-50">
+          {/* Utilisation de flex-col pour pousser le footer (si ajouté plus tard) vers le bas */}
+          <div className="min-h-screen bg-gray-50 flex flex-col font-sans text-gray-900">
             <Navbar />
-            <main className="container mx-auto px-4 py-8">
+
+            {/* SUPPRESSION de "container mx-auto px-4 py-8". 
+               Maintenant le main prend toute la largeur par défaut.
+               Chaque page (Dashboard, Feed, etc.) gère ses propres marges.
+            */}
+            <main className="flex-1 w-full relative">
               <Routes>
-                {/* <Route path="/" element={<Navigate to="/dashboard" />} /> */}
                 <Route path="/" element={<LandingFeed />} />
+
                 <Route
                   path="/login"
                   element={
@@ -86,6 +95,24 @@ function App() {
                     </PublicRoute>
                   }
                 />
+                <Route
+                  path="/forgot-password"
+                  element={
+                    <PublicRoute>
+                      <ForgotPassword />
+                    </PublicRoute>
+                  }
+                />
+                <Route
+                  path="/reset-password"
+                  element={
+                    <PublicRoute>
+                      <ResetPassword />
+                    </PublicRoute>
+                  }
+                />
+
+                {/* Routes Protégées */}
                 <Route
                   path="/dashboard"
                   element={
@@ -142,7 +169,6 @@ function App() {
                     </ProtectedRoute>
                   }
                 />
-                {/* NOUVELLE ROUTE : Invitations de joueurs */}
                 <Route
                   path="/player-invitations"
                   element={

@@ -111,14 +111,17 @@ router.get("/", authenticateToken, async (req, res) => {
     let query = `
       SELECT t.id, t.name, t.description, t.skill_level, t.max_players,
              t.location_city, t.location_lat, t.location_lng, t.created_at,
+             t.logo_id, t.banner_id,
              u.first_name as captain_first_name, u.last_name as captain_last_name,
              COUNT(tm.user_id) as current_players,
              ts.matches_played, ts.matches_won, ts.average_rating,
+             logo_up.stored_filename as logo_filename,
+             banner_up.stored_filename as banner_filename, banner_up.variants as banner_variants,
              ${
                lat && lng
                  ? `
-             (6371 * acos(cos(radians(?)) * cos(radians(t.location_lat)) * 
-              cos(radians(t.location_lng) - radians(?)) + sin(radians(?)) * 
+             (6371 * acos(cos(radians(?)) * cos(radians(t.location_lat)) *
+              cos(radians(t.location_lng) - radians(?)) + sin(radians(?)) *
               sin(radians(t.location_lat)))) AS distance
              `
                  : "NULL as distance"
@@ -127,6 +130,8 @@ router.get("/", authenticateToken, async (req, res) => {
       LEFT JOIN users u ON t.captain_id = u.id
       LEFT JOIN team_members tm ON t.id = tm.team_id AND tm.is_active = true
       LEFT JOIN team_stats ts ON t.id = ts.team_id
+      LEFT JOIN uploads logo_up ON t.logo_id = logo_up.id AND logo_up.is_active = true
+      LEFT JOIN uploads banner_up ON t.banner_id = banner_up.id AND banner_up.is_active = true
       WHERE t.is_active = true
     `;
 
@@ -152,7 +157,7 @@ router.get("/", authenticateToken, async (req, res) => {
     }
 
     query +=
-      " GROUP BY t.id, u.first_name, u.last_name, ts.matches_played, ts.matches_won, ts.average_rating";
+      " GROUP BY t.id, u.first_name, u.last_name, ts.matches_played, ts.matches_won, ts.average_rating, logo_up.stored_filename, banner_up.stored_filename, banner_up.variants";
 
     if (lat && lng && radius) {
       query += ` HAVING distance < ?`;
@@ -167,26 +172,40 @@ router.get("/", authenticateToken, async (req, res) => {
 
     const [teams] = await db.execute(query, queryParams);
 
-    const formattedTeams = teams.map((team) => ({
-      id: team.id,
-      name: team.name,
-      description: team.description,
-      skillLevel: team.skill_level,
-      maxPlayers: team.max_players,
-      currentPlayers: team.current_players,
-      locationCity: team.location_city,
-      captain: {
-        firstName: team.captain_first_name,
-        lastName: team.captain_last_name,
-      },
-      stats: {
-        matchesPlayed: team.matches_played || 0,
-        matchesWon: team.matches_won || 0,
-        averageRating: team.average_rating || 0,
-      },
-      distance: team.distance ? Math.round(team.distance * 10) / 10 : null,
-      createdAt: team.created_at,
-    }));
+    const formattedTeams = teams.map((team) => {
+      let bannerUrl = null;
+      if (team.banner_variants) {
+        try {
+          const variants = JSON.parse(team.banner_variants);
+          bannerUrl = variants.medium?.path || variants.large?.path || variants.small?.path || null;
+        } catch (e) {
+          console.error('Error parsing banner variants:', e);
+        }
+      }
+
+      return {
+        id: team.id,
+        name: team.name,
+        description: team.description,
+        skillLevel: team.skill_level,
+        maxPlayers: team.max_players,
+        currentPlayers: team.current_players,
+        locationCity: team.location_city,
+        logoUrl: team.logo_filename ? `/uploads/teams/${team.logo_filename}` : null,
+        bannerUrl,
+        captain: {
+          firstName: team.captain_first_name,
+          lastName: team.captain_last_name,
+        },
+        stats: {
+          matchesPlayed: team.matches_played || 0,
+          matchesWon: team.matches_won || 0,
+          averageRating: team.average_rating || 0,
+        },
+        distance: team.distance ? Math.round(team.distance * 10) / 10 : null,
+        createdAt: team.created_at,
+      };
+    });
 
     res.json(formattedTeams);
   } catch (error) {
@@ -241,61 +260,80 @@ router.get("/", authenticateToken, async (req, res) => {
 router.get("/my", authenticateToken, async (req, res) => {
   try {
     const [teams] = await db.execute(
-      `SELECT 
-          t.id, 
-          t.name, 
-          t.description, 
-          t.skill_level, 
+      `SELECT
+          t.id,
+          t.name,
+          t.description,
+          t.skill_level,
           t.max_players,
-          t.location_city, 
+          t.location_city,
           t.created_at,
           t.logo_id,
-          up.stored_filename AS logo_filename,
-          up.file_path AS logo_path,
+          t.banner_id,
+          logo_up.stored_filename AS logo_filename,
+          logo_up.file_path AS logo_path,
+          banner_up.stored_filename AS banner_filename,
+          banner_up.variants AS banner_variants,
           tm.role,
           COUNT(tm2.user_id) AS current_players,
-          ts.matches_played, 
-          ts.matches_won, 
+          ts.matches_played,
+          ts.matches_won,
           ts.average_rating
        FROM teams t
        JOIN team_members tm ON t.id = tm.team_id
        LEFT JOIN team_members tm2 ON t.id = tm2.team_id AND tm2.is_active = true
        LEFT JOIN team_stats ts ON t.id = ts.team_id
-       LEFT JOIN uploads up ON t.logo_id = up.id AND up.is_active = true
-       WHERE tm.user_id = ? 
-         AND tm.is_active = true 
+       LEFT JOIN uploads logo_up ON t.logo_id = logo_up.id AND logo_up.is_active = true
+       LEFT JOIN uploads banner_up ON t.banner_id = banner_up.id AND banner_up.is_active = true
+       WHERE tm.user_id = ?
+         AND tm.is_active = true
          AND t.is_active = true
-       GROUP BY 
-         t.id, 
-         tm.role, 
-         ts.matches_played, 
-         ts.matches_won, 
-         ts.average_rating, 
-         up.stored_filename, 
-         up.file_path
+       GROUP BY
+         t.id,
+         tm.role,
+         ts.matches_played,
+         ts.matches_won,
+         ts.average_rating,
+         logo_up.stored_filename,
+         logo_up.file_path,
+         banner_up.stored_filename,
+         banner_up.variants
        ORDER BY tm.role DESC, t.created_at DESC`,
       [req.user.id]
     );
 
-    const formattedTeams = teams.map((team) => ({
-      id: team.id,
-      name: team.name,
-      description: team.description,
-      skillLevel: team.skill_level,
-      maxPlayers: team.max_players,
-      currentPlayers: team.current_players,
-      locationCity: team.location_city,
-      role: team.role,
-      logoUrl: team.logo_filename
-        ? `/uploads/teams/${team.logo_filename}`
-        : null,
-      stats: {
-        matchesPlayed: team.matches_played || 0,
-        matchesWon: team.matches_won || 0,
-        averageRating: team.average_rating || 0,
-      },
-      createdAt: team.created_at,
-    }));
+    const formattedTeams = teams.map((team) => {
+      let bannerUrl = null;
+      if (team.banner_variants) {
+        try {
+          const variants = JSON.parse(team.banner_variants);
+          bannerUrl = variants.medium?.path || variants.large?.path || variants.small?.path || null;
+        } catch (e) {
+          console.error('Error parsing banner variants:', e);
+        }
+      }
+
+      return {
+        id: team.id,
+        name: team.name,
+        description: team.description,
+        skillLevel: team.skill_level,
+        maxPlayers: team.max_players,
+        currentPlayers: team.current_players,
+        locationCity: team.location_city,
+        role: team.role,
+        logoUrl: team.logo_filename
+          ? `/uploads/teams/${team.logo_filename}`
+          : null,
+        bannerUrl,
+        stats: {
+          matchesPlayed: team.matches_played || 0,
+          matchesWon: team.matches_won || 0,
+          averageRating: team.average_rating || 0,
+        },
+        createdAt: team.created_at,
+      };
+    });
 
     res.json(formattedTeams);
   } catch (error) {
@@ -393,20 +431,22 @@ router.get("/:id", authenticateToken, async (req, res) => {
   try {
     const teamId = req.params.id;
 
-    // Récupérer les informations de l'équipe + logo
+    // Récupérer les informations de l'équipe + logo + banner
     const [teams] = await db.execute(
       `SELECT t.id, t.name, t.description, t.skill_level, t.max_players,
               t.location_city, t.location_lat, t.location_lng, t.created_at,
-              t.logo_id,
-              u.id as captain_id, u.first_name as captain_first_name, 
+              t.logo_id, t.banner_id, t.banner_position,
+              u.id as captain_id, u.first_name as captain_first_name,
               u.last_name as captain_last_name, u.email as captain_email,
               ts.matches_played, ts.matches_won, ts.matches_drawn, ts.matches_lost,
               ts.goals_scored, ts.goals_conceded, ts.average_rating,
-              up.stored_filename as logo_filename, up.file_path as logo_path
+              logo_up.stored_filename as logo_filename, logo_up.file_path as logo_path,
+              banner_up.stored_filename as banner_filename, banner_up.variants as banner_variants
        FROM teams t
        JOIN users u ON t.captain_id = u.id
        LEFT JOIN team_stats ts ON t.id = ts.team_id
-       LEFT JOIN uploads up ON t.logo_id = up.id AND up.is_active = true
+       LEFT JOIN uploads logo_up ON t.logo_id = logo_up.id AND logo_up.is_active = true
+       LEFT JOIN uploads banner_up ON t.banner_id = banner_up.id AND banner_up.is_active = true
        WHERE t.id = ? AND t.is_active = true`,
       [teamId]
     );
@@ -417,10 +457,21 @@ router.get("/:id", authenticateToken, async (req, res) => {
 
     const team = teams[0];
 
-    // Construire l'URL du logo (comme pour users.js)
+    // Construire l'URL du logo
     const logoUrl = team.logo_filename
       ? `/uploads/teams/${team.logo_filename}`
       : null;
+
+    // Construire l'URL de la bannière à partir des variants
+    let bannerUrl = null;
+    if (team.banner_variants) {
+      try {
+        const variants = JSON.parse(team.banner_variants);
+        bannerUrl = variants.medium?.path || variants.large?.path || variants.small?.path || null;
+      } catch (e) {
+        console.error('Error parsing banner variants:', e);
+      }
+    }
 
     // Récupérer les membres de l'équipe
     const [members] = await db.execute(
@@ -455,7 +506,9 @@ router.get("/:id", authenticateToken, async (req, res) => {
         lastName: team.captain_last_name,
         email: team.captain_email,
       },
-      logoUrl, // ✅ ajouté ici
+      logoUrl,
+      bannerUrl,
+      bannerPosition: team.banner_position || 'center',
       members: members.map((member) => ({
         id: member.id,
         firstName: member.first_name,

@@ -1,8 +1,3 @@
-// ====================================================================
-// football-network-frontend/src/components/matches/MatchDetails.js
-// Version complète avec gestion du match
-// ====================================================================
-
 import React, { useState, useEffect } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import {
@@ -19,6 +14,11 @@ import {
   Settings,
   AlertTriangle,
   Clock,
+  Shield,
+  User,
+  Info,
+  Share2,
+  MoreVertical,
 } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
 import toast from "react-hot-toast";
@@ -36,20 +36,11 @@ const MatchDetails = () => {
   const [match, setMatch] = useState(null);
   const [loading, setLoading] = useState(true);
   const [showChat, setShowChat] = useState(false);
+  const [activeTab, setActiveTab] = useState("info"); // info, lineups, chat
+  const [showMenu, setShowMenu] = useState(false);
 
-  // États pour les modals
-  const [showEditModal, setShowEditModal] = useState(false);
-  const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [showCancelModal, setShowCancelModal] = useState(false);
-
-  // États pour l'édition
-  const [editForm, setEditForm] = useState({
-    matchDate: "",
-    duration: 90,
-    location: "",
-    refereeContact: "",
-    notes: "",
-  });
+  // Modals state (simplifié pour la démo)
+  const [isEditing, setIsEditing] = useState(false);
 
   useEffect(() => {
     loadMatch();
@@ -60,578 +51,392 @@ const MatchDetails = () => {
       setLoading(true);
       const response = await axios.get(`${API_BASE_URL}/matches/${matchId}`);
       setMatch(response.data);
-
-      // Pré-remplir le formulaire d'édition
-      setEditForm({
-        matchDate: response.data.matchDate?.slice(0, 16) || "",
-        duration: response.data.duration || 90,
-        location: response.data.location?.id || null,
-        refereeContact: response.data.refereeContact || "",
-        notes: response.data.notes || "",
-      });
+      // Ouvrir le chat par défaut si le match est en cours ou terminé
+      if (
+        response.data.status === "confirmed" ||
+        response.data.status === "completed"
+      ) {
+        // setShowChat(true);
+      }
     } catch (error) {
-      console.error("Error loading match:", error);
-      toast.error("Erreur lors du chargement du match");
+      toast.error("Impossible de charger le match");
       navigate("/matches");
     } finally {
       setLoading(false);
     }
   };
 
-  // Vérifier si l'utilisateur peut gérer ce match
-  const canManageMatch = () => {
-    if (!match || !user) return false;
-    // L'utilisateur peut gérer s'il est capitaine de l'équipe domicile
-    return match.homeTeam?.captain?.id === user.id;
-  };
-
-  const canCancelMatch = () => {
-    if (!match || !user) return false;
-    // Les deux capitaines peuvent annuler
-    return (
-      match.homeTeam?.captain?.id === user.id ||
-      match.awayTeam?.captain?.id === user.id
-    );
-  };
-
-  const handleEditMatch = async (e) => {
-    e.preventDefault();
-
+  // --- Actions ---
+  const handleStatusChange = async (newStatus, reason = null) => {
+    if (!window.confirm(`Confirmer l'action : ${newStatus} ?`)) return;
     try {
-      await axios.put(`${API_BASE_URL}/matches/${matchId}`, {
-        matchDate: editForm.matchDate,
-        durationMinutes: parseInt(editForm.duration),
-        locationId: editForm.location || null,
-        refereeContact: editForm.refereeContact || null,
-        notes: editForm.notes || null,
-      });
+      let endpoint = "";
+      let body = {};
+      if (newStatus === "confirmed") endpoint = "confirm";
+      if (newStatus === "cancelled") {
+        endpoint = "cancel";
+        body = { reason };
+      }
 
-      toast.success("Match modifié avec succès");
-      setShowEditModal(false);
+      await axios.patch(`${API_BASE_URL}/matches/${matchId}/${endpoint}`, body);
+      toast.success("Statut mis à jour");
       loadMatch();
     } catch (error) {
-      console.error("Error updating match:", error);
-      toast.error(
-        error.response?.data?.error || "Erreur lors de la modification"
-      );
+      toast.error("Erreur mise à jour");
     }
   };
 
-  const handleConfirmMatch = async () => {
-    try {
-      await axios.patch(`${API_BASE_URL}/matches/${matchId}/confirm`);
-      toast.success("Match confirmé");
-      loadMatch();
-    } catch (error) {
-      console.error("Error confirming match:", error);
-      toast.error("Erreur lors de la confirmation");
-    }
-  };
-
-  const handleCancelMatch = async (reason) => {
-    try {
-      await axios.patch(`${API_BASE_URL}/matches/${matchId}/cancel`, {
-        reason: reason || "Annulé par le capitaine",
-      });
-      toast.success("Match annulé");
-      setShowCancelModal(false);
-      loadMatch();
-    } catch (error) {
-      console.error("Error cancelling match:", error);
-      toast.error("Erreur lors de l'annulation");
-    }
-  };
-
-  const handleDeleteMatch = async () => {
+  const handleDelete = async () => {
+    if (!window.confirm("Supprimer définitivement ce match ?")) return;
     try {
       await axios.delete(`${API_BASE_URL}/matches/${matchId}`);
       toast.success("Match supprimé");
       navigate("/matches");
     } catch (error) {
-      console.error("Error deleting match:", error);
-      toast.error("Erreur lors de la suppression");
+      toast.error("Erreur suppression");
     }
   };
 
-  const formatDate = (dateString) => {
-    const date = new Date(dateString);
-    return {
-      date: date.toLocaleDateString("fr-FR", {
-        weekday: "long",
-        year: "numeric",
-        month: "long",
-        day: "numeric",
-      }),
-      time: date.toLocaleTimeString("fr-FR", {
-        hour: "2-digit",
-        minute: "2-digit",
-      }),
-    };
-  };
-
-  const getStatusColor = (status) => {
-    const colors = {
-      pending: "bg-yellow-100 text-yellow-800",
-      confirmed: "bg-blue-100 text-blue-800",
-      completed: "bg-green-100 text-green-800",
-      cancelled: "bg-red-100 text-red-800",
-    };
-    return colors[status] || "bg-gray-100 text-gray-800";
-  };
-
-  const getStatusLabel = (status) => {
-    const labels = {
-      pending: "En attente",
-      confirmed: "Confirmé",
-      completed: "Terminé",
-      cancelled: "Annulé",
-    };
-    return labels[status] || status;
-  };
-
-  if (loading) {
-    return (
-      <div className="flex justify-center items-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-500"></div>
-      </div>
-    );
-  }
-
-  if (!match) {
-    return (
-      <div className="text-center py-12">
-        <p className="text-gray-600">Match non trouvé</p>
-      </div>
-    );
-  }
-
-  const { date, time } = formatDate(match.matchDate);
   const isUserInvolved =
-    match.userTeamId &&
-    (match.homeTeam.id === match.userTeamId ||
-      match.awayTeam?.id === match.userTeamId);
+    match?.userTeamId &&
+    (match?.homeTeam?.id === match.userTeamId ||
+      match?.awayTeam?.id === match.userTeamId);
+  const canManage = match?.homeTeam?.captain?.id === user?.id;
 
-  const isPastMatch = new Date(match.matchDate) < new Date();
+  if (loading)
+    return (
+      <div className="flex justify-center items-center h-screen">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-500"></div>
+      </div>
+    );
+  if (!match) return null;
+
+  const matchDate = new Date(match.matchDate);
+  const isPast = matchDate < new Date();
 
   return (
-    <div className="max-w-6xl mx-auto">
-      {/* Header avec actions */}
-      <div className="flex items-center justify-between mb-8">
-        <button
-          onClick={() => navigate(-1)}
-          className="flex items-center text-gray-600 hover:text-gray-800"
-        >
-          <ArrowLeft className="w-5 h-5 mr-2" />
-          Retour
-        </button>
+    <div className="max-w-6xl mx-auto pb-12">
+      {/* --- Hero Section (Stadium Atmosphere) --- */}
+      <div className="relative rounded-3xl overflow-hidden shadow-2xl bg-gray-900 mb-8">
+        {/* Background Image with Overlay */}
+        <div className="absolute inset-0">
+          <img
+            src="https://images.unsplash.com/photo-1522778119026-d647f0565c6a?q=80&w=2070&auto=format&fit=crop"
+            alt="Stadium"
+            className="w-full h-full object-cover opacity-40"
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-gray-900 via-gray-900/80 to-transparent"></div>
+        </div>
 
-        <div className="flex items-center gap-3">
-          {/* Chat */}
-          {isUserInvolved && match.status === "confirmed" && (
-            <button
-              onClick={() => setShowChat(!showChat)}
-              className={`flex items-center px-4 py-2 rounded-lg transition-colors ${
-                showChat
-                  ? "bg-green-100 text-green-700"
-                  : "bg-green-600 text-white hover:bg-green-700"
-              }`}
-            >
-              <MessageCircle className="w-5 h-5 mr-2" />
-              {showChat ? "Fermer" : "Chat"}
-            </button>
-          )}
+        {/* Navigation Top */}
+        <div className="relative z-10 p-6 flex justify-between items-start">
+          <button
+            onClick={() => navigate("/matches")}
+            className="p-2 bg-white/10 hover:bg-white/20 backdrop-blur-md rounded-full text-white transition-all"
+          >
+            <ArrowLeft className="w-6 h-6" />
+          </button>
 
-          {/* Menu de gestion */}
-          {(canManageMatch() || canCancelMatch()) &&
-            match.status !== "cancelled" && (
-              <div className="relative group">
-                <button className="flex items-center px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors">
-                  <Settings className="w-5 h-5 mr-2" />
-                  Gérer
-                </button>
-
-                {/* Menu déroulant */}
-                <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-lg border border-gray-200 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-10">
-                  {/* Confirmer le match */}
-                  {canManageMatch() && match.status === "pending" && (
-                    <button
-                      onClick={handleConfirmMatch}
-                      className="w-full flex items-center px-4 py-3 text-left text-green-700 hover:bg-green-50 transition-colors"
-                    >
-                      <CheckCircle className="w-4 h-4 mr-3" />
-                      Confirmer le match
-                    </button>
-                  )}
-
-                  {/* Saisir/Valider le score */}
-                  {match.status === "completed" && isUserInvolved && (
-                    <Link
-                      to={`/matches/${matchId}/validate`}
-                      className="w-full flex items-center px-4 py-3 text-left text-blue-700 hover:bg-blue-50 transition-colors"
-                    >
-                      <Trophy className="w-4 h-4 mr-3" />
-                      Valider le score
-                    </Link>
-                  )}
-
-                  {/* Modifier le match */}
-                  {canManageMatch() &&
-                    !isPastMatch &&
-                    match.status !== "completed" && (
-                      <button
-                        onClick={() => setShowEditModal(true)}
-                        className="w-full flex items-center px-4 py-3 text-left text-blue-700 hover:bg-blue-50 transition-colors"
-                      >
-                        <Edit className="w-4 h-4 mr-3" />
-                        Modifier
-                      </button>
-                    )}
-
-                  {/* Annuler le match */}
-                  {canCancelMatch() &&
-                    !isPastMatch &&
-                    match.status !== "completed" && (
-                      <button
-                        onClick={() => setShowCancelModal(true)}
-                        className="w-full flex items-center px-4 py-3 text-left text-yellow-700 hover:bg-yellow-50 transition-colors"
-                      >
-                        <XCircle className="w-4 h-4 mr-3" />
-                        Annuler le match
-                      </button>
-                    )}
-
-                  {/* Supprimer le match */}
-                  {canManageMatch() && (
-                    <button
-                      onClick={() => setShowDeleteModal(true)}
-                      className="w-full flex items-center px-4 py-3 text-left text-red-700 hover:bg-red-50 transition-colors border-t border-gray-200"
-                    >
-                      <Trash2 className="w-4 h-4 mr-3" />
-                      Supprimer
-                    </button>
-                  )}
-                </div>
+          <div className="flex items-center gap-3">
+            {match.status === "confirmed" && (
+              <div className="px-3 py-1 rounded-full bg-green-500/20 border border-green-500/50 text-green-400 text-sm font-bold flex items-center backdrop-blur-md">
+                <div className="w-2 h-2 rounded-full bg-green-500 mr-2 animate-pulse"></div>
+                CONFIRMÉ
               </div>
             )}
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
-        {/* Informations principales du match */}
-        <div className={showChat ? "xl:col-span-2" : "xl:col-span-3"}>
-          <div className="bg-white rounded-lg shadow-md overflow-hidden">
-            {/* En-tête du match */}
-            <div className="bg-gradient-to-r from-green-500 to-blue-500 p-6 text-white">
-              <div className="flex items-center justify-between mb-4">
-                <span
-                  className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(
-                    match.status
-                  )} !bg-white`}
+            {canManage && (
+              <div className="relative">
+                <button
+                  onClick={() => setShowMenu(!showMenu)}
+                  className="p-2 bg-white/10 hover:bg-white/20 backdrop-blur-md rounded-full text-white transition-all"
                 >
-                  {getStatusLabel(match.status)}
-                </span>
-                <span className="text-green-100 text-sm">
-                  {match.type === "friendly" ? "Match amical" : match.type}
-                </span>
-              </div>
-
-              <div className="text-center">
-                <h1 className="text-3xl font-bold mb-2">
-                  {match.homeTeam.name} vs {match.awayTeam?.name || "À définir"}
-                </h1>
-
-                {match.status === "completed" && (
-                  <div className="text-4xl font-bold mb-4">
-                    {match.score.home} - {match.score.away}
-                  </div>
+                  <Settings className="w-6 h-6" />
+                </button>
+                {showMenu && (
+                  <>
+                    <div
+                      className="fixed inset-0 z-10"
+                      onClick={() => setShowMenu(false)}
+                    ></div>
+                    <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-xl py-2 z-20 animate-in fade-in zoom-in-95">
+                      {match.status === "pending" && (
+                        <button
+                          onClick={() => handleStatusChange("confirmed")}
+                          className="w-full px-4 py-2.5 text-left text-sm text-green-600 hover:bg-green-50 flex items-center"
+                        >
+                          <CheckCircle className="w-4 h-4 mr-2" /> Confirmer
+                        </button>
+                      )}
+                      <button
+                        onClick={() => navigate(`/matches/${matchId}/edit`)}
+                        className="w-full px-4 py-2.5 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center"
+                      >
+                        <Edit className="w-4 h-4 mr-2" /> Modifier
+                      </button>
+                      <button
+                        onClick={() =>
+                          handleStatusChange(
+                            "cancelled",
+                            "Annulé par le capitaine"
+                          )
+                        }
+                        className="w-full px-4 py-2.5 text-left text-sm text-orange-600 hover:bg-orange-50 flex items-center"
+                      >
+                        <XCircle className="w-4 h-4 mr-2" /> Annuler
+                      </button>
+                      <div className="border-t my-1"></div>
+                      <button
+                        onClick={handleDelete}
+                        className="w-full px-4 py-2.5 text-left text-sm text-red-600 hover:bg-red-50 flex items-center"
+                      >
+                        <Trash2 className="w-4 h-4 mr-2" /> Supprimer
+                      </button>
+                    </div>
+                  </>
                 )}
+              </div>
+            )}
+          </div>
+        </div>
 
-                <div className="flex items-center justify-center space-x-6 text-green-100">
-                  <div className="flex items-center">
-                    <Calendar className="w-5 h-5 mr-2" />
-                    <div>
-                      <div className="capitalize">{date}</div>
-                      <div>{time}</div>
-                    </div>
-                  </div>
+        {/* Scoreboard Center */}
+        <div className="relative z-10 flex flex-col items-center justify-center pb-12 px-4">
+          <div className="text-white/60 text-sm font-medium uppercase tracking-widest mb-6 flex items-center">
+            <Calendar className="w-4 h-4 mr-2" />
+            {matchDate.toLocaleDateString("fr-FR", {
+              weekday: "long",
+              day: "numeric",
+              month: "long",
+            })}
+            <span className="mx-2">•</span>
+            {matchDate.toLocaleTimeString("fr-FR", {
+              hour: "2-digit",
+              minute: "2-digit",
+            })}
+          </div>
 
-                  {match.location && (
-                    <div className="flex items-center">
-                      <MapPin className="w-5 h-5 mr-2" />
-                      <div>
-                        <div>{match.location.name}</div>
-                        <div className="text-sm">{match.location.city}</div>
-                      </div>
-                    </div>
-                  )}
+          <div className="flex items-center justify-center w-full max-w-4xl gap-8 md:gap-16">
+            {/* Home Team */}
+            <div className="flex flex-col items-center text-center flex-1">
+              <div className="w-20 h-20 md:w-28 md:h-28 rounded-full bg-white/10 backdrop-blur-sm border-4 border-white/20 p-4 mb-4 flex items-center justify-center">
+                {match.homeTeam.logoUrl ? (
+                  <img
+                    src={match.homeTeam.logoUrl}
+                    className="w-full h-full object-contain"
+                    alt="Home"
+                  />
+                ) : (
+                  <Shield className="w-10 h-10 md:w-14 md:h-14 text-blue-400" />
+                )}
+              </div>
+              <h2 className="text-xl md:text-3xl font-bold text-white leading-tight">
+                {match.homeTeam.name}
+              </h2>
+              <p className="text-blue-300 text-sm mt-1">Domicile</p>
+            </div>
+
+            {/* Score / VS */}
+            <div className="flex flex-col items-center justify-center">
+              {match.status === "completed" ? (
+                <div className="bg-white/10 backdrop-blur-md rounded-2xl px-6 py-3 md:px-10 md:py-5 border border-white/20">
+                  <span className="text-4xl md:text-6xl font-black text-white tracking-tight">
+                    {match.score?.home ?? 0} - {match.score?.away ?? 0}
+                  </span>
                 </div>
+              ) : (
+                <div className="w-16 h-16 md:w-20 md:h-20 rounded-full bg-white/5 backdrop-blur-sm border border-white/10 flex items-center justify-center">
+                  <span className="text-xl md:text-2xl font-black text-white/50 italic">
+                    VS
+                  </span>
+                </div>
+              )}
+              <div className="mt-4 text-white/50 text-sm font-medium uppercase tracking-wider bg-black/30 px-3 py-1 rounded-full">
+                {match.status === "completed"
+                  ? "Terminé"
+                  : match.duration + " min"}
               </div>
             </div>
 
-            {/* Détails des équipes */}
-            <div className="p-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Équipe domicile */}
-                <div className="bg-blue-50 rounded-lg p-4">
-                  <h3 className="text-lg font-semibold text-blue-900 mb-3 flex items-center">
-                    <Users className="w-5 h-5 mr-2" />
-                    {match.homeTeam.name} (Domicile)
-                  </h3>
-                  <div className="space-y-2 text-sm">
-                    <div>
-                      <span className="font-medium">Capitaine:</span>{" "}
-                      {match.homeTeam.captain.firstName}{" "}
-                      {match.homeTeam.captain.lastName}
-                    </div>
-                    <div>
-                      <span className="font-medium">Niveau:</span>{" "}
-                      {match.homeTeam.skillLevel}
-                    </div>
+            {/* Away Team */}
+            <div className="flex flex-col items-center text-center flex-1">
+              {match.awayTeam ? (
+                <>
+                  <div className="w-20 h-20 md:w-28 md:h-28 rounded-full bg-white/10 backdrop-blur-sm border-4 border-white/20 p-4 mb-4 flex items-center justify-center">
+                    {match.awayTeam.logoUrl ? (
+                      <img
+                        src={match.awayTeam.logoUrl}
+                        className="w-full h-full object-contain"
+                        alt="Away"
+                      />
+                    ) : (
+                      <Shield className="w-10 h-10 md:w-14 md:h-14 text-red-400" />
+                    )}
                   </div>
-                </div>
-
-                {/* Équipe visiteur */}
-                {match.awayTeam ? (
-                  <div className="bg-red-50 rounded-lg p-4">
-                    <h3 className="text-lg font-semibold text-red-900 mb-3 flex items-center">
-                      <Users className="w-5 h-5 mr-2" />
-                      {match.awayTeam.name} (Visiteur)
-                    </h3>
-                    <div className="space-y-2 text-sm">
-                      <div>
-                        <span className="font-medium">Capitaine:</span>{" "}
-                        {match.awayTeam.captain.firstName}{" "}
-                        {match.awayTeam.captain.lastName}
-                      </div>
-                      <div>
-                        <span className="font-medium">Niveau:</span>{" "}
-                        {match.awayTeam.skillLevel}
-                      </div>
-                    </div>
+                  <h2 className="text-xl md:text-3xl font-bold text-white leading-tight">
+                    {match.awayTeam.name}
+                  </h2>
+                  <p className="text-red-300 text-sm mt-1">Extérieur</p>
+                </>
+              ) : (
+                <div className="flex flex-col items-center opacity-60">
+                  <div className="w-24 h-24 rounded-full border-2 border-dashed border-white/30 flex items-center justify-center mb-4">
+                    <Users className="w-8 h-8 text-white/50" />
                   </div>
-                ) : (
-                  <div className="bg-gray-50 rounded-lg p-4 flex items-center justify-center">
-                    <div className="text-center text-gray-600">
-                      <Users className="w-12 h-12 text-gray-300 mx-auto mb-2" />
-                      <p>Équipe visiteur à définir</p>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Informations additionnelles */}
-              {(match.location || match.refereeContact || match.notes) && (
-                <div className="mt-6 pt-6 border-t">
-                  <h3 className="text-lg font-semibold mb-4">
-                    Informations additionnelles
-                  </h3>
-
-                  {match.location && (
-                    <div className="mb-4">
-                      <h4 className="font-medium text-gray-700 mb-2">Lieu</h4>
-                      <div className="bg-gray-50 rounded-lg p-3">
-                        <p className="font-medium">{match.location.name}</p>
-                        <p className="text-gray-600">
-                          {match.location.address}
-                        </p>
-                        {match.location.fieldType && (
-                          <p className="text-sm text-gray-500 mt-1">
-                            Type: {match.location.fieldType}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                  )}
-
-                  {match.refereeContact && (
-                    <div className="mb-4">
-                      <h4 className="font-medium text-gray-700 mb-2">
-                        Arbitre
-                      </h4>
-                      <p className="bg-gray-50 rounded-lg p-3">
-                        {match.refereeContact}
-                      </p>
-                    </div>
-                  )}
-
-                  {match.notes && (
-                    <div className="mb-4">
-                      <h4 className="font-medium text-gray-700 mb-2">Notes</h4>
-                      <p className="bg-gray-50 rounded-lg p-3">{match.notes}</p>
-                    </div>
-                  )}
+                  <p className="text-white/70">En attente d'adversaire</p>
                 </div>
               )}
             </div>
           </div>
         </div>
-
-        {/* Chat */}
-        {showChat && isUserInvolved && (
-          <div className="xl:col-span-1">
-            <div className="h-96 xl:h-[600px]">
-              <MatchChat matchId={matchId} onClose={() => setShowChat(false)} />
-            </div>
-          </div>
-        )}
       </div>
 
-      {/* Modal d'édition */}
-      {showEditModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg max-w-2xl w-full p-6">
-            <h3 className="text-xl font-bold mb-4">Modifier le match</h3>
+      {/* --- Content Grid --- */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        {/* Left: Main Info */}
+        <div className="lg:col-span-2 space-y-6">
+          {/* Tabs Navigation */}
+          <div className="flex items-center space-x-4 border-b border-gray-200 pb-1 mb-6">
+            <button
+              onClick={() => setActiveTab("info")}
+              className={`pb-3 px-2 text-sm font-bold border-b-2 transition ${
+                activeTab === "info"
+                  ? "border-indigo-600 text-indigo-600"
+                  : "border-transparent text-gray-500 hover:text-gray-700"
+              }`}
+            >
+              Informations
+            </button>
+            <button
+              onClick={() => setActiveTab("chat")}
+              className={`pb-3 px-2 text-sm font-bold border-b-2 transition ${
+                activeTab === "chat"
+                  ? "border-indigo-600 text-indigo-600"
+                  : "border-transparent text-gray-500 hover:text-gray-700"
+              }`}
+            >
+              Discussion d'avant-match
+            </button>
+          </div>
 
-            <form onSubmit={handleEditMatch}>
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Date et heure
-                  </label>
-                  <input
-                    type="datetime-local"
-                    value={editForm.matchDate}
-                    onChange={(e) =>
-                      setEditForm({ ...editForm, matchDate: e.target.value })
-                    }
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                    required
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Durée (minutes)
-                  </label>
-                  <input
-                    type="number"
-                    value={editForm.duration}
-                    onChange={(e) =>
-                      setEditForm({ ...editForm, duration: e.target.value })
-                    }
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                    min="30"
-                    max="180"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Contact arbitre (optionnel)
-                  </label>
-                  <input
-                    type="text"
-                    value={editForm.refereeContact}
-                    onChange={(e) =>
-                      setEditForm({
-                        ...editForm,
-                        refereeContact: e.target.value,
-                      })
-                    }
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                    placeholder="Nom et téléphone de l'arbitre"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Notes (optionnel)
-                  </label>
-                  <textarea
-                    value={editForm.notes}
-                    onChange={(e) =>
-                      setEditForm({ ...editForm, notes: e.target.value })
-                    }
-                    rows="3"
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                    placeholder="Informations complémentaires..."
-                  />
+          {activeTab === "info" && (
+            <div className="space-y-6 animate-in fade-in">
+              {/* Location Card */}
+              <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+                <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center">
+                  <MapPin className="w-5 h-5 mr-2 text-indigo-500" /> Détails du
+                  terrain
+                </h3>
+                <div className="flex items-start p-4 bg-gray-50 rounded-xl">
+                  <div className="flex-1">
+                    <h4 className="font-bold text-gray-900">
+                      {match.location?.name || "Lieu à définir"}
+                    </h4>
+                    <p className="text-gray-600 text-sm mt-1">
+                      {match.location?.address || "Adresse non renseignée"}
+                    </p>
+                    {match.location?.fieldType && (
+                      <span className="inline-block mt-2 text-xs font-medium bg-white border border-gray-200 px-2 py-1 rounded text-gray-600">
+                        {match.location.fieldType}
+                      </span>
+                    )}
+                  </div>
+                  <a
+                    href={`https://maps.google.com/?q=${match.location?.address}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="p-2 bg-white border border-gray-200 rounded-lg text-indigo-600 hover:bg-indigo-50 transition"
+                  >
+                    <MapPin className="w-5 h-5" />
+                  </a>
                 </div>
               </div>
 
-              <div className="flex gap-3 mt-6">
+              {/* Notes */}
+              {match.notes && (
+                <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+                  <h3 className="text-lg font-bold text-gray-900 mb-3 flex items-center">
+                    <Info className="w-5 h-5 mr-2 text-gray-400" /> Notes du
+                    capitaine
+                  </h3>
+                  <p className="text-gray-600 text-sm leading-relaxed">
+                    {match.notes}
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {activeTab === "chat" && (
+            <div className="h-[500px] bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+              {isUserInvolved ? (
+                <MatchChat matchId={matchId} />
+              ) : (
+                <div className="flex flex-col items-center justify-center h-full text-gray-500">
+                  <MessageCircle className="w-12 h-12 mb-3 opacity-30" />
+                  <p>Vous devez participer au match pour accéder au chat.</p>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Right: Sidebar */}
+        <div className="space-y-6">
+          {/* Arbitre */}
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+            <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider mb-4">
+              Officiels
+            </h3>
+            <div className="flex items-center">
+              <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center text-gray-500 mr-3">
+                <User className="w-5 h-5" />
+              </div>
+              <div>
+                <p className="text-sm font-bold text-gray-900">
+                  {match.refereeContact || "Arbitre à désigner"}
+                </p>
+                <p className="text-xs text-gray-500">Arbitre principal</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Share / Actions */}
+          <div className="bg-indigo-50 rounded-2xl p-6 border border-indigo-100">
+            <h3 className="text-indigo-900 font-bold mb-2">
+              Invitez vos supporters
+            </h3>
+            <p className="text-indigo-700/80 text-sm mb-4">
+              Partagez le lien du match pour que vos amis puissent suivre le
+              score.
+            </p>
+            <button className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-sm flex items-center justify-center transition shadow-lg shadow-indigo-200">
+              <Share2 className="w-4 h-4 mr-2" /> Partager le match
+            </button>
+          </div>
+
+          {/* Quick Actions for Captains */}
+          {canManage && (
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
+              <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3 pl-2">
+                Zone Capitaine
+              </h3>
+              <div className="space-y-2">
                 <button
-                  type="button"
-                  onClick={() => setShowEditModal(false)}
-                  className="flex-1 px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
+                  onClick={() => navigate(`/matches/${matchId}/validate`)}
+                  className="w-full text-left px-4 py-2 rounded-lg hover:bg-gray-50 text-sm text-gray-700 font-medium flex items-center"
                 >
-                  Annuler
+                  <Trophy className="w-4 h-4 mr-2 text-yellow-500" /> Saisir le
+                  score
                 </button>
-                <button
-                  type="submit"
-                  className="flex-1 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-                >
-                  Enregistrer
+                <button className="w-full text-left px-4 py-2 rounded-lg hover:bg-gray-50 text-sm text-gray-700 font-medium flex items-center">
+                  <Users className="w-4 h-4 mr-2 text-blue-500" /> Gérer la
+                  compo
                 </button>
               </div>
-            </form>
-          </div>
+            </div>
+          )}
         </div>
-      )}
-
-      {/* Modal d'annulation */}
-      {showCancelModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg max-w-md w-full p-6">
-            <div className="flex items-center mb-4">
-              <AlertTriangle className="w-6 h-6 text-yellow-600 mr-2" />
-              <h3 className="text-xl font-bold">Annuler le match</h3>
-            </div>
-
-            <p className="text-gray-600 mb-6">
-              Êtes-vous sûr de vouloir annuler ce match ? Les deux équipes
-              seront notifiées.
-            </p>
-
-            <div className="flex gap-3">
-              <button
-                onClick={() => setShowCancelModal(false)}
-                className="flex-1 px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
-              >
-                Non, garder
-              </button>
-              <button
-                onClick={() => handleCancelMatch()}
-                className="flex-1 px-6 py-3 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700"
-              >
-                Oui, annuler
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Modal de suppression */}
-      {showDeleteModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg max-w-md w-full p-6">
-            <div className="flex items-center mb-4">
-              <Trash2 className="w-6 h-6 text-red-600 mr-2" />
-              <h3 className="text-xl font-bold">Supprimer le match</h3>
-            </div>
-
-            <p className="text-gray-600 mb-6">
-              Cette action est irréversible. Toutes les données du match seront
-              définitivement supprimées.
-            </p>
-
-            <div className="flex gap-3">
-              <button
-                onClick={() => setShowDeleteModal(false)}
-                className="flex-1 px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
-              >
-                Annuler
-              </button>
-              <button
-                onClick={handleDeleteMatch}
-                className="flex-1 px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700"
-              >
-                Supprimer
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      </div>
     </div>
   );
 };

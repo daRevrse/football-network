@@ -1,147 +1,98 @@
 import React from "react";
-import { MapPin, Zap, Users, Navigation } from "lucide-react";
+import { MapPin, Trophy, Navigation } from "lucide-react";
 
-const SearchFilters = ({ filters, onFilterChange, onSearch, loading }) => {
-  const skillLevels = [
-    { value: "", label: "Tous les niveaux" },
-    { value: "beginner", label: "Débutant" },
-    { value: "amateur", label: "Amateur" },
-    { value: "intermediate", label: "Intermédiaire" },
-    { value: "advanced", label: "Avancé" },
-    { value: "semi_pro", label: "Semi-professionnel" },
-  ];
-
-  const radiusOptions = [
-    { value: 5, label: "5 km" },
-    { value: 10, label: "10 km" },
-    { value: 25, label: "25 km" },
-    { value: 50, label: "50 km" },
-    { value: 100, label: "100 km" },
-  ];
-
-  const handleFilterChange = (key, value) => {
+const SearchFilters = ({ filters, onFilterChange }) => {
+  const handleChange = (key, value) => {
     onFilterChange({ [key]: value });
   };
 
-  const canUseLocation = filters.userLat && filters.userLng;
-
   return (
-    <div className="bg-white rounded-lg shadow-md p-6 space-y-6">
-      <h3 className="text-lg font-semibold text-gray-900">
-        Filtres de recherche
-      </h3>
-
-      {/* Niveau de compétence */}
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">
-          <Zap className="inline w-4 h-4 mr-1" />
-          Niveau de compétence
+    <div className="space-y-8">
+      {/* Localisation */}
+      <div className="space-y-4">
+        <label className="text-sm font-bold text-gray-700 uppercase tracking-wider flex items-center">
+          <MapPin className="w-4 h-4 mr-2 text-indigo-500" /> Localisation
         </label>
-        <select
-          value={filters.skillLevel}
-          onChange={(e) => handleFilterChange("skillLevel", e.target.value)}
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-        >
-          {skillLevels.map((level) => (
-            <option key={level.value} value={level.value}>
-              {level.label}
-            </option>
-          ))}
-        </select>
-      </div>
 
-      {/* Localisation par ville */}
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">
-          <MapPin className="inline w-4 h-4 mr-1" />
-          Ville
-        </label>
-        <input
-          type="text"
-          value={filters.city}
-          onChange={(e) => handleFilterChange("city", e.target.value)}
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-          placeholder="Paris, Lyon, Marseille..."
-        />
-      </div>
-
-      {/* Géolocalisation */}
-      {canUseLocation && (
-        <div className="border-t pt-4">
-          <div className="flex items-center justify-between mb-4">
-            <label className="flex items-center">
-              <input
-                type="checkbox"
-                checked={filters.useLocation}
-                onChange={(e) =>
-                  handleFilterChange("useLocation", e.target.checked)
-                }
-                className="rounded border-gray-300 text-green-600 shadow-sm focus:border-green-300 focus:ring focus:ring-green-200 focus:ring-opacity-50"
-              />
-              <span className="ml-2 text-sm font-medium text-gray-700">
-                <Navigation className="inline w-4 h-4 mr-1" />
-                Recherche par proximité
-              </span>
-            </label>
+        {/* Toggle Géolocalisation */}
+        <label className="flex items-center cursor-pointer group">
+          <div className="relative">
+            <input
+              type="checkbox"
+              className="sr-only peer"
+              checked={filters.useLocation}
+              onChange={(e) => handleChange("useLocation", e.target.checked)}
+              disabled={!filters.userLat}
+            />
+            <div className="w-10 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
           </div>
+          <span className="ml-3 text-sm font-medium text-gray-700 group-hover:text-indigo-600 transition-colors flex items-center">
+            Autour de moi <Navigation className="w-3 h-3 ml-1.5 inline" />
+          </span>
+        </label>
 
-          {filters.useLocation && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Rayon de recherche
-              </label>
-              <select
-                value={filters.radius}
-                onChange={(e) =>
-                  handleFilterChange("radius", parseInt(e.target.value))
-                }
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-              >
-                {radiusOptions.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
+        {/* Ville (si pas de géo) */}
+        {!filters.useLocation && (
+          <input
+            type="text"
+            value={filters.city}
+            onChange={(e) => handleChange("city", e.target.value)}
+            placeholder="Ville (ex: Paris)"
+            className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+          />
+        )}
+
+        {/* Rayon Slider */}
+        {filters.useLocation && (
+          <div className="pt-2">
+            <div className="flex justify-between text-xs text-gray-500 mb-2">
+              <span>Rayon</span>
+              <span className="font-bold text-indigo-600">
+                {filters.radius} km
+              </span>
             </div>
-          )}
+            <input
+              type="range"
+              min="5"
+              max="100"
+              step="5"
+              value={filters.radius}
+              onChange={(e) => handleChange("radius", parseInt(e.target.value))}
+              className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
+            />
+          </div>
+        )}
+      </div>
+
+      <hr className="border-gray-100" />
+
+      {/* Niveau */}
+      <div className="space-y-3">
+        <label className="text-sm font-bold text-gray-700 uppercase tracking-wider flex items-center">
+          <Trophy className="w-4 h-4 mr-2 text-yellow-500" /> Niveau
+        </label>
+        <div className="space-y-2">
+          {[
+            { val: "", label: "Tous les niveaux" },
+            { val: "beginner", label: "Débutant" },
+            { val: "amateur", label: "Amateur" },
+            { val: "intermediate", label: "Intermédiaire" },
+            { val: "advanced", label: "Avancé" },
+            { val: "semi_pro", label: "Semi-Pro" },
+          ].map((opt) => (
+            <label key={opt.val} className="flex items-center cursor-pointer">
+              <input
+                type="radio"
+                name="skillLevel"
+                checked={filters.skillLevel === opt.val}
+                onChange={() => handleChange("skillLevel", opt.val)}
+                className="w-4 h-4 text-indigo-600 border-gray-300 focus:ring-indigo-500"
+              />
+              <span className="ml-3 text-sm text-gray-600">{opt.label}</span>
+            </label>
+          ))}
         </div>
-      )}
-
-      {!canUseLocation && (
-        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
-          <p className="text-yellow-800 text-sm">
-            <Navigation className="inline w-4 h-4 mr-1" />
-            Activez la géolocalisation pour rechercher par proximité
-          </p>
-        </div>
-      )}
-
-      {/* Bouton de recherche */}
-      <button
-        onClick={onSearch}
-        disabled={loading}
-        className="w-full flex items-center justify-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 transition-colors"
-      >
-        <Users className="w-4 h-4 mr-2" />
-        {loading ? "Recherche..." : "Rechercher"}
-      </button>
-
-      {/* Reset filtres */}
-      <button
-        onClick={() =>
-          onFilterChange({
-            search: "",
-            skillLevel: "",
-            city: "",
-            useLocation: false,
-            radius: 50,
-          })
-        }
-        className="w-full text-sm text-gray-600 hover:text-gray-800 transition-colors"
-      >
-        Réinitialiser les filtres
-      </button>
+      </div>
     </div>
   );
 };

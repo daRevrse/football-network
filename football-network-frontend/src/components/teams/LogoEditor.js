@@ -1,191 +1,71 @@
-// football-network-frontend/src/components/teams/LogoEditor.js
 import React, { useState, useRef, useEffect } from "react";
-import { X, Save, RotateCw, ZoomIn, ZoomOut, Move } from "lucide-react";
+import { X, Save, ZoomIn, ZoomOut, RotateCw, Loader2 } from "lucide-react";
 
 const LogoEditor = ({ image, onSave, onCancel, loading }) => {
   const [scale, setScale] = useState(1);
-  const [position, setPosition] = useState({ x: 0, y: 0 });
-  const [isDragging, setIsDragging] = useState(false);
-  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
-  const [imageSize, setImageSize] = useState({ width: 0, height: 0 });
-
+  const [rotation, setRotation] = useState(0);
   const canvasRef = useRef(null);
-  const imageRef = useRef(null);
-  const containerRef = useRef(null);
-
-  const CANVAS_SIZE = 400; // Taille du canvas carré
-  const CROP_SIZE = 400; // Taille du crop final
+  const imgRef = useRef(new Image());
 
   useEffect(() => {
-    loadImage();
+    imgRef.current.src = image.preview;
+    imgRef.current.onload = draw;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [image]);
 
   useEffect(() => {
-    drawCanvas();
-  }, [scale, position, imageSize]);
+    draw();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scale, rotation]);
 
-  const loadImage = () => {
-    const img = new Image();
-    img.onload = () => {
-      imageRef.current = img;
-
-      // Calculer la taille initiale pour que l'image remplisse le canvas
-      const aspectRatio = img.width / img.height;
-      let initialWidth, initialHeight;
-
-      if (aspectRatio > 1) {
-        initialHeight = CANVAS_SIZE;
-        initialWidth = CANVAS_SIZE * aspectRatio;
-      } else {
-        initialWidth = CANVAS_SIZE;
-        initialHeight = CANVAS_SIZE / aspectRatio;
-      }
-
-      setImageSize({ width: initialWidth, height: initialHeight });
-
-      // Centrer l'image
-      setPosition({
-        x: (CANVAS_SIZE - initialWidth) / 2,
-        y: (CANVAS_SIZE - initialHeight) / 2,
-      });
-    };
-
-    img.src = image.preview;
-  };
-
-  const drawCanvas = () => {
-    const canvas = canvasRef.current;
-    if (!canvas || !imageRef.current) return;
-
-    const ctx = canvas.getContext("2d");
-
-    // Effacer le canvas
-    ctx.clearRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
-
-    // Dessiner l'image
-    ctx.save();
-    ctx.drawImage(
-      imageRef.current,
-      position.x,
-      position.y,
-      imageSize.width * scale,
-      imageSize.height * scale
-    );
-    ctx.restore();
-
-    // Dessiner la zone de crop (cercle)
-    ctx.save();
-    ctx.strokeStyle = "#22C55E";
-    ctx.lineWidth = 3;
-    ctx.setLineDash([10, 5]);
-    ctx.beginPath();
-    ctx.arc(
-      CANVAS_SIZE / 2,
-      CANVAS_SIZE / 2,
-      CANVAS_SIZE / 2 - 10,
-      0,
-      Math.PI * 2
-    );
-    ctx.stroke();
-    ctx.restore();
-
-    // Assombrir la zone hors du cercle
-    ctx.save();
-    ctx.globalCompositeOperation = "source-over";
-    ctx.fillStyle = "rgba(0, 0, 0, 0.5)";
-    ctx.fillRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
-    ctx.globalCompositeOperation = "destination-out";
-    ctx.beginPath();
-    ctx.arc(
-      CANVAS_SIZE / 2,
-      CANVAS_SIZE / 2,
-      CANVAS_SIZE / 2 - 10,
-      0,
-      Math.PI * 2
-    );
-    ctx.fill();
-    ctx.restore();
-  };
-
-  const handleMouseDown = (e) => {
-    setIsDragging(true);
-    setDragStart({
-      x: e.clientX - position.x,
-      y: e.clientY - position.y,
-    });
-  };
-
-  const handleMouseMove = (e) => {
-    if (!isDragging) return;
-
-    setPosition({
-      x: e.clientX - dragStart.x,
-      y: e.clientY - dragStart.y,
-    });
-  };
-
-  const handleMouseUp = () => {
-    setIsDragging(false);
-  };
-
-  const handleZoomIn = () => {
-    setScale((prev) => Math.min(prev + 0.1, 3));
-  };
-
-  const handleZoomOut = () => {
-    setScale((prev) => Math.max(prev - 0.1, 0.5));
-  };
-
-  const handleReset = () => {
-    setScale(1);
-    setPosition({
-      x: (CANVAS_SIZE - imageSize.width) / 2,
-      y: (CANVAS_SIZE - imageSize.height) / 2,
-    });
-  };
-
-  const handleSave = async () => {
+  const draw = () => {
     const canvas = canvasRef.current;
     if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    const size = 300; // Canvas size
 
-    // Créer un canvas temporaire pour le crop final
-    const cropCanvas = document.createElement("canvas");
-    cropCanvas.width = CROP_SIZE;
-    cropCanvas.height = CROP_SIZE;
-    const cropCtx = cropCanvas.getContext("2d");
+    // Clear
+    ctx.clearRect(0, 0, size, size);
 
-    // Dessiner l'image cropée
-    cropCtx.save();
-    cropCtx.beginPath();
-    cropCtx.arc(CROP_SIZE / 2, CROP_SIZE / 2, CROP_SIZE / 2, 0, Math.PI * 2);
-    cropCtx.closePath();
-    cropCtx.clip();
+    // Background for transparency
+    ctx.fillStyle = "#f3f4f6";
+    ctx.fillRect(0, 0, size, size);
 
-    cropCtx.drawImage(
-      imageRef.current,
-      position.x,
-      position.y,
-      imageSize.width * scale,
-      imageSize.height * scale
-    );
-    cropCtx.restore();
+    ctx.save();
+    ctx.translate(size / 2, size / 2);
+    ctx.rotate((rotation * Math.PI) / 180);
+    ctx.scale(scale, scale);
 
-    // Convertir en blob
-    cropCanvas.toBlob(
+    // Draw Image centered
+    const img = imgRef.current;
+    if (img.width) {
+      const ratio = Math.max(size / img.width, size / img.height);
+      const w = img.width * ratio;
+      const h = img.height * ratio;
+      ctx.drawImage(img, -w / 2, -h / 2, w, h);
+    }
+    ctx.restore();
+
+    // Overlay Circle Mask
+    ctx.save();
+    ctx.globalCompositeOperation = "destination-in";
+    ctx.beginPath();
+    ctx.arc(size / 2, size / 2, size / 2 - 5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    // Border ring
+    ctx.beginPath();
+    ctx.arc(size / 2, size / 2, size / 2 - 5, 0, Math.PI * 2);
+    ctx.strokeStyle = "#22c55e"; // Green-500
+    ctx.lineWidth = 4;
+    ctx.stroke();
+  };
+
+  const handleSave = () => {
+    canvasRef.current.toBlob(
       (blob) => {
-        if (blob) {
-          // Calculer les données de crop pour le backend
-          const cropData = {
-            x: -position.x,
-            y: -position.y,
-            width: imageSize.width * scale,
-            height: imageSize.height * scale,
-            targetWidth: CROP_SIZE,
-            targetHeight: CROP_SIZE,
-          };
-
-          onSave(blob, cropData);
-        }
+        onSave(blob);
       },
       "image/jpeg",
       0.95
@@ -193,119 +73,76 @@ const LogoEditor = ({ image, onSave, onCancel, loading }) => {
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-        {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-200">
-          <h3 className="text-xl font-bold text-gray-900">Recadrer le logo</h3>
+    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+        <div className="p-4 border-b border-gray-100 flex justify-between items-center">
+          <h3 className="font-bold text-gray-900">Ajuster le logo</h3>
           <button
             onClick={onCancel}
-            className="text-gray-400 hover:text-gray-600 transition-colors"
-            disabled={loading}
+            className="text-gray-400 hover:text-gray-600"
           >
-            <X size={24} />
+            <X size={20} />
           </button>
         </div>
 
-        {/* Canvas */}
-        <div className="p-6">
-          <div
-            ref={containerRef}
-            className="relative mx-auto bg-gray-100 rounded-lg overflow-hidden"
-            style={{ width: CANVAS_SIZE, height: CANVAS_SIZE }}
-          >
-            <canvas
-              ref={canvasRef}
-              width={CANVAS_SIZE}
-              height={CANVAS_SIZE}
-              className="cursor-move"
-              onMouseDown={handleMouseDown}
-              onMouseMove={handleMouseMove}
-              onMouseUp={handleMouseUp}
-              onMouseLeave={handleMouseUp}
-            />
-          </div>
+        <div className="p-6 flex flex-col items-center">
+          <canvas
+            ref={canvasRef}
+            width={300}
+            height={300}
+            className="rounded-full shadow-inner bg-gray-100 cursor-move mb-6"
+          />
 
-          {/* Instructions */}
-          <div className="mt-4 text-center">
-            <p className="text-sm text-gray-600 flex items-center justify-center space-x-2">
-              <Move size={16} />
-              <span>
-                Glissez pour repositionner • Utilisez les boutons pour zoomer
-              </span>
-            </p>
-          </div>
-
-          {/* Contrôles */}
-          <div className="mt-6 flex items-center justify-center space-x-4">
+          <div className="flex items-center space-x-4 w-full justify-center">
             <button
-              onClick={handleZoomOut}
-              className="p-3 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
-              disabled={loading || scale <= 0.5}
+              onClick={() => setScale((s) => Math.max(0.5, s - 0.1))}
+              className="p-2 bg-gray-100 rounded-full hover:bg-gray-200"
             >
               <ZoomOut size={20} />
             </button>
-
-            <div className="flex items-center space-x-3">
-              <span className="text-sm text-gray-600">Zoom:</span>
-              <input
-                type="range"
-                min="0.5"
-                max="3"
-                step="0.1"
-                value={scale}
-                onChange={(e) => setScale(parseFloat(e.target.value))}
-                className="w-32"
-                disabled={loading}
-              />
-              <span className="text-sm font-medium text-gray-900 w-12">
-                {Math.round(scale * 100)}%
-              </span>
-            </div>
-
+            <input
+              type="range"
+              min="0.5"
+              max="3"
+              step="0.1"
+              value={scale}
+              onChange={(e) => setScale(parseFloat(e.target.value))}
+              className="w-32 accent-green-600"
+            />
             <button
-              onClick={handleZoomIn}
-              className="p-3 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
-              disabled={loading || scale >= 3}
+              onClick={() => setScale((s) => Math.min(3, s + 0.1))}
+              className="p-2 bg-gray-100 rounded-full hover:bg-gray-200"
             >
               <ZoomIn size={20} />
             </button>
-
+            <div className="w-px h-8 bg-gray-200 mx-2"></div>
             <button
-              onClick={handleReset}
-              className="p-3 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
-              disabled={loading}
+              onClick={() => setRotation((r) => r + 90)}
+              className="p-2 bg-gray-100 rounded-full hover:bg-gray-200"
             >
               <RotateCw size={20} />
             </button>
           </div>
         </div>
 
-        {/* Footer */}
-        <div className="flex items-center justify-end space-x-3 p-6 border-t border-gray-200 bg-gray-50">
+        <div className="p-4 bg-gray-50 border-t border-gray-100 flex justify-end gap-3">
           <button
             onClick={onCancel}
-            className="px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors font-medium"
-            disabled={loading}
+            className="px-4 py-2 text-gray-600 font-medium hover:bg-gray-200 rounded-lg transition"
           >
             Annuler
           </button>
           <button
             onClick={handleSave}
             disabled={loading}
-            className="px-6 py-3 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors font-medium flex items-center space-x-2 disabled:bg-gray-400 disabled:cursor-not-allowed"
+            className="px-6 py-2 bg-green-600 text-white font-bold rounded-lg hover:bg-green-700 transition flex items-center shadow-lg shadow-green-200"
           >
             {loading ? (
-              <>
-                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white" />
-                <span>Enregistrement...</span>
-              </>
+              <Loader2 className="w-4 h-4 animate-spin mr-2" />
             ) : (
-              <>
-                <Save size={18} />
-                <span>Enregistrer</span>
-              </>
+              <Save className="w-4 h-4 mr-2" />
             )}
+            Enregistrer
           </button>
         </div>
       </div>
