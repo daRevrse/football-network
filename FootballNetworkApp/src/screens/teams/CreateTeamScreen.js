@@ -1,5 +1,5 @@
 // ====== src/screens/teams/CreateTeamScreen.js - NOUVEAU DESIGN + BACKEND ======
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -12,11 +12,16 @@ import {
   StatusBar,
   KeyboardAvoidingView,
   ActivityIndicator,
+  Animated,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import LinearGradient from 'react-native-linear-gradient';
 import { DIMENSIONS, FONTS, SHADOWS } from '../../styles/theme';
 import { teamsApi } from '../../services/api';
+
+const HEADER_MAX_HEIGHT = 250;
+const HEADER_MIN_HEIGHT = Platform.OS === 'ios' ? 100 : 80;
+const HEADER_SCROLL_DISTANCE = HEADER_MAX_HEIGHT - HEADER_MIN_HEIGHT;
 
 // Composant ModernInput
 const ModernInput = ({
@@ -188,6 +193,45 @@ export const CreateTeamScreen = ({ navigation }) => {
   });
   const [errors, setErrors] = useState({});
 
+  const scrollY = useRef(new Animated.Value(0)).current;
+
+  // Animations du header
+  const headerHeight = scrollY.interpolate({
+    inputRange: [0, HEADER_SCROLL_DISTANCE],
+    outputRange: [HEADER_MAX_HEIGHT, HEADER_MIN_HEIGHT],
+    extrapolate: 'clamp',
+  });
+
+  const headerContentOpacity = scrollY.interpolate({
+    inputRange: [0, HEADER_SCROLL_DISTANCE / 2],
+    outputRange: [1, 0],
+    extrapolate: 'clamp',
+  });
+
+  const headerContentTranslateY = scrollY.interpolate({
+    inputRange: [0, HEADER_SCROLL_DISTANCE],
+    outputRange: [0, -20],
+    extrapolate: 'clamp',
+  });
+
+  const headerIconScale = scrollY.interpolate({
+    inputRange: [0, HEADER_SCROLL_DISTANCE],
+    outputRange: [1, 0.6],
+    extrapolate: 'clamp',
+  });
+
+  const headerTitleScale = scrollY.interpolate({
+    inputRange: [0, HEADER_SCROLL_DISTANCE],
+    outputRange: [1, 0.9],
+    extrapolate: 'clamp',
+  });
+
+  const headerTitleTranslateY = scrollY.interpolate({
+    inputRange: [0, HEADER_SCROLL_DISTANCE],
+    outputRange: [0, -140],
+    extrapolate: 'clamp',
+  });
+
   const updateFormData = (field, value) => {
     setFormData(prev => ({ ...prev, [field]: value }));
     // Effacer l'erreur du champ modifié
@@ -274,41 +318,92 @@ export const CreateTeamScreen = ({ navigation }) => {
     <View style={styles.container}>
       <StatusBar barStyle="light-content" />
 
-      {/* Header avec gradient */}
-      <LinearGradient
-        colors={['#22C55E', '#16A34A']}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={styles.header}
+      {/* Header animé */}
+      <Animated.View
+        style={[
+          styles.header,
+          {
+            height: headerHeight,
+          },
+        ]}
       >
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => navigation.goBack()}
+        <LinearGradient
+          colors={['#22C55E', '#16A34A']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.headerGradient}
         >
-          <Icon name="x" size={24} color="#FFF" />
-        </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => navigation.navigate('MyTeams')}
+          >
+            <Icon name="x" size={24} color="#FFF" />
+          </TouchableOpacity>
 
-        <View style={styles.headerContent}>
-          <View style={styles.headerIconContainer}>
-            <Icon name="plus-circle" size={32} color="#FFF" />
-          </View>
-          <Text style={styles.headerTitle}>Nouvelle équipe</Text>
-          <Text style={styles.headerSubtitle}>
-            Quelques infos pour commencer
-          </Text>
-        </View>
-      </LinearGradient>
+          <Animated.View
+            style={[
+              styles.headerContent,
+              {
+                // opacity: headerContentOpacity,
+                transform: [{ translateY: headerContentTranslateY }],
+              },
+            ]}
+          >
+            <Animated.View
+              style={[
+                styles.headerIconContainer,
+                {
+                  transform: [{ scale: headerIconScale }],
+                  opacity: headerContentOpacity,
+                },
+              ]}
+            >
+              <Icon name="plus-circle" size={32} color="#FFF" />
+            </Animated.View>
+            <Animated.Text
+              style={[
+                styles.headerTitle,
+                {
+                  transform: [
+                    {
+                      scale: headerTitleScale,
+                    },
+                    {
+                      translateY: headerTitleTranslateY,
+                    },
+                  ],
+                },
+              ]}
+            >
+              Nouvelle équipe
+            </Animated.Text>
+            <Animated.Text
+              style={[styles.headerSubtitle, { opacity: headerContentOpacity }]}
+            >
+              Quelques infos pour commencer
+            </Animated.Text>
+          </Animated.View>
+        </LinearGradient>
+      </Animated.View>
 
       <KeyboardAvoidingView
         style={styles.keyboardView}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
       >
-        <ScrollView
+        <Animated.ScrollView
           style={styles.scrollView}
-          contentContainerStyle={styles.scrollContent}
+          contentContainerStyle={[
+            styles.scrollContent,
+            { paddingTop: HEADER_MAX_HEIGHT + 24 },
+          ]}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
+          scrollEventThrottle={16}
+          onScroll={Animated.event(
+            [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+            { useNativeDriver: false },
+          )}
         >
           {/* Section Identité */}
           <SectionCard
@@ -391,7 +486,7 @@ export const CreateTeamScreen = ({ navigation }) => {
               maxLength={100}
             />
           </SectionCard>
-        </ScrollView>
+        </Animated.ScrollView>
 
         {/* Bouton Créer */}
         <View style={styles.footer}>
@@ -432,10 +527,18 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   header: {
-    paddingTop: Platform.OS === 'ios' ? 60 : 20,
-    paddingBottom: DIMENSIONS.SPACING_XL,
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 10,
+    overflow: 'hidden',
+  },
+  headerGradient: {
+    flex: 1,
+    paddingTop: Platform.OS === 'ios' ? 60 : 30,
     paddingHorizontal: DIMENSIONS.CONTAINER_PADDING,
-    ...SHADOWS.LARGE,
+    paddingBottom: DIMENSIONS.SPACING_XL,
   },
   backButton: {
     width: 40,

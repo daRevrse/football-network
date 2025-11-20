@@ -1,12 +1,7 @@
-// ====== src/navigation/SearchStackNavigator.js ======
+// ====== src/navigation/SearchStackNavigator.js - VERSION MISE À JOUR ======
 import React from 'react';
 import { createStackNavigator } from '@react-navigation/stack';
-import {
-  SearchScreen,
-  // SearchResultsScreen,
-  // TeamProfileScreen,
-} from '../screens/search';
-import { COLORS } from '@utils/constants';
+import { SearchScreen } from './../screens/search/SearchScreen';
 
 const Stack = createStackNavigator();
 
@@ -14,33 +9,32 @@ export const SearchStackNavigator = () => {
   return (
     <Stack.Navigator
       screenOptions={{
-        headerStyle: {
-          backgroundColor: COLORS.PRIMARY,
-        },
-        headerTintColor: COLORS.TEXT_WHITE,
-        headerTitleStyle: {
-          fontWeight: 'bold',
+        headerShown: false, // Tous les écrans gèrent leur propre header
+        gestureEnabled: true,
+        gestureDirection: 'horizontal',
+        cardStyleInterpolator: ({ current, layouts }) => {
+          return {
+            cardStyle: {
+              transform: [
+                {
+                  translateX: current.progress.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [layouts.screen.width, 0],
+                  }),
+                },
+              ],
+            },
+          };
         },
       }}
     >
       <Stack.Screen
         name="Search"
         component={SearchScreen}
-        // options={{ title: 'Rechercher des équipes' }}
-        options={{ headerShown: false }}
+        options={{
+          title: 'Rechercher',
+        }}
       />
-      {/* <Stack.Screen
-        name="SearchResults"
-        component={SearchResultsScreen}
-        options={{ title: 'Résultats de recherche' }}
-      />
-      <Stack.Screen
-        name="TeamProfile"
-        component={TeamProfileScreen}
-        options={({ route }) => ({
-          title: route.params?.teamName || 'Profil équipe',
-        })}
-      /> */}
     </Stack.Navigator>
   );
 };

@@ -1,91 +1,104 @@
-// ====== src/screens/search/SearchScreen.js ======
-import React, { useState } from 'react';
+// ====== src/screens/search/SearchScreen.js - VERSION COMPLÈTE AVEC BACKEND ======
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
+  StyleSheet,
   ScrollView,
   TouchableOpacity,
   TextInput,
-  StyleSheet,
   StatusBar,
-  Platform,
+  ActivityIndicator,
+  RefreshControl,
+  Alert,
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Feather';
+import LinearGradient from 'react-native-linear-gradient';
+import { teamsApi } from '../../services/api/teamsApi';
+import { matchesApi } from '../../services/api/matchesApi';
 import { useTheme } from '../../hooks/useTheme';
 import { DIMENSIONS, FONTS, SHADOWS } from '../../styles/theme';
+
+// ============ COMPOSANTS UTILITAIRES ============
 
 // Composant FilterChip
 const FilterChip = ({ label, icon, active, onPress, COLORS }) => (
   <TouchableOpacity
+    onPress={onPress}
     style={[
       styles.filterChip,
       {
-        backgroundColor: active ? COLORS.PRIMARY : COLORS.BACKGROUND_LIGHT,
+        backgroundColor: active ? 'transparent' : COLORS.BACKGROUND_LIGHT,
         borderColor: active ? COLORS.PRIMARY : COLORS.BORDER,
+      },
+    ]}
+  >
+    {active ? (
+      <LinearGradient
+        colors={[COLORS.PRIMARY || '#22C55E', COLORS.PRIMARY_DARK || '#16A34A']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0 }}
+        style={styles.filterGradient}
+      >
+        <Icon name={icon} size={16} color={COLORS.WHITE || '#FFFFFF'} />
+        <Text style={[styles.filterText, { color: COLORS.WHITE || '#FFFFFF' }]}>
+          {label}
+        </Text>
+      </LinearGradient>
+    ) : (
+      <View style={styles.filterContent}>
+        <Icon name={icon} size={16} color={COLORS.TEXT_MUTED || '#9CA3AF'} />
+        <Text
+          style={[styles.filterText, { color: COLORS.TEXT_MUTED || '#9CA3AF' }]}
+        >
+          {label}
+        </Text>
+      </View>
+    )}
+  </TouchableOpacity>
+);
+
+// Composant RecentSearchItem
+const RecentSearchItem = ({ search, onPress, onRemove, COLORS }) => (
+  <TouchableOpacity
+    style={[
+      styles.recentItem,
+      {
+        backgroundColor: COLORS.BACKGROUND_LIGHT,
+        borderColor: COLORS.BORDER,
       },
     ]}
     onPress={onPress}
   >
-    <Icon
-      name={icon}
-      size={16}
-      color={active ? COLORS.WHITE : COLORS.TEXT_SECONDARY}
-    />
-    <Text
-      style={[
-        styles.filterChipText,
-        { color: active ? COLORS.WHITE : COLORS.TEXT_SECONDARY },
-      ]}
-    >
-      {label}
-    </Text>
+    <Icon name="clock" size={16} color={COLORS.TEXT_MUTED} />
+    <View style={styles.recentContent}>
+      <Text style={[styles.recentText, { color: COLORS.TEXT_PRIMARY }]}>
+        {search}
+      </Text>
+    </View>
+    <TouchableOpacity style={styles.removeButton} onPress={onRemove}>
+      <Icon name="x" size={16} color={COLORS.TEXT_MUTED} />
+    </TouchableOpacity>
   </TouchableOpacity>
 );
 
-// Composant MatchResultCard
-const MatchResultCard = ({ match, onPress, COLORS }) => (
+// Composant PopularSearchItem
+const PopularSearchItem = ({ search, icon, onPress, COLORS }) => (
   <TouchableOpacity
-    style={[styles.resultCard, { backgroundColor: COLORS.WHITE }]}
+    style={[
+      styles.popularItem,
+      {
+        backgroundColor: COLORS.PRIMARY_ULTRA_LIGHT,
+        borderColor: COLORS.PRIMARY_LIGHT,
+      },
+    ]}
     onPress={onPress}
   >
-    <View style={styles.resultHeader}>
-      <View
-        style={[
-          styles.resultIcon,
-          { backgroundColor: COLORS.PRIMARY_ULTRA_LIGHT },
-        ]}
-      >
-        <Icon name="calendar" size={20} color={COLORS.PRIMARY} />
-      </View>
-      <View style={styles.resultInfo}>
-        <View style={styles.teamsRow}>
-          <Text style={[styles.teamNameSmall, { color: COLORS.TEXT_PRIMARY }]}>
-            {match.homeTeam}
-          </Text>
-          <Text style={[styles.vsTextSmall, { color: COLORS.TEXT_MUTED }]}>
-            vs
-          </Text>
-          <Text style={[styles.teamNameSmall, { color: COLORS.TEXT_PRIMARY }]}>
-            {match.awayTeam}
-          </Text>
-        </View>
-        <View style={styles.matchMeta}>
-          <View style={styles.metaItem}>
-            <Icon name="calendar" size={12} color={COLORS.TEXT_MUTED} />
-            <Text style={[styles.metaText, { color: COLORS.TEXT_SECONDARY }]}>
-              {match.date}
-            </Text>
-          </View>
-          <View style={styles.metaItem}>
-            <Icon name="map-pin" size={12} color={COLORS.TEXT_MUTED} />
-            <Text style={[styles.metaText, { color: COLORS.TEXT_SECONDARY }]}>
-              {match.location}
-            </Text>
-          </View>
-        </View>
-      </View>
-      <Icon name="chevron-right" size={20} color={COLORS.TEXT_MUTED} />
-    </View>
+    <Icon name={icon} size={16} color={COLORS.PRIMARY} />
+    <Text style={[styles.popularText, { color: COLORS.PRIMARY }]}>
+      {search}
+    </Text>
   </TouchableOpacity>
 );
 
@@ -94,6 +107,7 @@ const TeamResultCard = ({ team, onPress, COLORS }) => (
   <TouchableOpacity
     style={[styles.resultCard, { backgroundColor: COLORS.WHITE }]}
     onPress={onPress}
+    activeOpacity={0.7}
   >
     <View style={styles.resultHeader}>
       <View
@@ -102,7 +116,7 @@ const TeamResultCard = ({ team, onPress, COLORS }) => (
           { backgroundColor: COLORS.PRIMARY_ULTRA_LIGHT },
         ]}
       >
-        <Icon name="dribbble" size={24} color={COLORS.PRIMARY} />
+        <Icon name="users" size={24} color={COLORS.PRIMARY} />
       </View>
       <View style={styles.resultInfo}>
         <Text style={[styles.teamNameResult, { color: COLORS.TEXT_PRIMARY }]}>
@@ -111,28 +125,32 @@ const TeamResultCard = ({ team, onPress, COLORS }) => (
         <View style={styles.matchMeta}>
           <View style={styles.metaItem}>
             <Icon name="users" size={12} color={COLORS.TEXT_MUTED} />
-            <Text style={[styles.metaText, { color: COLORS.TEXT_SECONDARY }]}>
-              {team.members} membres
+            <Text style={[styles.metaText, { color: COLORS.TEXT_MUTED }]}>
+              {team.currentPlayers}/{team.maxPlayers} joueurs
             </Text>
           </View>
-          <View style={styles.metaItem}>
-            <Icon name="map-pin" size={12} color={COLORS.TEXT_MUTED} />
-            <Text style={[styles.metaText, { color: COLORS.TEXT_SECONDARY }]}>
-              {team.city}
-            </Text>
-          </View>
+          {team.locationCity && (
+            <View style={styles.metaItem}>
+              <Icon name="map-pin" size={12} color={COLORS.TEXT_MUTED} />
+              <Text style={[styles.metaText, { color: COLORS.TEXT_MUTED }]}>
+                {team.locationCity}
+              </Text>
+            </View>
+          )}
+        </View>
+        {team.skillLevel && (
           <View
             style={[
               styles.skillBadgeSmall,
-              { backgroundColor: COLORS.WARNING_LIGHT },
+              { backgroundColor: COLORS.PRIMARY_LIGHT },
             ]}
           >
-            <Icon name="star" size={10} color={COLORS.WARNING} />
-            <Text style={[styles.skillText, { color: COLORS.WARNING }]}>
-              {team.skillLevel}
+            <Icon name="award" size={10} color={COLORS.PRIMARY} />
+            <Text style={[styles.skillText, { color: COLORS.PRIMARY }]}>
+              {team.skillLevel.toUpperCase()}
             </Text>
           </View>
-        </View>
+        )}
       </View>
       <Icon name="chevron-right" size={20} color={COLORS.TEXT_MUTED} />
     </View>
@@ -144,33 +162,43 @@ const PlayerResultCard = ({ player, onPress, COLORS }) => (
   <TouchableOpacity
     style={[styles.resultCard, { backgroundColor: COLORS.WHITE }]}
     onPress={onPress}
+    activeOpacity={0.7}
   >
     <View style={styles.resultHeader}>
       <View
         style={[
           styles.playerAvatar,
-          { backgroundColor: COLORS.SECONDARY_LIGHT },
+          { backgroundColor: COLORS.PRIMARY_ULTRA_LIGHT },
         ]}
       >
-        <Icon name="user" size={20} color={COLORS.SECONDARY} />
+        <Icon name="user" size={24} color={COLORS.PRIMARY} />
       </View>
       <View style={styles.resultInfo}>
         <Text style={[styles.playerName, { color: COLORS.TEXT_PRIMARY }]}>
-          {player.name}
+          {player.firstName} {player.lastName}
         </Text>
         <View style={styles.matchMeta}>
-          <View style={styles.metaItem}>
-            <Icon name="target" size={12} color={COLORS.TEXT_MUTED} />
-            <Text style={[styles.metaText, { color: COLORS.TEXT_SECONDARY }]}>
-              {player.position}
-            </Text>
-          </View>
-          <View style={styles.metaItem}>
-            <Icon name="map-pin" size={12} color={COLORS.TEXT_MUTED} />
-            <Text style={[styles.metaText, { color: COLORS.TEXT_SECONDARY }]}>
-              {player.city}
-            </Text>
-          </View>
+          {player.position && (
+            <View style={styles.metaItem}>
+              <Icon name="target" size={12} color={COLORS.TEXT_MUTED} />
+              <Text style={[styles.metaText, { color: COLORS.TEXT_MUTED }]}>
+                {player.position}
+              </Text>
+            </View>
+          )}
+          {player.skillLevel && (
+            <View
+              style={[
+                styles.skillBadgeSmall,
+                { backgroundColor: COLORS.PRIMARY_LIGHT },
+              ]}
+            >
+              <Icon name="award" size={10} color={COLORS.PRIMARY} />
+              <Text style={[styles.skillText, { color: COLORS.PRIMARY }]}>
+                {player.skillLevel.toUpperCase()}
+              </Text>
+            </View>
+          )}
         </View>
       </View>
       <Icon name="chevron-right" size={20} color={COLORS.TEXT_MUTED} />
@@ -178,37 +206,41 @@ const PlayerResultCard = ({ player, onPress, COLORS }) => (
   </TouchableOpacity>
 );
 
-// Composant RecentSearchItem
-const RecentSearchItem = ({ search, onPress, onRemove, COLORS }) => (
-  <View style={styles.recentItem}>
-    <TouchableOpacity style={styles.recentContent} onPress={onPress}>
-      <Icon name="clock" size={18} color={COLORS.TEXT_MUTED} />
-      <Text style={[styles.recentText, { color: COLORS.TEXT_PRIMARY }]}>
-        {search}
-      </Text>
-    </TouchableOpacity>
-    <TouchableOpacity onPress={onRemove} style={styles.removeButton}>
-      <Icon name="x" size={16} color={COLORS.TEXT_MUTED} />
-    </TouchableOpacity>
-  </View>
-);
-
-// Composant PopularSearchItem
-const PopularSearchItem = ({ search, icon, onPress, COLORS }) => (
+// Composant MatchResultCard
+const MatchResultCard = ({ match, onPress, COLORS }) => (
   <TouchableOpacity
-    style={[
-      styles.popularItem,
-      {
-        backgroundColor: COLORS.BACKGROUND_LIGHT,
-        borderColor: COLORS.BORDER,
-      },
-    ]}
+    style={[styles.resultCard, { backgroundColor: COLORS.WHITE }]}
     onPress={onPress}
+    activeOpacity={0.7}
   >
-    <Icon name={icon} size={18} color={COLORS.PRIMARY} />
-    <Text style={[styles.popularText, { color: COLORS.TEXT_PRIMARY }]}>
-      {search}
-    </Text>
+    <View style={styles.teamsRow}>
+      <Text style={[styles.teamNameSmall, { color: COLORS.TEXT_PRIMARY }]}>
+        {match.homeTeamName}
+      </Text>
+      <Text style={[styles.vsTextSmall, { color: COLORS.PRIMARY }]}>VS</Text>
+      <Text style={[styles.teamNameSmall, { color: COLORS.TEXT_PRIMARY }]}>
+        {match.awayTeamName}
+      </Text>
+    </View>
+    <View style={styles.matchMeta}>
+      <View style={styles.metaItem}>
+        <Icon name="calendar" size={12} color={COLORS.TEXT_MUTED} />
+        <Text style={[styles.metaText, { color: COLORS.TEXT_MUTED }]}>
+          {new Date(match.matchDate).toLocaleDateString('fr-FR', {
+            day: 'numeric',
+            month: 'short',
+          })}
+        </Text>
+      </View>
+      {match.location && (
+        <View style={styles.metaItem}>
+          <Icon name="map-pin" size={12} color={COLORS.TEXT_MUTED} />
+          <Text style={[styles.metaText, { color: COLORS.TEXT_MUTED }]}>
+            {match.location}
+          </Text>
+        </View>
+      )}
+    </View>
   </TouchableOpacity>
 );
 
@@ -232,16 +264,24 @@ const EmptyState = ({ icon, title, message, COLORS }) => (
   </View>
 );
 
+// ============ COMPOSANT PRINCIPAL ============
+
 export const SearchScreen = ({ navigation }) => {
   const { colors: COLORS, isDark } = useTheme('auto');
   const [searchQuery, setSearchQuery] = useState('');
-  const [activeFilter, setActiveFilter] = useState('all'); // all, matches, teams, players
+  const [activeFilter, setActiveFilter] = useState('all');
+  const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
-  // Données mockées (à remplacer par API)
-  const [recentSearches] = useState([
+  // Résultats de recherche
+  const [teams, setTeams] = useState([]);
+  const [players, setPlayers] = useState([]);
+  const [matches, setMatches] = useState([]);
+
+  // Historique et suggestions
+  const [recentSearches, setRecentSearches] = useState([
     'Les Tigres de Paris',
     'Match amical Paris',
-    'Jean Dupont',
     'FC Olympique',
   ]);
 
@@ -249,82 +289,138 @@ export const SearchScreen = ({ navigation }) => {
     { text: 'Matchs ce weekend', icon: 'calendar' },
     { text: 'Équipes à Paris', icon: 'map-pin' },
     { text: 'Joueurs débutants', icon: 'users' },
-    { text: 'Tournois en cours', icon: 'trophy' },
   ]);
 
-  const [searchResults] = useState({
-    matches: [
-      {
-        id: 1,
-        homeTeam: 'Les Tigres de Paris',
-        awayTeam: 'FC Olympique',
-        date: 'Sam 20 Avril',
-        location: 'Paris 15e',
-      },
-      {
-        id: 2,
-        homeTeam: 'Racing Club 75',
-        awayTeam: 'AS Montparnasse',
-        date: 'Dim 21 Avril',
-        location: 'Paris 18e',
-      },
-    ],
-    teams: [
-      {
-        id: 1,
-        name: 'Les Tigres de Paris',
-        members: 11,
-        city: 'Paris',
-        skillLevel: 'Intermédiaire',
-      },
-      {
-        id: 2,
-        name: 'FC Montmartre',
-        members: 9,
-        city: 'Paris',
-        skillLevel: 'Amateur',
-      },
-      {
-        id: 3,
-        name: 'Racing Club 75',
-        members: 15,
-        city: 'Paris',
-        skillLevel: 'Avancé',
-      },
-    ],
-    players: [
-      {
-        id: 1,
-        name: 'Jean Dupont',
-        position: 'Attaquant',
-        city: 'Paris 15e',
-      },
-      {
-        id: 2,
-        name: 'Marie Martin',
-        position: 'Milieu',
-        city: 'Paris 18e',
-      },
-      {
-        id: 3,
-        name: 'Thomas Dubois',
-        position: 'Défenseur',
-        city: 'Paris 14e',
-      },
-    ],
-  });
+  // Debounce pour la recherche
+  const [searchTimeout, setSearchTimeout] = useState(null);
 
-  const handleSearch = query => {
-    setSearchQuery(query);
-    // Ici, on ferait un appel API pour rechercher
+  // Recherche quand l'utilisateur tape
+  useEffect(() => {
+    if (searchTimeout) {
+      clearTimeout(searchTimeout);
+    }
+
+    if (searchQuery.trim().length >= 2) {
+      const timeout = setTimeout(() => {
+        handleSearch();
+      }, 500); // Attendre 500ms après la dernière frappe
+      setSearchTimeout(timeout);
+    } else {
+      setTeams([]);
+      setPlayers([]);
+      setMatches([]);
+    }
+
+    return () => {
+      if (searchTimeout) {
+        clearTimeout(searchTimeout);
+      }
+    };
+  }, [searchQuery]);
+
+  // Charger les données au focus de l'écran
+  useFocusEffect(
+    useCallback(() => {
+      // Peut charger des données par défaut ici si nécessaire
+    }, []),
+  );
+
+  // ============ FONCTIONS DE RECHERCHE ============
+
+  const handleSearch = async () => {
+    if (!searchQuery.trim() || searchQuery.trim().length < 2) {
+      return;
+    }
+
+    try {
+      setLoading(true);
+
+      // Rechercher selon le filtre actif
+      if (activeFilter === 'all' || activeFilter === 'teams') {
+        await searchTeams();
+      }
+      if (activeFilter === 'all' || activeFilter === 'players') {
+        await searchPlayers();
+      }
+      if (activeFilter === 'all' || activeFilter === 'matches') {
+        await searchMatches();
+      }
+
+      // Ajouter à l'historique
+      if (!recentSearches.includes(searchQuery.trim())) {
+        setRecentSearches(prev => [searchQuery.trim(), ...prev.slice(0, 4)]);
+      }
+    } catch (error) {
+      console.error('Search error:', error);
+      Alert.alert('Erreur', 'Erreur lors de la recherche');
+    } finally {
+      setLoading(false);
+    }
   };
+
+  const searchTeams = async () => {
+    try {
+      const result = await teamsApi.searchTeams({
+        search: searchQuery,
+        limit: 10,
+        offset: 0,
+      });
+
+      if (result.success) {
+        setTeams(result.data || []);
+      } else {
+        console.error('Teams search error:', result.error);
+        setTeams([]);
+      }
+    } catch (error) {
+      console.error('Teams search error:', error);
+      setTeams([]);
+    }
+  };
+
+  const searchPlayers = async () => {
+    try {
+      const result = await teamsApi.searchPlayers(searchQuery);
+
+      if (result.success) {
+        setPlayers(result.data || []);
+      } else {
+        console.error('Players search error:', result.error);
+        setPlayers([]);
+      }
+    } catch (error) {
+      console.error('Players search error:', error);
+      setPlayers([]);
+    }
+  };
+
+  const searchMatches = async () => {
+    try {
+      const result = await matchesApi.getMatches({
+        search: searchQuery,
+        limit: 10,
+      });
+
+      if (result.success) {
+        setMatches(result.data || []);
+      } else {
+        console.error('Matches search error:', result.error);
+        setMatches([]);
+      }
+    } catch (error) {
+      console.error('Matches search error:', error);
+      setMatches([]);
+    }
+  };
+
+  // ============ GESTIONNAIRES D'ÉVÉNEMENTS ============
 
   const handleRecentSearch = search => {
     setSearchQuery(search);
   };
 
   const handleRemoveRecentSearch = search => {
-    // Supprimer de l'historique
+    setRecentSearches(prev => prev.filter(s => s !== search));
   };
 
   const handlePopularSearch = search => {
@@ -333,20 +429,33 @@ export const SearchScreen = ({ navigation }) => {
 
   const handleClearSearch = () => {
     setSearchQuery('');
+    setTeams([]);
+    setPlayers([]);
+    setMatches([]);
   };
 
+  const onRefresh = async () => {
+    setRefreshing(true);
+    if (searchQuery.trim().length >= 2) {
+      await handleSearch();
+    }
+    setRefreshing(false);
+  };
+
+  // ============ FILTRAGE DES RÉSULTATS ============
+
   const getFilteredResults = () => {
-    if (!searchQuery) return null;
+    if (!searchQuery || searchQuery.trim().length < 2) return null;
 
     switch (activeFilter) {
       case 'matches':
-        return { matches: searchResults.matches };
+        return { matches };
       case 'teams':
-        return { teams: searchResults.teams };
+        return { teams };
       case 'players':
-        return { players: searchResults.players };
+        return { players };
       default:
-        return searchResults;
+        return { matches, teams, players };
     }
   };
 
@@ -357,11 +466,16 @@ export const SearchScreen = ({ navigation }) => {
       filteredResults.teams?.length > 0 ||
       filteredResults.players?.length > 0);
 
+  // ============ RENDU ============
+
   return (
     <View
       style={[styles.container, { backgroundColor: COLORS.BACKGROUND_LIGHT }]}
     >
-      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
+      <StatusBar
+        barStyle={isDark ? 'light-content' : 'dark-content'}
+        backgroundColor={COLORS.WHITE}
+      />
 
       {/* Header avec barre de recherche */}
       <View style={[styles.header, { backgroundColor: COLORS.WHITE }]}>
@@ -387,8 +501,10 @@ export const SearchScreen = ({ navigation }) => {
               placeholder="Rechercher matchs, équipes, joueurs..."
               placeholderTextColor={COLORS.TEXT_MUTED}
               value={searchQuery}
-              onChangeText={handleSearch}
+              onChangeText={setSearchQuery}
               autoFocus
+              returnKeyType="search"
+              onSubmitEditing={handleSearch}
             />
             {searchQuery.length > 0 && (
               <TouchableOpacity onPress={handleClearSearch}>
@@ -442,8 +558,22 @@ export const SearchScreen = ({ navigation }) => {
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={COLORS.PRIMARY}
+            colors={[COLORS.PRIMARY]}
+          />
+        }
       >
-        {!searchQuery ? (
+        {loading && (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={COLORS.PRIMARY} />
+          </View>
+        )}
+
+        {!searchQuery || searchQuery.trim().length < 2 ? (
           // État initial - Recherches récentes et populaires
           <>
             {/* Recherches récentes */}
@@ -458,7 +588,7 @@ export const SearchScreen = ({ navigation }) => {
                   >
                     Recherches récentes
                   </Text>
-                  <TouchableOpacity>
+                  <TouchableOpacity onPress={() => setRecentSearches([])}>
                     <Text style={[styles.clearText, { color: COLORS.PRIMARY }]}>
                       Effacer
                     </Text>
@@ -515,7 +645,7 @@ export const SearchScreen = ({ navigation }) => {
               </Text>
             </View>
           </>
-        ) : !hasResults ? (
+        ) : !hasResults && !loading ? (
           // Aucun résultat
           <EmptyState
             icon="search"
@@ -546,8 +676,9 @@ export const SearchScreen = ({ navigation }) => {
                       key={match.id}
                       match={match}
                       onPress={() =>
-                        navigation.navigate('MatchDetail', {
-                          matchId: match.id,
+                        navigation.navigate('Matches', {
+                          screen: 'MatchDetail',
+                          params: { matchId: match.id },
                         })
                       }
                       COLORS={COLORS}
@@ -577,9 +708,9 @@ export const SearchScreen = ({ navigation }) => {
                       key={team.id}
                       team={team}
                       onPress={() =>
-                        navigation.navigate('TeamDetail', {
-                          teamId: team.id,
-                          teamName: team.name,
+                        navigation.navigate('Teams', {
+                          screen: 'TeamDetail',
+                          params: { teamId: team.id },
                         })
                       }
                       COLORS={COLORS}
@@ -608,11 +739,10 @@ export const SearchScreen = ({ navigation }) => {
                     <PlayerResultCard
                       key={player.id}
                       player={player}
-                      onPress={() =>
-                        navigation.navigate('PlayerProfile', {
-                          playerId: player.id,
-                        })
-                      }
+                      onPress={() => {
+                        // Navigation vers le profil du joueur
+                        Alert.alert('Info', 'Profil du joueur à implémenter');
+                      }}
                       COLORS={COLORS}
                     />
                   ))}
@@ -626,64 +756,78 @@ export const SearchScreen = ({ navigation }) => {
   );
 };
 
+// ============ STYLES ============
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
   header: {
-    paddingTop: Platform.OS === 'ios' ? 60 : 20,
+    paddingTop: Platform.OS === 'ios' ? 50 : 20,
     paddingBottom: DIMENSIONS.SPACING_MD,
     ...SHADOWS.SMALL,
   },
   headerTop: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: DIMENSIONS.CONTAINER_PADDING,
-    marginBottom: DIMENSIONS.SPACING_SM,
-    gap: DIMENSIONS.SPACING_SM,
+    paddingHorizontal: DIMENSIONS.SPACING_LG,
+    gap: DIMENSIONS.SPACING_MD,
   },
   backButton: {
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
+    padding: DIMENSIONS.SPACING_SM,
   },
   searchBar: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: DIMENSIONS.SPACING_MD,
-    height: 48,
     borderRadius: DIMENSIONS.BORDER_RADIUS_MD,
     borderWidth: 1,
     gap: DIMENSIONS.SPACING_SM,
+    height: 44,
   },
   searchInput: {
     flex: 1,
     fontSize: FONTS.SIZE.MD,
+    fontFamily: FONTS.FAMILY.REGULAR,
   },
   filtersContainer: {
-    paddingHorizontal: DIMENSIONS.CONTAINER_PADDING,
+    paddingHorizontal: DIMENSIONS.SPACING_LG,
+    paddingTop: DIMENSIONS.SPACING_MD,
     gap: DIMENSIONS.SPACING_SM,
   },
   filterChip: {
+    borderRadius: DIMENSIONS.BORDER_RADIUS_FULL,
+    borderWidth: 1,
+    overflow: 'hidden',
+  },
+  filterGradient: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: DIMENSIONS.SPACING_MD,
     paddingVertical: DIMENSIONS.SPACING_SM,
-    borderRadius: DIMENSIONS.BORDER_RADIUS_FULL,
-    borderWidth: 1,
     gap: DIMENSIONS.SPACING_XS,
   },
-  filterChipText: {
+  filterContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: DIMENSIONS.SPACING_MD,
+    paddingVertical: DIMENSIONS.SPACING_SM,
+    gap: DIMENSIONS.SPACING_XS,
+  },
+  filterText: {
     fontSize: FONTS.SIZE.SM,
-    fontWeight: FONTS.WEIGHT.SEMIBOLD,
+    fontWeight: FONTS.WEIGHT.MEDIUM,
   },
   scrollView: {
     flex: 1,
   },
   scrollContent: {
-    padding: DIMENSIONS.CONTAINER_PADDING,
-    paddingBottom: DIMENSIONS.SPACING_XXL,
+    padding: DIMENSIONS.SPACING_LG,
+  },
+  loadingContainer: {
+    paddingVertical: DIMENSIONS.SPACING_XXL,
+    alignItems: 'center',
   },
   section: {
     marginBottom: DIMENSIONS.SPACING_XL,
@@ -700,16 +844,18 @@ const styles = StyleSheet.create({
   },
   clearText: {
     fontSize: FONTS.SIZE.SM,
-    fontWeight: FONTS.WEIGHT.SEMIBOLD,
+    fontWeight: FONTS.WEIGHT.MEDIUM,
   },
   recentList: {
-    gap: DIMENSIONS.SPACING_XS,
+    gap: DIMENSIONS.SPACING_SM,
   },
   recentItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: DIMENSIONS.SPACING_SM,
+    padding: DIMENSIONS.SPACING_MD,
+    borderRadius: DIMENSIONS.BORDER_RADIUS_MD,
+    borderWidth: 1,
+    gap: DIMENSIONS.SPACING_MD,
   },
   recentContent: {
     flexDirection: 'row',
@@ -778,14 +924,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
-  resultIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: DIMENSIONS.SPACING_MD,
-  },
   teamIconLarge: {
     width: 48,
     height: 48,
@@ -849,6 +987,8 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
     borderRadius: DIMENSIONS.BORDER_RADIUS_FULL,
     gap: DIMENSIONS.SPACING_XXS,
+    marginTop: DIMENSIONS.SPACING_XS,
+    alignSelf: 'flex-start',
   },
   skillText: {
     fontSize: FONTS.SIZE.XXS,
