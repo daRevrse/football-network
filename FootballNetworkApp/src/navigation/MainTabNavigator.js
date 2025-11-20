@@ -11,6 +11,7 @@ import { SearchStackNavigator } from './SearchStackNavigator';
 import { ProfileStackNavigator } from './ProfileStackNavigator';
 import { useTheme } from '../hooks/useTheme';
 import { DIMENSIONS, FONTS, SHADOWS } from '../styles/theme';
+import FeedScreen from './../screens/feed/FeedScreen';
 
 const Tab = createBottomTabNavigator();
 
@@ -133,6 +134,16 @@ export const MainTabNavigator = () => {
         name="Profile"
         component={ProfileStackNavigator}
         options={{ title: 'Profil' }}
+      />
+      <Tab.Screen
+        name="Feed"
+        component={FeedScreen}
+        options={{
+          tabBarLabel: 'Feed',
+          tabBarIcon: ({ color, size }) => (
+            <Icon name="activity" size={size} color={color} />
+          ),
+        }}
       />
     </Tab.Navigator>
   );

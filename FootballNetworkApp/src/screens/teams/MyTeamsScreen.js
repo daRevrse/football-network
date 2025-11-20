@@ -1,5 +1,5 @@
 // ====== src/screens/teams/MyTeamsScreen.js - NOUVEAU DESIGN + BACKEND ======
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -12,6 +12,7 @@ import {
   RefreshControl,
   Dimensions,
   ActivityIndicator,
+  Animated,
 } from 'react-native';
 import { useSelector } from 'react-redux';
 import Icon from 'react-native-vector-icons/Feather';
@@ -21,6 +22,9 @@ import { teamsApi } from '../../services/api';
 import { LinearGradient } from 'react-native-linear-gradient';
 
 const { width } = Dimensions.get('window');
+const HEADER_MAX_HEIGHT = 280;
+const HEADER_MIN_HEIGHT = Platform.OS === 'ios' ? 110 : 140;
+const HEADER_SCROLL_DISTANCE = HEADER_MAX_HEIGHT - HEADER_MIN_HEIGHT;
 
 // Composant TeamCard moderne
 const TeamCard = ({ team, onPress, onManage }) => {
@@ -184,6 +188,8 @@ export const MyTeamsScreen = ({ navigation }) => {
     totalMembers: 0,
   });
 
+  const scrollY = useRef(new Animated.Value(0)).current;
+
   // Charger les équipes au focus de l'écran
   useFocusEffect(
     useCallback(() => {
@@ -251,6 +257,37 @@ export const MyTeamsScreen = ({ navigation }) => {
     navigation.navigate('CreateTeam');
   };
 
+  // Animations du header
+  const headerHeight = scrollY.interpolate({
+    inputRange: [0, HEADER_SCROLL_DISTANCE],
+    outputRange: [HEADER_MAX_HEIGHT, HEADER_MIN_HEIGHT],
+    extrapolate: 'clamp',
+  });
+
+  const headerContentOpacity = scrollY.interpolate({
+    inputRange: [0, HEADER_SCROLL_DISTANCE / 2],
+    outputRange: [1, 0],
+    extrapolate: 'clamp',
+  });
+
+  const headerContentTranslateY = scrollY.interpolate({
+    inputRange: [0, HEADER_SCROLL_DISTANCE],
+    outputRange: [0, -30],
+    extrapolate: 'clamp',
+  });
+
+  const headerTitleScale = scrollY.interpolate({
+    inputRange: [0, HEADER_SCROLL_DISTANCE],
+    outputRange: [1, 0.8],
+    extrapolate: 'clamp',
+  });
+
+  const headerTitleTranslateY = scrollY.interpolate({
+    inputRange: [0, HEADER_SCROLL_DISTANCE],
+    outputRange: [0, 0],
+    extrapolate: 'clamp',
+  });
+
   // Filtrer les équipes selon l'onglet actif
   const filteredTeams = teams.filter(team => {
     if (activeTab === 'owner') {
@@ -275,133 +312,174 @@ export const MyTeamsScreen = ({ navigation }) => {
     <View style={styles.container}>
       <StatusBar barStyle="light-content" />
 
-      {/* Header avec gradient */}
-      <LinearGradient
-        colors={['#22C55E', '#16A34A', '#15803D']}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={styles.header}
+      {/* Header avec gradient animé */}
+      <Animated.View
+        style={[
+          styles.header,
+          {
+            height: headerHeight,
+          },
+        ]}
       >
-        <View style={styles.headerTop}>
-          <View>
-            <Text style={styles.headerTitle}>Mes Équipes</Text>
-            <Text style={styles.headerSubtitle}>
-              {teams.length} {teams.length > 1 ? 'équipes' : 'équipe'}
-            </Text>
+        <LinearGradient
+          colors={['#22C55E', '#16A34A', '#15803D']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.headerGradient}
+        >
+          <View style={styles.headerTop}>
+            <Animated.View
+              style={[
+                styles.headerTitleContainer,
+                {
+                  transform: [
+                    { translateY: headerTitleTranslateY },
+                    { scale: headerTitleScale },
+                  ],
+                },
+              ]}
+            >
+              <Text style={styles.headerTitle}>Mes Équipes</Text>
+              <Animated.Text
+                style={[
+                  styles.headerSubtitle,
+                  { opacity: headerContentOpacity },
+                ]}
+              >
+                {teams.length} {teams.length > 1 ? 'équipes' : 'équipe'}
+              </Animated.Text>
+            </Animated.View>
+
+            <TouchableOpacity
+              style={styles.searchButton}
+              onPress={() => navigation.navigate('Search')}
+            >
+              <Icon name="search" size={20} color="#FFF" />
+            </TouchableOpacity>
           </View>
-          <TouchableOpacity
-            style={styles.searchButton}
-            onPress={() => navigation.navigate('Search')}
+
+          {/* Quick Stats animés */}
+          <Animated.View
+            style={[
+              styles.quickStatsContainer,
+              {
+                opacity: headerContentOpacity,
+                transform: [{ translateY: headerContentTranslateY }],
+              },
+            ]}
           >
-            <Icon name="search" size={20} color="#FFF" />
+            <QuickStat
+              icon="users"
+              value={stats.totalTeams}
+              label="Équipes"
+              gradient={['rgba(255,255,255,0.25)', 'rgba(255,255,255,0.15)']}
+            />
+            <QuickStat
+              icon="award"
+              value={stats.ownedTeams}
+              label="Capitaine"
+              gradient={['rgba(255,255,255,0.25)', 'rgba(255,255,255,0.15)']}
+            />
+            <QuickStat
+              icon="user"
+              value={stats.totalMembers}
+              label="Membres"
+              gradient={['rgba(255,255,255,0.25)', 'rgba(255,255,255,0.15)']}
+            />
+          </Animated.View>
+        </LinearGradient>
+        {/* Tabs */}
+        <View style={styles.tabsContainer}>
+          <TouchableOpacity
+            style={[styles.tab, activeTab === 'all' && styles.tabActive]}
+            onPress={() => setActiveTab('all')}
+          >
+            {activeTab === 'all' ? (
+              <LinearGradient
+                colors={['#22C55E', '#16A34A']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.tabGradient}
+              >
+                <Icon name="list" size={16} color="#FFF" />
+                <Text style={styles.tabTextActive}>Toutes</Text>
+              </LinearGradient>
+            ) : (
+              <View style={styles.tabContent}>
+                <Icon name="list" size={16} color="#6B7280" />
+                <Text style={styles.tabText}>Toutes</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.tab, activeTab === 'owner' && styles.tabActive]}
+            onPress={() => setActiveTab('owner')}
+          >
+            {activeTab === 'owner' ? (
+              <LinearGradient
+                colors={['#22C55E', '#16A34A']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.tabGradient}
+              >
+                <Icon name="award" size={16} color="#FFF" />
+                <Text style={styles.tabTextActive}>Capitaine</Text>
+              </LinearGradient>
+            ) : (
+              <View style={styles.tabContent}>
+                <Icon name="award" size={16} color="#6B7280" />
+                <Text style={styles.tabText}>Capitaine</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.tab, activeTab === 'member' && styles.tabActive]}
+            onPress={() => setActiveTab('member')}
+          >
+            {activeTab === 'member' ? (
+              <LinearGradient
+                colors={['#22C55E', '#16A34A']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.tabGradient}
+              >
+                <Icon name="user" size={16} color="#FFF" />
+                <Text style={styles.tabTextActive}>Membre</Text>
+              </LinearGradient>
+            ) : (
+              <View style={styles.tabContent}>
+                <Icon name="user" size={16} color="#6B7280" />
+                <Text style={styles.tabText}>Membre</Text>
+              </View>
+            )}
           </TouchableOpacity>
         </View>
+      </Animated.View>
 
-        {/* Quick Stats */}
-        <View style={styles.quickStatsContainer}>
-          <QuickStat
-            icon="users"
-            value={stats.totalTeams}
-            label="Équipes"
-            gradient={['rgba(255,255,255,0.25)', 'rgba(255,255,255,0.15)']}
-          />
-          <QuickStat
-            icon="award"
-            value={stats.ownedTeams}
-            label="Capitaine"
-            gradient={['rgba(255,255,255,0.25)', 'rgba(255,255,255,0.15)']}
-          />
-          <QuickStat
-            icon="user"
-            value={stats.totalMembers}
-            label="Membres"
-            gradient={['rgba(255,255,255,0.25)', 'rgba(255,255,255,0.15)']}
-          />
-        </View>
-      </LinearGradient>
-
-      {/* Tabs */}
-      <View style={styles.tabsContainer}>
-        <TouchableOpacity
-          style={[styles.tab, activeTab === 'all' && styles.tabActive]}
-          onPress={() => setActiveTab('all')}
-        >
-          {activeTab === 'all' ? (
-            <LinearGradient
-              colors={['#22C55E', '#16A34A']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.tabGradient}
-            >
-              <Icon name="list" size={16} color="#FFF" />
-              <Text style={styles.tabTextActive}>Toutes</Text>
-            </LinearGradient>
-          ) : (
-            <View style={styles.tabContent}>
-              <Icon name="list" size={16} color="#6B7280" />
-              <Text style={styles.tabText}>Toutes</Text>
-            </View>
-          )}
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.tab, activeTab === 'owner' && styles.tabActive]}
-          onPress={() => setActiveTab('owner')}
-        >
-          {activeTab === 'owner' ? (
-            <LinearGradient
-              colors={['#22C55E', '#16A34A']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.tabGradient}
-            >
-              <Icon name="award" size={16} color="#FFF" />
-              <Text style={styles.tabTextActive}>Capitaine</Text>
-            </LinearGradient>
-          ) : (
-            <View style={styles.tabContent}>
-              <Icon name="award" size={16} color="#6B7280" />
-              <Text style={styles.tabText}>Capitaine</Text>
-            </View>
-          )}
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.tab, activeTab === 'member' && styles.tabActive]}
-          onPress={() => setActiveTab('member')}
-        >
-          {activeTab === 'member' ? (
-            <LinearGradient
-              colors={['#22C55E', '#16A34A']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.tabGradient}
-            >
-              <Icon name="user" size={16} color="#FFF" />
-              <Text style={styles.tabTextActive}>Membre</Text>
-            </LinearGradient>
-          ) : (
-            <View style={styles.tabContent}>
-              <Icon name="user" size={16} color="#6B7280" />
-              <Text style={styles.tabText}>Membre</Text>
-            </View>
-          )}
-        </TouchableOpacity>
-      </View>
-
-      {/* Liste des équipes */}
-      <ScrollView
+      {/* Liste des équipes avec scroll animé */}
+      <Animated.ScrollView
         style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingTop: HEADER_MAX_HEIGHT + 24 },
+        ]}
+        showsVerticalScrollIndicator={false}
+        scrollEventThrottle={16}
+        onScroll={Animated.event(
+          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+          { useNativeDriver: false },
+        )}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
             onRefresh={handleRefresh}
             colors={['#22C55E']}
             tintColor="#22C55E"
+            progressViewOffset={HEADER_MAX_HEIGHT}
           />
         }
-        showsVerticalScrollIndicator={false}
       >
         {filteredTeams.length === 0 ? (
           <EmptyState onCreateTeam={handleCreateTeam} />
@@ -415,7 +493,7 @@ export const MyTeamsScreen = ({ navigation }) => {
             />
           ))
         )}
-      </ScrollView>
+      </Animated.ScrollView>
 
       {/* Bouton Créer */}
       {teams.length > 0 && (
@@ -455,16 +533,27 @@ const styles = StyleSheet.create({
     color: '#6B7280',
   },
   header: {
-    paddingTop: Platform.OS === 'ios' ? 60 : 20,
-    paddingBottom: 20,
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 10,
+    overflow: 'hidden',
+  },
+  headerGradient: {
+    flex: 1,
+    paddingTop: Platform.OS === 'ios' ? 60 : 30,
     paddingHorizontal: 20,
-    ...SHADOWS.MEDIUM,
+    paddingBottom: 20,
   },
   headerTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: 20,
+    marginBottom: 24,
+  },
+  headerTitleContainer: {
+    flex: 1,
   },
   headerTitle: {
     fontSize: 28,

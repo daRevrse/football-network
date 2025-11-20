@@ -118,6 +118,11 @@ export const FONTS = {
     NORMAL: 1.5,
     RELAXED: 1.75,
   },
+  FAMILY: {
+    REGULAR: 'Roboto-Regular',
+    MEDIUM: 'Roboto-Medium',
+    BOLD: 'Roboto-Bold',
+  },
 };
 
 export const SHADOWS = {

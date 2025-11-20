@@ -14,6 +14,7 @@ const Stack = createStackNavigator();
 export const TeamsStackNavigator = () => {
   return (
     <Stack.Navigator
+      initialRouteName="MyTeams"
       screenOptions={{
         headerShown: false, // Tous les écrans gèrent leur propre header
         gestureEnabled: true,

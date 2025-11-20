@@ -1,5 +1,5 @@
 // ====== src/screens/matches/MatchesScreen.js - NOUVEAU DESIGN + BACKEND ======
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -12,6 +12,7 @@ import {
   RefreshControl,
   Dimensions,
   ActivityIndicator,
+  Animated,
 } from 'react-native';
 import { useSelector } from 'react-redux';
 import Icon from 'react-native-vector-icons/Feather';
@@ -21,6 +22,9 @@ import { DIMENSIONS, FONTS, SHADOWS } from '../../styles/theme';
 import { matchesApi } from '../../services/api';
 
 const { width } = Dimensions.get('window');
+const HEADER_MAX_HEIGHT = 280;
+const HEADER_MIN_HEIGHT = Platform.OS === 'ios' ? 110 : 140;
+const HEADER_SCROLL_DISTANCE = HEADER_MAX_HEIGHT - HEADER_MIN_HEIGHT;
 
 // Helper pour formater les dates
 const formatDate = dateString => {
@@ -241,6 +245,8 @@ export const MatchesScreen = ({ navigation }) => {
     completedMatches: 0,
   });
 
+  const scrollY = useRef(new Animated.Value(0)).current;
+
   // Charger les matchs au focus
   useFocusEffect(
     useCallback(() => {
@@ -310,6 +316,37 @@ export const MatchesScreen = ({ navigation }) => {
     navigation.navigate('Invitations');
   };
 
+  // Animations du header
+  const headerHeight = scrollY.interpolate({
+    inputRange: [0, HEADER_SCROLL_DISTANCE],
+    outputRange: [HEADER_MAX_HEIGHT, HEADER_MIN_HEIGHT],
+    extrapolate: 'clamp',
+  });
+
+  const headerContentOpacity = scrollY.interpolate({
+    inputRange: [0, HEADER_SCROLL_DISTANCE / 2],
+    outputRange: [1, 0],
+    extrapolate: 'clamp',
+  });
+
+  const headerContentTranslateY = scrollY.interpolate({
+    inputRange: [0, HEADER_SCROLL_DISTANCE],
+    outputRange: [0, -30],
+    extrapolate: 'clamp',
+  });
+
+  const headerTitleScale = scrollY.interpolate({
+    inputRange: [0, HEADER_SCROLL_DISTANCE],
+    outputRange: [1, 0.8],
+    extrapolate: 'clamp',
+  });
+
+  const headerTitleTranslateY = scrollY.interpolate({
+    inputRange: [0, HEADER_SCROLL_DISTANCE],
+    outputRange: [0, 0],
+    extrapolate: 'clamp',
+  });
+
   // Filtrer les matchs selon l'onglet actif
   const filteredMatches = matches.filter(match => {
     const now = new Date();
@@ -342,136 +379,176 @@ export const MatchesScreen = ({ navigation }) => {
       <StatusBar barStyle="light-content" />
 
       {/* Header avec gradient */}
-      <LinearGradient
-        colors={['#22C55E', '#16A34A', '#15803D']}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={styles.header}
+      <Animated.View
+        style={[
+          styles.header,
+          {
+            height: headerHeight,
+          },
+        ]}
       >
-        <View style={styles.headerTop}>
-          <View>
-            <Text style={styles.headerTitle}>Mes Matchs</Text>
-            <Text style={styles.headerSubtitle}>
-              {matches.length} {matches.length > 1 ? 'matchs' : 'match'}
-            </Text>
+        <LinearGradient
+          colors={['#22C55E', '#16A34A', '#15803D']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.headerGradient}
+        >
+          <View style={styles.headerTop}>
+            <Animated.View
+              style={[
+                styles.headerTitleContainer,
+                {
+                  transform: [
+                    { translateY: headerTitleTranslateY },
+                    { scale: headerTitleScale },
+                  ],
+                },
+              ]}
+            >
+              <Text style={styles.headerTitle}>Mes Matchs</Text>
+              <Animated.Text
+                style={[
+                  styles.headerSubtitle,
+                  { opacity: headerContentOpacity },
+                ]}
+              >
+                {matches.length} {matches.length > 1 ? 'matchs' : 'match'}
+              </Animated.Text>
+            </Animated.View>
+            <TouchableOpacity
+              style={styles.invitationButton}
+              onPress={handleInvitations}
+            >
+              <Icon name="mail" size={20} color="#FFF" />
+              {/* Badge notification (si invitations en attente) */}
+              <View style={styles.notificationBadge}>
+                <Text style={styles.notificationBadgeText}>2</Text>
+              </View>
+            </TouchableOpacity>
           </View>
-          <TouchableOpacity
-            style={styles.invitationButton}
-            onPress={handleInvitations}
+
+          {/* Quick Stats */}
+          <Animated.View
+            style={[
+              styles.quickStatsContainer,
+              {
+                opacity: headerContentOpacity,
+                transform: [{ translateY: headerContentTranslateY }],
+              },
+            ]}
           >
-            <Icon name="mail" size={20} color="#FFF" />
-            {/* Badge notification (si invitations en attente) */}
-            <View style={styles.notificationBadge}>
-              <Text style={styles.notificationBadgeText}>2</Text>
-            </View>
+            <QuickStat
+              icon="calendar"
+              value={stats.totalMatches}
+              label="Total"
+              gradient={['rgba(255,255,255,0.25)', 'rgba(255,255,255,0.15)']}
+            />
+            <QuickStat
+              icon="clock"
+              value={stats.upcomingMatches}
+              label="À venir"
+              gradient={['rgba(255,255,255,0.25)', 'rgba(255,255,255,0.15)']}
+            />
+            <QuickStat
+              icon="check-circle"
+              value={stats.completedMatches}
+              label="Joués"
+              gradient={['rgba(255,255,255,0.25)', 'rgba(255,255,255,0.15)']}
+            />
+          </Animated.View>
+        </LinearGradient>
+        {/* Tabs */}
+        <View style={styles.tabsContainer}>
+          <TouchableOpacity
+            style={[styles.tab, activeTab === 'upcoming' && styles.tabActive]}
+            onPress={() => setActiveTab('upcoming')}
+          >
+            {activeTab === 'upcoming' ? (
+              <LinearGradient
+                colors={['#22C55E', '#16A34A']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.tabGradient}
+              >
+                <Icon name="clock" size={16} color="#FFF" />
+                <Text style={styles.tabTextActive}>À venir</Text>
+              </LinearGradient>
+            ) : (
+              <View style={styles.tabContent}>
+                <Icon name="clock" size={16} color="#6B7280" />
+                <Text style={styles.tabText}>À venir</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.tab, activeTab === 'past' && styles.tabActive]}
+            onPress={() => setActiveTab('past')}
+          >
+            {activeTab === 'past' ? (
+              <LinearGradient
+                colors={['#22C55E', '#16A34A']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.tabGradient}
+              >
+                <Icon name="check-circle" size={16} color="#FFF" />
+                <Text style={styles.tabTextActive}>Passés</Text>
+              </LinearGradient>
+            ) : (
+              <View style={styles.tabContent}>
+                <Icon name="check-circle" size={16} color="#6B7280" />
+                <Text style={styles.tabText}>Passés</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.tab, activeTab === 'all' && styles.tabActive]}
+            onPress={() => setActiveTab('all')}
+          >
+            {activeTab === 'all' ? (
+              <LinearGradient
+                colors={['#22C55E', '#16A34A']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.tabGradient}
+              >
+                <Icon name="list" size={16} color="#FFF" />
+                <Text style={styles.tabTextActive}>Tous</Text>
+              </LinearGradient>
+            ) : (
+              <View style={styles.tabContent}>
+                <Icon name="list" size={16} color="#6B7280" />
+                <Text style={styles.tabText}>Tous</Text>
+              </View>
+            )}
           </TouchableOpacity>
         </View>
-
-        {/* Quick Stats */}
-        <View style={styles.quickStatsContainer}>
-          <QuickStat
-            icon="calendar"
-            value={stats.totalMatches}
-            label="Total"
-            gradient={['rgba(255,255,255,0.25)', 'rgba(255,255,255,0.15)']}
-          />
-          <QuickStat
-            icon="clock"
-            value={stats.upcomingMatches}
-            label="À venir"
-            gradient={['rgba(255,255,255,0.25)', 'rgba(255,255,255,0.15)']}
-          />
-          <QuickStat
-            icon="check-circle"
-            value={stats.completedMatches}
-            label="Joués"
-            gradient={['rgba(255,255,255,0.25)', 'rgba(255,255,255,0.15)']}
-          />
-        </View>
-      </LinearGradient>
-
-      {/* Tabs */}
-      <View style={styles.tabsContainer}>
-        <TouchableOpacity
-          style={[styles.tab, activeTab === 'upcoming' && styles.tabActive]}
-          onPress={() => setActiveTab('upcoming')}
-        >
-          {activeTab === 'upcoming' ? (
-            <LinearGradient
-              colors={['#22C55E', '#16A34A']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.tabGradient}
-            >
-              <Icon name="clock" size={16} color="#FFF" />
-              <Text style={styles.tabTextActive}>À venir</Text>
-            </LinearGradient>
-          ) : (
-            <View style={styles.tabContent}>
-              <Icon name="clock" size={16} color="#6B7280" />
-              <Text style={styles.tabText}>À venir</Text>
-            </View>
-          )}
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.tab, activeTab === 'past' && styles.tabActive]}
-          onPress={() => setActiveTab('past')}
-        >
-          {activeTab === 'past' ? (
-            <LinearGradient
-              colors={['#22C55E', '#16A34A']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.tabGradient}
-            >
-              <Icon name="check-circle" size={16} color="#FFF" />
-              <Text style={styles.tabTextActive}>Passés</Text>
-            </LinearGradient>
-          ) : (
-            <View style={styles.tabContent}>
-              <Icon name="check-circle" size={16} color="#6B7280" />
-              <Text style={styles.tabText}>Passés</Text>
-            </View>
-          )}
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.tab, activeTab === 'all' && styles.tabActive]}
-          onPress={() => setActiveTab('all')}
-        >
-          {activeTab === 'all' ? (
-            <LinearGradient
-              colors={['#22C55E', '#16A34A']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.tabGradient}
-            >
-              <Icon name="list" size={16} color="#FFF" />
-              <Text style={styles.tabTextActive}>Tous</Text>
-            </LinearGradient>
-          ) : (
-            <View style={styles.tabContent}>
-              <Icon name="list" size={16} color="#6B7280" />
-              <Text style={styles.tabText}>Tous</Text>
-            </View>
-          )}
-        </TouchableOpacity>
-      </View>
+      </Animated.View>
 
       {/* Liste des matchs */}
-      <ScrollView
+      <Animated.ScrollView
         style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingTop: HEADER_MAX_HEIGHT + 24 },
+        ]}
+        showsVerticalScrollIndicator={false}
+        scrollEventThrottle={16}
+        onScroll={Animated.event(
+          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+          { useNativeDriver: false },
+        )}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
             onRefresh={handleRefresh}
             colors={['#22C55E']}
             tintColor="#22C55E"
+            progressViewOffset={HEADER_MAX_HEIGHT}
           />
         }
-        showsVerticalScrollIndicator={false}
       >
         {filteredMatches.length === 0 ? (
           <EmptyState activeTab={activeTab} onCreateMatch={handleCreateMatch} />
@@ -484,7 +561,7 @@ export const MatchesScreen = ({ navigation }) => {
             />
           ))
         )}
-      </ScrollView>
+      </Animated.ScrollView>
 
       {/* Bouton FAB Créer */}
       <TouchableOpacity
@@ -522,16 +599,27 @@ const styles = StyleSheet.create({
     color: '#6B7280',
   },
   header: {
-    paddingTop: Platform.OS === 'ios' ? 60 : 20,
-    paddingBottom: 20,
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 10,
+    overflow: 'hidden',
+  },
+  headerGradient: {
+    flex: 1,
+    paddingTop: Platform.OS === 'ios' ? 60 : 30,
     paddingHorizontal: 20,
-    ...SHADOWS.MEDIUM,
+    paddingBottom: 20,
   },
   headerTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: 20,
+    marginBottom: 24,
+  },
+  headerTitleContainer: {
+    flex: 1,
   },
   headerTitle: {
     fontSize: 28,
