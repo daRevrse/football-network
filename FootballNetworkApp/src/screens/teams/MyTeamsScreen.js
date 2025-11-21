@@ -1,5 +1,5 @@
-// ====== src/screens/teams/MyTeamsScreen.js - NOUVEAU DESIGN + BACKEND ======
-import React, { useState, useCallback, useEffect, useRef } from 'react';
+// ====== src/screens/teams/MyTeamsScreen.js ======
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -10,98 +10,102 @@ import {
   Platform,
   StatusBar,
   RefreshControl,
+  Image,
   Dimensions,
-  ActivityIndicator,
-  Animated,
 } from 'react-native';
-import { useSelector } from 'react-redux';
 import Icon from 'react-native-vector-icons/Feather';
 import { useFocusEffect } from '@react-navigation/native';
-import { DIMENSIONS, FONTS, SHADOWS } from '../../styles/theme';
+import LinearGradient from 'react-native-linear-gradient';
 import { teamsApi } from '../../services/api';
-import { LinearGradient } from 'react-native-linear-gradient';
+import { API_CONFIG } from '../../utils/constants';
 
 const { width } = Dimensions.get('window');
-const HEADER_MAX_HEIGHT = 280;
-const HEADER_MIN_HEIGHT = Platform.OS === 'ios' ? 110 : 140;
-const HEADER_SCROLL_DISTANCE = HEADER_MAX_HEIGHT - HEADER_MIN_HEIGHT;
 
-// Composant TeamCard moderne
+// Thème Premium Night
+const THEME = {
+  BG: '#0F172A', // Slate 900
+  SURFACE: '#1E293B', // Slate 800
+  SURFACE_LIGHT: '#334155', // Slate 700
+  TEXT: '#F8FAFC', // Slate 50
+  TEXT_SEC: '#94A3B8', // Slate 400
+  ACCENT: '#22C55E', // Green 500
+  BORDER: '#334155', // Slate 700
+  CAPTAIN: '#F59E0B', // Amber 500
+  PRIMARY: '#3B82F6', // Blue 500
+};
+
 const TeamCard = ({ team, onPress, onManage }) => {
-  const getRoleInfo = role => {
-    if (role === 'owner' || role === 'captain')
-      return { label: 'Capitaine', icon: 'award', color: '#F59E0B' };
-    return { label: 'Membre', icon: 'user', color: '#22C55E' };
-  };
-
-  const roleInfo = getRoleInfo(team.role);
+  const isCaptain = team.role === 'owner' || team.role === 'captain';
 
   return (
     <TouchableOpacity
-      style={styles.teamCard}
+      style={styles.cardContainer}
       onPress={onPress}
-      activeOpacity={0.7}
+      activeOpacity={0.9}
     >
-      <LinearGradient
-        colors={['#FFFFFF', '#F9FAFB']}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 0, y: 1 }}
-        style={styles.teamCardGradient}
-      >
-        {/* Icon avec gradient */}
-        <View style={styles.teamIconContainer}>
-          <LinearGradient
-            colors={['#22C55E', '#16A34A']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.teamIcon}
-          >
-            <Icon name="shield" size={32} color="#FFF" />
-          </LinearGradient>
-        </View>
+      {/* Fond de carte : Bannière ou Dégradé */}
+      <View style={styles.cardBackground}>
+        {team.bannerUrl ? (
+          <Image
+            source={{
+              uri: API_CONFIG.BASE_URL.replace('/api', '') + team.bannerUrl,
+            }}
+            style={StyleSheet.absoluteFill}
+            resizeMode="cover"
+          />
+        ) : null}
+        <LinearGradient
+          colors={
+            team.bannerUrl
+              ? ['rgba(15, 23, 42, 0.7)', 'rgba(15, 23, 42, 0.95)']
+              : [THEME.SURFACE, '#111827']
+          }
+          style={StyleSheet.absoluteFill}
+        />
+      </View>
 
-        {/* Info */}
-        <View style={styles.teamInfo}>
-          <View style={styles.teamHeader}>
-            <Text style={styles.teamName}>{team.name}</Text>
-            <View
-              style={[
-                styles.roleBadge,
-                { backgroundColor: roleInfo.color + '20' },
-              ]}
-            >
-              <Icon name={roleInfo.icon} size={12} color={roleInfo.color} />
-              <Text style={[styles.roleText, { color: roleInfo.color }]}>
-                {roleInfo.label}
-              </Text>
-            </View>
+      {/* Contenu de la carte */}
+      <View style={styles.cardContent}>
+        {/* Header: Logo + Info + Badge */}
+        <View style={styles.cardHeader}>
+          <View style={styles.logoContainer}>
+            {team.logoUrl ? (
+              <Image
+                source={{
+                  uri: API_CONFIG.BASE_URL.replace('/api', '') + team.logoUrl,
+                }}
+                style={styles.logoImage}
+              />
+            ) : (
+              <LinearGradient
+                colors={[THEME.ACCENT, '#166534']}
+                style={styles.logoPlaceholder}
+              >
+                <Icon name="shield" size={24} color="#FFF" />
+              </LinearGradient>
+            )}
           </View>
 
-          <View style={styles.teamStats}>
-            <View style={styles.teamStat}>
-              <Icon name="users" size={14} color="#6B7280" />
-              <Text style={styles.teamStatText}>
-                {team.member_count || 0} membres
+          <View style={styles.infoContainer}>
+            <View style={styles.nameRow}>
+              <Text style={styles.teamName} numberOfLines={1}>
+                {team.name}
               </Text>
+              {isCaptain && (
+                <View style={styles.roleBadge}>
+                  <Icon name="star" size={10} color="#000" />
+                  <Text style={styles.roleText}>CAPITAINE</Text>
+                </View>
+              )}
             </View>
-            <View style={styles.teamStat}>
-              <Icon name="calendar" size={14} color="#6B7280" />
-              <Text style={styles.teamStatText}>
-                {team.matches_count || 0} matchs
-              </Text>
-            </View>
-          </View>
-
-          {team.description && (
-            <Text style={styles.teamDescription} numberOfLines={2}>
-              {team.description}
+            <Text style={styles.teamLocation}>
+              <Icon name="map-pin" size={10} color={THEME.TEXT_SEC} />{' '}
+              {team.locationCity || 'Non localisé'}
             </Text>
-          )}
-        </View>
+          </View>
 
-        {/* Actions */}
-        <View style={styles.teamActions}>
-          {(team.role === 'owner' || team.role === 'captain') && (
+          {/* Bouton Gestion (seulement si capitaine) */}
+          {isCaptain && (
             <TouchableOpacity
               style={styles.manageButton}
               onPress={e => {
@@ -109,88 +113,71 @@ const TeamCard = ({ team, onPress, onManage }) => {
                 onManage();
               }}
             >
-              <LinearGradient
-                colors={['#22C55E', '#16A34A']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.manageButtonGradient}
-              >
-                <Icon name="settings" size={18} color="#FFF" />
-              </LinearGradient>
+              <Icon name="more-vertical" size={20} color={THEME.TEXT_SEC} />
             </TouchableOpacity>
           )}
-          <Icon name="chevron-right" size={24} color="#CBD5E1" />
         </View>
-      </LinearGradient>
+
+        {/* Séparateur subtil */}
+        <View style={styles.separator} />
+
+        {/* Stats Footer */}
+        <View style={styles.statsFooter}>
+          <View style={styles.statItem}>
+            <View
+              style={[
+                styles.statIcon,
+                { backgroundColor: 'rgba(59, 130, 246, 0.15)' },
+              ]}
+            >
+              <Icon name="users" size={14} color="#60A5FA" />
+            </View>
+            <Text style={styles.statValue}>{team.currentPlayers || 0}</Text>
+            <Text style={styles.statLabel}>Membres</Text>
+          </View>
+
+          <View style={styles.verticalDivider} />
+
+          <View style={styles.statItem}>
+            <View
+              style={[
+                styles.statIcon,
+                { backgroundColor: 'rgba(34, 197, 94, 0.15)' },
+              ]}
+            >
+              <Icon name="calendar" size={14} color="#4ADE80" />
+            </View>
+            <Text style={styles.statValue}>
+              {team.stats.matchesPlayed || 0}
+            </Text>
+            <Text style={styles.statLabel}>Matchs</Text>
+          </View>
+
+          <View style={styles.verticalDivider} />
+
+          <View style={styles.statItem}>
+            <View
+              style={[
+                styles.statIcon,
+                { backgroundColor: 'rgba(245, 158, 11, 0.15)' },
+              ]}
+            >
+              <Icon name="award" size={14} color="#FBBF24" />
+            </View>
+            <Text style={styles.statValue}>{team.stats.matchesWon || 0}</Text>
+            <Text style={styles.statLabel}>Victoires</Text>
+          </View>
+        </View>
+      </View>
     </TouchableOpacity>
   );
 };
-
-// Composant QuickStat
-const QuickStat = ({ icon, value, label, gradient }) => (
-  <View style={styles.quickStat}>
-    <LinearGradient
-      colors={gradient}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
-      style={styles.quickStatGradient}
-    >
-      <Icon name={icon} size={20} color="#FFF" />
-      <Text style={styles.quickStatValue}>{value}</Text>
-      <Text style={styles.quickStatLabel}>{label}</Text>
-    </LinearGradient>
-  </View>
-);
-
-// Composant EmptyState
-const EmptyState = ({ onCreateTeam }) => (
-  <View style={styles.emptyState}>
-    <LinearGradient
-      colors={['#22C55E20', '#22C55E10']}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 0, y: 1 }}
-      style={styles.emptyStateGradient}
-    >
-      <View style={styles.emptyIconContainer}>
-        <Icon name="users" size={48} color="#22C55E" />
-      </View>
-      <Text style={styles.emptyTitle}>Aucune équipe</Text>
-      <Text style={styles.emptyDescription}>
-        Créez votre première équipe ou rejoignez-en une existante
-      </Text>
-      <TouchableOpacity
-        style={styles.emptyButton}
-        onPress={onCreateTeam}
-        activeOpacity={0.8}
-      >
-        <LinearGradient
-          colors={['#22C55E', '#16A34A']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.emptyButtonGradient}
-        >
-          <Icon name="plus" size={20} color="#FFF" />
-          <Text style={styles.emptyButtonText}>Créer une équipe</Text>
-        </LinearGradient>
-      </TouchableOpacity>
-    </LinearGradient>
-  </View>
-);
 
 export const MyTeamsScreen = ({ navigation }) => {
   const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [teams, setTeams] = useState([]);
-  const [activeTab, setActiveTab] = useState('all'); // all, owner, member
-  const [stats, setStats] = useState({
-    totalTeams: 0,
-    ownedTeams: 0,
-    totalMembers: 0,
-  });
 
-  const scrollY = useRef(new Animated.Value(0)).current;
-
-  // Charger les équipes au focus de l'écran
   useFocusEffect(
     useCallback(() => {
       loadTeams();
@@ -199,590 +186,303 @@ export const MyTeamsScreen = ({ navigation }) => {
 
   const loadTeams = async () => {
     try {
-      setLoading(true);
       const result = await teamsApi.getMyTeams();
-
-      if (result.success) {
-        setTeams(result.data);
-
-        // Calculer les statistiques
-        const ownedCount = result.data.filter(
-          t => t.role === 'owner' || t.role === 'captain',
-        ).length;
-        const totalMembers = result.data.reduce(
-          (sum, t) => sum + (t.currentPlayers || 0),
-          0,
-        );
-
-        setStats({
-          totalTeams: result.data.length,
-          ownedTeams: ownedCount,
-          totalMembers: totalMembers,
-        });
-      } else {
-        Alert.alert(
-          'Erreur',
-          result.error || 'Impossible de charger les équipes',
-        );
-      }
-    } catch (error) {
-      console.error('Load teams error:', error);
-      Alert.alert('Erreur', 'Une erreur est survenue');
+      if (result.success) setTeams(result.data);
+    } catch (e) {
+      Alert.alert('Erreur', 'Chargement impossible');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleRefresh = useCallback(async () => {
+  const onRefresh = async () => {
     setRefreshing(true);
     await loadTeams();
     setRefreshing(false);
-  }, []);
-
-  const handleTeamPress = team => {
-    navigation.navigate('TeamDetail', {
-      teamId: team.id,
-      teamName: team.name,
-    });
   };
-
-  const handleManageTeam = team => {
-    navigation.navigate('EditTeam', {
-      teamId: team.id,
-      teamName: team.name,
-    });
-  };
-
-  const handleCreateTeam = () => {
-    navigation.navigate('CreateTeam');
-  };
-
-  // Animations du header
-  const headerHeight = scrollY.interpolate({
-    inputRange: [0, HEADER_SCROLL_DISTANCE],
-    outputRange: [HEADER_MAX_HEIGHT, HEADER_MIN_HEIGHT],
-    extrapolate: 'clamp',
-  });
-
-  const headerContentOpacity = scrollY.interpolate({
-    inputRange: [0, HEADER_SCROLL_DISTANCE / 2],
-    outputRange: [1, 0],
-    extrapolate: 'clamp',
-  });
-
-  const headerContentTranslateY = scrollY.interpolate({
-    inputRange: [0, HEADER_SCROLL_DISTANCE],
-    outputRange: [0, -30],
-    extrapolate: 'clamp',
-  });
-
-  const headerTitleScale = scrollY.interpolate({
-    inputRange: [0, HEADER_SCROLL_DISTANCE],
-    outputRange: [1, 0.8],
-    extrapolate: 'clamp',
-  });
-
-  const headerTitleTranslateY = scrollY.interpolate({
-    inputRange: [0, HEADER_SCROLL_DISTANCE],
-    outputRange: [0, 0],
-    extrapolate: 'clamp',
-  });
-
-  // Filtrer les équipes selon l'onglet actif
-  const filteredTeams = teams.filter(team => {
-    if (activeTab === 'owner') {
-      return team.role === 'owner' || team.role === 'captain';
-    }
-    if (activeTab === 'member') {
-      return team.role !== 'owner' && team.role !== 'captain';
-    }
-    return true;
-  });
-
-  if (loading && !refreshing) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#22C55E" />
-        <Text style={styles.loadingText}>Chargement...</Text>
-      </View>
-    );
-  }
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" />
+      <StatusBar barStyle="light-content" backgroundColor={THEME.BG} />
 
-      {/* Header avec gradient animé */}
-      <Animated.View
-        style={[
-          styles.header,
-          {
-            height: headerHeight,
-          },
-        ]}
-      >
-        <LinearGradient
-          colors={['#22C55E', '#16A34A', '#15803D']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.headerGradient}
+      {/* Header */}
+      <View style={styles.header}>
+        <Text style={styles.title}>Mes Équipes</Text>
+        <TouchableOpacity
+          onPress={() => navigation.navigate('Search')}
+          style={styles.searchBtn}
         >
-          <View style={styles.headerTop}>
-            <Animated.View
-              style={[
-                styles.headerTitleContainer,
-                {
-                  transform: [
-                    { translateY: headerTitleTranslateY },
-                    { scale: headerTitleScale },
-                  ],
-                },
-              ]}
-            >
-              <Text style={styles.headerTitle}>Mes Équipes</Text>
-              <Animated.Text
-                style={[
-                  styles.headerSubtitle,
-                  { opacity: headerContentOpacity },
-                ]}
-              >
-                {teams.length} {teams.length > 1 ? 'équipes' : 'équipe'}
-              </Animated.Text>
-            </Animated.View>
+          <Icon name="search" size={24} color={THEME.TEXT} />
+        </TouchableOpacity>
+      </View>
 
-            <TouchableOpacity
-              style={styles.searchButton}
-              onPress={() => navigation.navigate('Search')}
-            >
-              <Icon name="search" size={20} color="#FFF" />
-            </TouchableOpacity>
-          </View>
-
-          {/* Quick Stats animés */}
-          <Animated.View
-            style={[
-              styles.quickStatsContainer,
-              {
-                opacity: headerContentOpacity,
-                transform: [{ translateY: headerContentTranslateY }],
-              },
-            ]}
-          >
-            <QuickStat
-              icon="users"
-              value={stats.totalTeams}
-              label="Équipes"
-              gradient={['rgba(255,255,255,0.25)', 'rgba(255,255,255,0.15)']}
-            />
-            <QuickStat
-              icon="award"
-              value={stats.ownedTeams}
-              label="Capitaine"
-              gradient={['rgba(255,255,255,0.25)', 'rgba(255,255,255,0.15)']}
-            />
-            <QuickStat
-              icon="user"
-              value={stats.totalMembers}
-              label="Membres"
-              gradient={['rgba(255,255,255,0.25)', 'rgba(255,255,255,0.15)']}
-            />
-          </Animated.View>
-        </LinearGradient>
-        {/* Tabs */}
-        <View style={styles.tabsContainer}>
-          <TouchableOpacity
-            style={[styles.tab, activeTab === 'all' && styles.tabActive]}
-            onPress={() => setActiveTab('all')}
-          >
-            {activeTab === 'all' ? (
-              <LinearGradient
-                colors={['#22C55E', '#16A34A']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.tabGradient}
-              >
-                <Icon name="list" size={16} color="#FFF" />
-                <Text style={styles.tabTextActive}>Toutes</Text>
-              </LinearGradient>
-            ) : (
-              <View style={styles.tabContent}>
-                <Icon name="list" size={16} color="#6B7280" />
-                <Text style={styles.tabText}>Toutes</Text>
-              </View>
-            )}
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.tab, activeTab === 'owner' && styles.tabActive]}
-            onPress={() => setActiveTab('owner')}
-          >
-            {activeTab === 'owner' ? (
-              <LinearGradient
-                colors={['#22C55E', '#16A34A']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.tabGradient}
-              >
-                <Icon name="award" size={16} color="#FFF" />
-                <Text style={styles.tabTextActive}>Capitaine</Text>
-              </LinearGradient>
-            ) : (
-              <View style={styles.tabContent}>
-                <Icon name="award" size={16} color="#6B7280" />
-                <Text style={styles.tabText}>Capitaine</Text>
-              </View>
-            )}
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.tab, activeTab === 'member' && styles.tabActive]}
-            onPress={() => setActiveTab('member')}
-          >
-            {activeTab === 'member' ? (
-              <LinearGradient
-                colors={['#22C55E', '#16A34A']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.tabGradient}
-              >
-                <Icon name="user" size={16} color="#FFF" />
-                <Text style={styles.tabTextActive}>Membre</Text>
-              </LinearGradient>
-            ) : (
-              <View style={styles.tabContent}>
-                <Icon name="user" size={16} color="#6B7280" />
-                <Text style={styles.tabText}>Membre</Text>
-              </View>
-            )}
-          </TouchableOpacity>
-        </View>
-      </Animated.View>
-
-      {/* Liste des équipes avec scroll animé */}
-      <Animated.ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={[
-          styles.scrollContent,
-          { paddingTop: HEADER_MAX_HEIGHT + 24 },
-        ]}
-        showsVerticalScrollIndicator={false}
-        scrollEventThrottle={16}
-        onScroll={Animated.event(
-          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-          { useNativeDriver: false },
-        )}
+      {/* Liste */}
+      <ScrollView
+        contentContainerStyle={styles.content}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
-            onRefresh={handleRefresh}
-            colors={['#22C55E']}
-            tintColor="#22C55E"
-            progressViewOffset={HEADER_MAX_HEIGHT}
+            onRefresh={onRefresh}
+            tintColor={THEME.ACCENT}
           />
         }
       >
-        {filteredTeams.length === 0 ? (
-          <EmptyState onCreateTeam={handleCreateTeam} />
+        {teams.length === 0 && !loading ? (
+          <View style={styles.emptyState}>
+            <Icon name="shield" size={64} color={THEME.SURFACE_LIGHT} />
+            <Text style={styles.emptyText}>Aucune équipe pour le moment.</Text>
+            <Text style={styles.emptySubText}>
+              Rejoignez le jeu dès maintenant !
+            </Text>
+            <TouchableOpacity
+              style={styles.createBtn}
+              onPress={() => navigation.navigate('CreateTeam')}
+            >
+              <Text style={styles.createBtnText}>Créer une équipe</Text>
+            </TouchableOpacity>
+          </View>
         ) : (
-          filteredTeams.map(team => (
+          teams.map(team => (
             <TeamCard
               key={team.id}
               team={team}
-              onPress={() => handleTeamPress(team)}
-              onManage={() => handleManageTeam(team)}
+              onPress={() =>
+                navigation.navigate('TeamDetail', {
+                  teamId: team.id,
+                  teamName: team.name,
+                })
+              }
+              onManage={() =>
+                navigation.navigate('EditTeam', { teamId: team.id })
+              }
             />
           ))
         )}
-      </Animated.ScrollView>
+        <View style={{ height: 80 }} />
+      </ScrollView>
 
-      {/* Bouton Créer */}
-      {teams.length > 0 && (
-        <TouchableOpacity
-          style={styles.fabButton}
-          onPress={handleCreateTeam}
-          activeOpacity={0.8}
+      {/* FAB */}
+      <TouchableOpacity
+        style={styles.fab}
+        onPress={() => navigation.navigate('CreateTeam')}
+      >
+        <LinearGradient
+          colors={[THEME.ACCENT, '#16A34A']}
+          style={styles.fabGradient}
         >
-          <LinearGradient
-            colors={['#22C55E', '#16A34A']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.fabGradient}
-          >
-            <Icon name="plus" size={28} color="#FFF" />
-          </LinearGradient>
-        </TouchableOpacity>
-      )}
+          <Icon name="plus" size={28} color="#FFF" />
+        </LinearGradient>
+      </TouchableOpacity>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F8FAFC',
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#F8FAFC',
-  },
-  loadingText: {
-    marginTop: 12,
-    fontSize: 14,
-    color: '#6B7280',
-  },
+  container: { flex: 1, backgroundColor: THEME.BG },
+
+  // HEADER
   header: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    zIndex: 10,
-    overflow: 'hidden',
-  },
-  headerGradient: {
-    flex: 1,
-    paddingTop: Platform.OS === 'ios' ? 60 : 30,
-    paddingHorizontal: 20,
-    paddingBottom: 20,
-  },
-  headerTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 24,
+    alignItems: 'center',
+    paddingTop: Platform.OS === 'ios' ? 60 : 30,
+    paddingHorizontal: 24,
+    paddingBottom: 20,
+    backgroundColor: THEME.BG,
+    borderBottomWidth: 1,
+    borderBottomColor: THEME.BORDER,
+    zIndex: 10,
   },
-  headerTitleContainer: {
-    flex: 1,
-  },
-  headerTitle: {
+  title: {
     fontSize: 28,
-    fontWeight: '700',
-    color: '#FFF',
-    marginBottom: 4,
+    fontWeight: '900',
+    color: THEME.TEXT,
+    letterSpacing: 0.5,
   },
-  headerSubtitle: {
-    fontSize: 14,
-    color: 'rgba(255,255,255,0.9)',
-  },
-  searchButton: {
+  searchBtn: {
     width: 44,
     height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  quickStatsContainer: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  quickStat: {
-    flex: 1,
     borderRadius: 12,
-    overflow: 'hidden',
-  },
-  quickStatGradient: {
-    padding: 12,
-    alignItems: 'center',
-  },
-  quickStatValue: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#FFF',
-    marginTop: 4,
-  },
-  quickStatLabel: {
-    fontSize: 11,
-    color: 'rgba(255,255,255,0.9)',
-    marginTop: 2,
-  },
-  tabsContainer: {
-    flexDirection: 'row',
-    backgroundColor: '#FFF',
-    padding: 8,
-    gap: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
-  },
-  tab: {
-    flex: 1,
-    borderRadius: 10,
-    overflow: 'hidden',
-  },
-  tabActive: {
-    ...SHADOWS.SMALL,
-  },
-  tabGradient: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    backgroundColor: THEME.SURFACE,
     justifyContent: 'center',
-    paddingVertical: 10,
-    gap: 6,
-  },
-  tabContent: {
-    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 10,
-    gap: 6,
-    backgroundColor: '#F3F4F6',
+    borderWidth: 1,
+    borderColor: THEME.BORDER,
   },
-  tabText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#6B7280',
-  },
-  tabTextActive: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#FFF',
-  },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    padding: 20,
-  },
-  teamCard: {
-    borderRadius: 16,
-    marginBottom: 16,
+  content: { padding: 20 },
+
+  // TEAM CARD
+  cardContainer: {
+    marginBottom: 20,
+    borderRadius: 20,
     overflow: 'hidden',
-    ...SHADOWS.MEDIUM,
+    height: 150, // Hauteur fixe pour uniformité
+    borderWidth: 1,
+    borderColor: THEME.BORDER,
+    backgroundColor: THEME.SURFACE,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.4,
+        shadowRadius: 12,
+      },
+      android: { elevation: 8 },
+    }),
   },
-  teamCardGradient: {
+  cardBackground: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  cardContent: {
+    flex: 1,
     padding: 16,
+    justifyContent: 'space-between',
   },
-  teamIconContainer: {
-    alignSelf: 'flex-start',
-    marginBottom: 12,
+
+  // Card Header
+  cardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
-  teamIcon: {
-    width: 64,
-    height: 64,
+  logoContainer: {
+    marginRight: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+  },
+  logoImage: {
+    width: 56,
+    height: 56,
+    borderRadius: 50,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+  },
+  logoPlaceholder: {
+    width: 56,
+    height: 56,
     borderRadius: 16,
     justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.2)',
   },
-  teamInfo: {
-    marginBottom: 12,
-  },
-  teamHeader: {
+
+  infoContainer: { flex: 1 },
+  nameRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 8,
-    gap: 8,
+    marginBottom: 4,
+    flexWrap: 'wrap',
   },
   teamName: {
-    flex: 1,
     fontSize: 18,
-    fontWeight: '700',
-    color: '#1F2937',
+    fontWeight: '800',
+    color: THEME.TEXT,
+    marginRight: 8,
+    textShadowColor: 'rgba(0,0,0,0.5)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
   roleBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-    gap: 4,
+    backgroundColor: THEME.CAPTAIN,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
   },
-  roleText: {
-    fontSize: 11,
-    fontWeight: '600',
-  },
-  teamStats: {
-    flexDirection: 'row',
-    gap: 16,
-    marginBottom: 8,
-  },
-  teamStat: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  teamStatText: {
-    fontSize: 13,
-    color: '#6B7280',
-  },
-  teamDescription: {
-    fontSize: 13,
-    color: '#6B7280',
-    lineHeight: 18,
-  },
-  teamActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'flex-end',
-    gap: 12,
+  roleText: { fontSize: 9, fontWeight: '900', color: '#000' },
+
+  teamLocation: {
+    fontSize: 12,
+    color: THEME.TEXT_SEC,
+    fontWeight: '500',
   },
   manageButton: {
-    borderRadius: 12,
-    overflow: 'hidden',
+    padding: 8,
   },
-  manageButtonGradient: {
-    width: 36,
-    height: 36,
-    justifyContent: 'center',
-    alignItems: 'center',
+
+  separator: {
+    height: 1,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    marginVertical: 10,
   },
-  emptyState: {
-    flex: 1,
-    paddingVertical: 60,
-  },
-  emptyStateGradient: {
-    padding: 32,
-    borderRadius: 24,
-    alignItems: 'center',
-  },
-  emptyIconContainer: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
-    backgroundColor: 'rgba(34, 197, 94, 0.1)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  emptyTitle: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: '#1F2937',
-    marginBottom: 8,
-  },
-  emptyDescription: {
-    fontSize: 14,
-    color: '#6B7280',
-    textAlign: 'center',
-    marginBottom: 24,
-  },
-  emptyButton: {
-    borderRadius: 12,
-    overflow: 'hidden',
-  },
-  emptyButtonGradient: {
+
+  // Card Stats Footer
+  statsFooter: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 14,
-    paddingHorizontal: 24,
+    justifyContent: 'space-around',
+  },
+  statItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 8,
   },
-  emptyButtonText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#FFF',
+  statIcon: {
+    width: 24,
+    height: 24,
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  fabButton: {
+  statValue: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: THEME.TEXT,
+    marginRight: 4,
+  },
+  statLabel: { fontSize: 12, color: THEME.TEXT_SEC },
+
+  verticalDivider: {
+    width: 1,
+    height: 20,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+  },
+
+  // EMPTY STATE
+  emptyState: { alignItems: 'center', marginTop: 80 },
+  emptyText: {
+    color: THEME.TEXT,
+    marginTop: 24,
+    fontSize: 20,
+    fontWeight: 'bold',
+  },
+  emptySubText: {
+    color: THEME.TEXT_SEC,
+    marginTop: 8,
+    fontSize: 14,
+    marginBottom: 32,
+  },
+  createBtn: {
+    backgroundColor: THEME.ACCENT,
+    paddingHorizontal: 32,
+    paddingVertical: 16,
+    borderRadius: 16,
+    shadowColor: THEME.ACCENT,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
+  },
+  createBtnText: { color: '#000', fontWeight: 'bold', fontSize: 16 },
+
+  // FAB
+  fab: {
     position: 'absolute',
-    right: 20,
-    bottom: 20,
+    bottom: 32,
+    right: 24,
     borderRadius: 28,
-    overflow: 'hidden',
-    ...SHADOWS.LARGE,
+    shadowColor: THEME.ACCENT,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.5,
+    shadowRadius: 16,
+    elevation: 8,
   },
   fabGradient: {
     width: 56,
     height: 56,
+    borderRadius: 28,
     justifyContent: 'center',
     alignItems: 'center',
   },

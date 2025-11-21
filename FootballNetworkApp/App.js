@@ -1,4 +1,3 @@
-// ====== App.js ======
 import React, { useEffect } from 'react';
 import { StatusBar, View, Text } from 'react-native';
 import { Provider } from 'react-redux';

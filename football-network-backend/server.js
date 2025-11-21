@@ -20,6 +20,7 @@ const feedRoutes = require("./routes/feed");
 const uploadRoutes = require("./routes/uploads");
 const teamMediaRoutes = require("./routes/teamMediaRoutes");
 const passwordRoutes = require("./routes/password");
+const searchRoutes = require("./routes/search");
 
 // Import de la base de données
 const db = require("./config/database");
@@ -87,6 +88,7 @@ app.use("/api/feed", feedRoutes);
 app.use("/api/uploads", uploadRoutes);
 app.use("/api/teams", teamMediaRoutes);
 app.use("/api/password", passwordRoutes);
+app.use("/api/search", searchRoutes);
 
 // Routes pour les notifications (nouvelles)
 app.get(

@@ -1,5 +1,5 @@
-// ====== src/screens/teams/TeamDetailScreen.js - NOUVEAU DESIGN + BACKEND ======
-import React, { useState, useCallback, useRef, useEffect } from 'react';
+// ====== src/screens/teams/TeamDetailScreen.js ======
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -9,767 +9,304 @@ import {
   StyleSheet,
   StatusBar,
   RefreshControl,
-  Animated,
   Platform,
   ActivityIndicator,
-  Dimensions,
+  Image,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import LinearGradient from 'react-native-linear-gradient';
 import { useFocusEffect } from '@react-navigation/native';
-import { DIMENSIONS, FONTS, SHADOWS } from '../../styles/theme';
 import { teamsApi } from '../../services/api';
+import { API_CONFIG } from '../../utils/constants';
 
-const { width } = Dimensions.get('window');
-const HEADER_HEIGHT = 280;
+const THEME = {
+  BG: '#0F172A',
+  SURFACE: '#1E293B',
+  TEXT: '#F8FAFC',
+  TEXT_SEC: '#94A3B8',
+  ACCENT: '#22C55E',
+  BORDER: '#334155',
+};
 
-// Composant StatCard
-const StatCard = ({ icon, value, label, gradient }) => (
-  <View style={styles.statCard}>
-    <LinearGradient
-      colors={gradient}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
-      style={styles.statGradient}
-    >
-      <View style={styles.statIconContainer}>
-        <Icon name={icon} size={22} color="#FFF" />
-      </View>
-      <Text style={styles.statValue}>{value}</Text>
-      <Text style={styles.statLabel}>{label}</Text>
-    </LinearGradient>
-  </View>
-);
-
-// Composant MemberCard
-const MemberCard = ({ member, isOwner, onManage }) => (
-  <View style={styles.memberCard}>
-    <View style={styles.memberAvatar}>
-      <Icon name="user" size={20} color="#22C55E" />
-    </View>
-    <View style={styles.memberInfo}>
-      <View style={styles.memberHeader}>
-        <Text style={styles.memberName}>
-          {member.firstName} {member.lastName}
-        </Text>
-        {member.role === 'captain' && (
-          <View style={styles.captainBadge}>
-            <Icon name="award" size={12} color="#F59E0B" />
-            <Text style={styles.captainText}>Capitaine</Text>
-          </View>
-        )}
-      </View>
-      <View style={styles.memberMeta}>
-        {member.position && (
-          <View style={styles.memberMetaItem}>
-            <Icon name="target" size={12} color="#9CA3AF" />
-            <Text style={styles.memberMetaText}>{member.position}</Text>
-          </View>
-        )}
-        <View style={styles.memberMetaItem}>
-          <Icon name="calendar" size={12} color="#9CA3AF" />
-          <Text style={styles.memberMetaText}>
-            Membre depuis {member.joinedDate || 'récemment'}
-          </Text>
-        </View>
-      </View>
-    </View>
-    {isOwner && member.role !== 'captain' && (
-      <TouchableOpacity
-        style={styles.memberOptions}
-        onPress={() => onManage(member)}
-      >
-        <Icon name="more-vertical" size={20} color="#9CA3AF" />
-      </TouchableOpacity>
-    )}
-  </View>
-);
-
-// Composant InfoRow
-const InfoRow = ({ icon, label, value }) => (
-  <View style={styles.infoRow}>
-    <View style={styles.infoLeft}>
-      <Icon name={icon} size={18} color="#6B7280" />
-      <Text style={styles.infoLabel}>{label}</Text>
-    </View>
-    <Text style={styles.infoValue}>{value}</Text>
+const StatBox = ({ label, value }) => (
+  <View style={styles.statBox}>
+    <Text style={styles.statValue}>{value}</Text>
+    <Text style={styles.statLabel}>{label}</Text>
   </View>
 );
 
 export const TeamDetailScreen = ({ route, navigation }) => {
-  const { teamId, teamName } = route.params || {};
-  const [refreshing, setRefreshing] = useState(false);
+  const { teamId } = route.params;
   const [loading, setLoading] = useState(true);
   const [team, setTeam] = useState(null);
-  const [members, setMembers] = useState([]);
-  const [activeTab, setActiveTab] = useState('overview'); // overview, members
+  const [refreshing, setRefreshing] = useState(false);
 
-  const scrollY = useRef(new Animated.Value(0)).current;
-
-  // Charger les données au focus de l'écran
-  useFocusEffect(
-    useCallback(() => {
-      loadTeamDetails();
-    }, [teamId]),
-  );
-
-  const loadTeamDetails = async () => {
+  const loadData = async () => {
     try {
       setLoading(true);
-      const [teamResult, membersResult] = await Promise.all([
-        teamsApi.getTeamById(teamId),
-        teamsApi.getTeamMembers(teamId),
-      ]);
-
-      if (teamResult.success) {
-        setTeam(teamResult.data);
-      } else {
-        Alert.alert('Erreur', teamResult.error);
-        navigation.goBack();
-      }
-
-      if (membersResult.success) {
-        setMembers(membersResult.data);
-      }
-    } catch (error) {
-      console.error('Load team details error:', error);
-      Alert.alert('Erreur', 'Une erreur est survenue');
-      navigation.goBack();
+      const result = await teamsApi.getTeamById(teamId);
+      if (result.success) setTeam(result.data);
+    } catch (e) {
+      Alert.alert('Erreur', "Impossible de charger l'équipe");
     } finally {
       setLoading(false);
     }
   };
 
-  const handleRefresh = useCallback(async () => {
-    setRefreshing(true);
-    await loadTeamDetails();
-    setRefreshing(false);
-  }, [teamId]);
+  useFocusEffect(
+    useCallback(() => {
+      loadData();
+    }, [teamId]),
+  );
 
-  const handleLeaveTeam = () => {
-    Alert.alert(
-      "Quitter l'équipe",
-      `Êtes-vous sûr de vouloir quitter "${team?.name}" ?`,
-      [
-        { text: 'Annuler', style: 'cancel' },
-        {
-          text: 'Quitter',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              const result = await teamsApi.leaveTeam(teamId);
-              if (result.success) {
-                Alert.alert('Succès', "Vous avez quitté l'équipe", [
-                  { text: 'OK', onPress: () => navigation.goBack() },
-                ]);
-              } else {
-                Alert.alert('Erreur', result.error);
-              }
-            } catch (error) {
-              Alert.alert('Erreur', 'Une erreur est survenue');
-            }
-          },
-        },
-      ],
-    );
-  };
-
-  const handleDeleteTeam = () => {
-    Alert.alert(
-      "Supprimer l'équipe",
-      `Êtes-vous sûr de vouloir supprimer "${team?.name}" ? Cette action est irréversible.`,
-      [
-        { text: 'Annuler', style: 'cancel' },
-        {
-          text: 'Supprimer',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              const result = await teamsApi.deleteTeam(teamId);
-              if (result.success) {
-                Alert.alert('Succès', "L'équipe a été supprimée", [
-                  { text: 'OK', onPress: () => navigation.goBack() },
-                ]);
-              } else {
-                Alert.alert('Erreur', result.error);
-              }
-            } catch (error) {
-              Alert.alert('Erreur', 'Une erreur est survenue');
-            }
-          },
-        },
-      ],
-    );
-  };
-
-  const handleManageMember = member => {
-    Alert.alert('Gérer le membre', `Options pour ${member.name}`, [
-      { text: 'Annuler', style: 'cancel' },
-      {
-        text: "Retirer de l'équipe",
-        style: 'destructive',
-        onPress: () => {
-          // TODO: Implémenter la suppression de membre
-          Alert.alert('Info', 'Fonctionnalité bientôt disponible');
-        },
-      },
-    ]);
-  };
-
-  const getSkillLevelLabel = level => {
-    const levels = {
-      beginner: 'Débutant',
-      amateur: 'Amateur',
-      intermediate: 'Intermédiaire',
-      advanced: 'Avancé',
-      semi_pro: 'Semi-pro',
-    };
-    return levels[level] || level;
-  };
-
-  if (loading) {
+  if (loading || !team)
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#22C55E" />
-        <Text style={styles.loadingText}>Chargement...</Text>
+      <View style={[styles.container, styles.center]}>
+        <ActivityIndicator color={THEME.ACCENT} />
       </View>
     );
-  }
 
-  if (!team) {
-    return null;
-  }
-
-  const isOwner =
-    team.is_owner || team.role === 'owner' || team.role === 'captain';
+  const isOwner = team.role === 'owner' || team.role === 'captain';
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" />
+      <StatusBar barStyle="light-content" backgroundColor={THEME.BG} />
 
-      {/* Header avec gradient */}
-      <LinearGradient
-        colors={['#22C55E', '#16A34A', '#15803D']}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={styles.header}
-      >
-        <View style={styles.headerTop}>
-          <TouchableOpacity
-            style={styles.headerButton}
-            onPress={() => navigation.goBack()}
-          >
-            <Icon name="arrow-left" size={24} color="#FFF" />
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.headerButton}
-            onPress={() => {
-              // Menu options
-              Alert.alert(
-                'Options',
-                'Choisissez une action',
-                [
-                  { text: 'Annuler', style: 'cancel' },
-                  isOwner && {
-                    text: "Modifier l'équipe",
-                    onPress: () =>
-                      navigation.navigate('EditTeam', {
-                        teamId,
-                        teamName: team.name,
-                      }),
-                  },
-                  isOwner && {
-                    text: "Supprimer l'équipe",
-                    style: 'destructive',
-                    onPress: handleDeleteTeam,
-                  },
-                  !isOwner && {
-                    text: "Quitter l'équipe",
-                    style: 'destructive',
-                    onPress: handleLeaveTeam,
-                  },
-                ].filter(Boolean),
-              );
+      {/* HEADER AVEC BANNIÈRE */}
+      <View style={styles.headerWrapper}>
+        {/* Image de Bannière */}
+        {team.bannerUrl && (
+          <Image
+            source={{
+              uri: API_CONFIG.BASE_URL.replace('/api', '') + team.bannerUrl,
             }}
+            style={styles.bannerImage}
+          />
+        )}
+        {/* Gradient Overlay pour lisibilité */}
+        <LinearGradient
+          colors={['rgba(15, 23, 42, 0.3)', 'rgba(15, 23, 42, 0.8)', THEME.BG]}
+          style={styles.headerOverlay}
+        />
+
+        {/* Top Bar */}
+        <View style={styles.topBar}>
+          <TouchableOpacity
+            onPress={() => navigation.goBack()}
+            style={styles.iconBtn}
           >
-            <Icon name="more-vertical" size={24} color="#FFF" />
+            <Icon name="arrow-left" size={24} color={THEME.TEXT} />
           </TouchableOpacity>
-        </View>
-
-        <View style={styles.headerContent}>
-          <View style={styles.teamIconLarge}>
-            <Icon name="shield" size={48} color="#FFF" />
+          <View style={styles.headerActions}>
+            {isOwner && (
+              <TouchableOpacity
+                onPress={() => navigation.navigate('EditTeam', { teamId })}
+                style={styles.iconBtn}
+              >
+                <Icon name="edit-2" size={20} color={THEME.TEXT} />
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity style={styles.iconBtn}>
+              <Icon name="share-2" size={20} color={THEME.TEXT} />
+            </TouchableOpacity>
           </View>
-          <Text style={styles.teamTitle}>{team.name}</Text>
-          {team.description && (
-            <Text style={styles.teamSubtitle} numberOfLines={2}>
-              {team.description}
-            </Text>
-          )}
         </View>
 
-        {/* Stats Cards */}
-        <View style={styles.statsContainer}>
-          <StatCard
-            icon="users"
-            value={team.member_count || 0}
-            label="Membres"
-            gradient={['rgba(255,255,255,0.25)', 'rgba(255,255,255,0.15)']}
-          />
-          <StatCard
-            icon="calendar"
-            value={team.matches_count || 0}
-            label="Matchs"
-            gradient={['rgba(255,255,255,0.25)', 'rgba(255,255,255,0.15)']}
-          />
-          <StatCard
-            icon="award"
-            value={team.wins_count || 0}
-            label="Victoires"
-            gradient={['rgba(255,255,255,0.25)', 'rgba(255,255,255,0.15)']}
-          />
+        {/* Info Équipe (Logo Centré) */}
+        <View style={styles.teamHeader}>
+          <View style={styles.logoPlaceholder}>
+            {team.logoUrl ? (
+              <Image
+                source={{
+                  uri: API_CONFIG.BASE_URL.replace('/api', '') + team.logoUrl,
+                }}
+                style={styles.teamLogo}
+              />
+            ) : (
+              <Icon name="shield" size={48} color={THEME.ACCENT} />
+            )}
+          </View>
+          <Text style={styles.teamName}>{team.name}</Text>
+          <Text style={styles.teamLoc}>
+            {team.locationCity} • {team.skillLevel}
+          </Text>
         </View>
-      </LinearGradient>
-
-      {/* Tabs */}
-      <View style={styles.tabsContainer}>
-        <TouchableOpacity
-          style={[styles.tab, activeTab === 'overview' && styles.tabActive]}
-          onPress={() => setActiveTab('overview')}
-        >
-          <Text
-            style={[
-              styles.tabText,
-              activeTab === 'overview' && styles.tabTextActive,
-            ]}
-          >
-            Aperçu
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.tab, activeTab === 'members' && styles.tabActive]}
-          onPress={() => setActiveTab('members')}
-        >
-          <Text
-            style={[
-              styles.tabText,
-              activeTab === 'members' && styles.tabTextActive,
-            ]}
-          >
-            Membres ({members.length})
-          </Text>
-        </TouchableOpacity>
       </View>
 
-      {/* Content */}
       <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
-            onRefresh={handleRefresh}
-            colors={['#22C55E']}
-            tintColor="#22C55E"
+            onRefresh={loadData}
+            tintColor={THEME.ACCENT}
           />
         }
-        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.content}
       >
-        {activeTab === 'overview' ? (
-          <View>
-            {/* Informations */}
-            <View style={styles.card}>
-              <Text style={styles.cardTitle}>Informations</Text>
-              <View style={styles.cardContent}>
-                <InfoRow
-                  icon="trending-up"
-                  label="Niveau"
-                  value={getSkillLevelLabel(team.skill_level)}
-                />
-                <InfoRow
-                  icon="users"
-                  label="Capacité"
-                  value={`${team.currentPlayers || 0}/${
-                    team.maxPlayers || 'N/A'
-                  } joueurs`}
-                />
-                {team.location_city && (
-                  <InfoRow
-                    icon="map-pin"
-                    label="Ville"
-                    value={team.location_city}
-                  />
-                )}
-                {team.created_at && (
-                  <InfoRow
-                    icon="calendar"
-                    label="Créée le"
-                    value={new Date(team.created_at).toLocaleDateString(
-                      'fr-FR',
-                    )}
-                  />
-                )}
-              </View>
-            </View>
+        {/* STATS ROW */}
+        <View style={styles.statsRow}>
+          <StatBox label="Matchs" value={team.stats.matchesPlayed || 0} />
+          <View style={styles.divider} />
+          <StatBox label="Victoires" value={team.stats.matchesWon || 0} />
+          <View style={styles.divider} />
+          <StatBox label="Membres" value={team.members.length || 0} />
+        </View>
 
-            {/* Actions */}
-            <View style={styles.actionsCard}>
-              {isOwner && (
-                <>
-                  <TouchableOpacity
-                    style={styles.actionButton}
-                    onPress={() =>
-                      navigation.navigate('EditTeam', {
-                        teamId,
-                        teamName: team.name,
-                      })
-                    }
-                  >
-                    <LinearGradient
-                      colors={['#3B82F6', '#2563EB']}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 1 }}
-                      style={styles.actionGradient}
-                    >
-                      <Icon name="edit-2" size={20} color="#FFF" />
-                      <Text style={styles.actionText}>Modifier l'équipe</Text>
-                    </LinearGradient>
-                  </TouchableOpacity>
+        {/* MENU */}
+        <Text style={styles.sectionTitle}>Gestion d'équipe</Text>
 
-                  <TouchableOpacity
-                    style={styles.actionButton}
-                    onPress={() =>
-                      navigation.navigate('TeamMembers', {
-                        teamId,
-                        teamName: team.name,
-                      })
-                    }
-                  >
-                    <LinearGradient
-                      colors={['#22C55E', '#16A34A']}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 1 }}
-                      style={styles.actionGradient}
-                    >
-                      <Icon name="user-plus" size={20} color="#FFF" />
-                      <Text style={styles.actionText}>Inviter des joueurs</Text>
-                    </LinearGradient>
-                  </TouchableOpacity>
-                </>
-              )}
+        <TouchableOpacity
+          style={styles.menuItem}
+          onPress={() =>
+            navigation.navigate('TeamMembers', {
+              teamId,
+              teamName: team.name,
+            })
+          }
+        >
+          <View style={styles.menuLeft}>
+            <View style={[styles.menuIcon, { backgroundColor: '#3B82F620' }]}>
+              <Icon name="users" size={20} color="#3B82F6" />
             </View>
+            <Text style={styles.menuText}>Voir les membres</Text>
           </View>
-        ) : (
-          <View>
-            {/* Liste des membres */}
-            <View style={styles.card}>
-              <View style={styles.cardHeader}>
-                <Text style={styles.cardTitle}>Membres de l'équipe</Text>
-                {isOwner && (
-                  <TouchableOpacity
-                    onPress={() =>
-                      navigation.navigate('TeamMembers', {
-                        teamId,
-                        teamName: team.name,
-                      })
-                    }
-                  >
-                    <Text style={styles.seeAllText}>Gérer</Text>
-                  </TouchableOpacity>
-                )}
+          <Icon name="chevron-right" size={20} color={THEME.TEXT_SEC} />
+        </TouchableOpacity>
+
+        {isOwner && (
+          <TouchableOpacity style={styles.menuItem}>
+            <View style={styles.menuLeft}>
+              <View style={[styles.menuIcon, { backgroundColor: '#F59E0B20' }]}>
+                <Icon name="calendar" size={20} color="#F59E0B" />
               </View>
-              <View style={styles.membersContainer}>
-                {members.length === 0 ? (
-                  <Text style={styles.emptyMembersText}>
-                    Aucun membre pour le moment
-                  </Text>
-                ) : (
-                  members.map(member => (
-                    <MemberCard
-                      key={member.id}
-                      member={{
-                        ...member,
-                        name: `${member.first_name} ${member.last_name}`,
-                        joinedDate: member.joined_at
-                          ? new Date(member.joined_at).toLocaleDateString(
-                              'fr-FR',
-                              {
-                                month: 'short',
-                                year: 'numeric',
-                              },
-                            )
-                          : 'récemment',
-                      }}
-                      isOwner={isOwner}
-                      onManage={handleManageMember}
-                    />
-                  ))
-                )}
-              </View>
+              <Text style={styles.menuText}>Planifier un match</Text>
             </View>
-          </View>
+            <Icon name="chevron-right" size={20} color={THEME.TEXT_SEC} />
+          </TouchableOpacity>
         )}
+
+        {/* DESCRIPTION */}
+        <Text style={styles.sectionTitle}>À propos</Text>
+        <Text style={styles.description}>
+          {team.description || 'Aucune description pour le moment.'}
+        </Text>
       </ScrollView>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F8FAFC',
+  container: { flex: 1, backgroundColor: THEME.BG },
+  center: { justifyContent: 'center', alignItems: 'center' },
+
+  // HEADER STYLES
+  headerWrapper: {
+    height: 320, // Hauteur fixe pour le header
+    justifyContent: 'flex-end',
+    paddingBottom: 20,
+    position: 'relative',
   },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#F8FAFC',
+  bannerImage: {
+    ...StyleSheet.absoluteFillObject,
+    resizeMode: 'cover',
   },
-  loadingText: {
-    marginTop: 12,
-    fontSize: 14,
-    color: '#6B7280',
+  headerOverlay: {
+    ...StyleSheet.absoluteFillObject,
   },
-  header: {
-    paddingTop: Platform.OS === 'ios' ? 60 : 20,
-    paddingBottom: 24,
-    paddingHorizontal: 20,
-    ...SHADOWS.LARGE,
-  },
-  headerTop: {
+  topBar: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 24,
-  },
-  headerButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    justifyContent: 'center',
     alignItems: 'center',
+    paddingTop: Platform.OS === 'ios' ? 60 : 30,
+    paddingHorizontal: 20,
+    zIndex: 10,
   },
-  headerContent: {
-    alignItems: 'center',
-    marginBottom: 24,
+  headerActions: { flexDirection: 'row', gap: 12 },
+  iconBtn: {
+    padding: 8,
+    backgroundColor: 'rgba(0,0,0,0.4)', // Fond sombre semi-transparent
+    borderRadius: 12,
   },
-  teamIconLarge: {
+
+  teamHeader: { alignItems: 'center', marginBottom: 10, zIndex: 5 },
+  logoPlaceholder: {
     width: 80,
     height: 80,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    borderRadius: 50,
+    backgroundColor: `${THEME.ACCENT}15`,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 16,
-  },
-  teamTitle: {
-    fontSize: 26,
-    fontWeight: '700',
-    color: '#FFF',
-    marginBottom: 8,
-    textAlign: 'center',
-  },
-  teamSubtitle: {
-    fontSize: 14,
-    color: 'rgba(255, 255, 255, 0.9)',
-    textAlign: 'center',
-    paddingHorizontal: 20,
-  },
-  statsContainer: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  statCard: {
-    flex: 1,
-    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: `${THEME.ACCENT}50`,
     overflow: 'hidden',
   },
-  statGradient: {
-    padding: 12,
-    alignItems: 'center',
+  teamLogo: { width: '100%', height: '100%' },
+  teamName: {
+    fontSize: 26,
+    fontWeight: 'bold',
+    color: THEME.TEXT,
+    marginBottom: 4,
+    textShadowColor: 'rgba(0, 0, 0, 0.75)',
+    textShadowOffset: { width: -1, height: 1 },
+    textShadowRadius: 10,
   },
-  statIconContainer: {
+  teamLoc: {
+    fontSize: 14,
+    color: THEME.TEXT_SEC,
+    textTransform: 'capitalize',
+  },
+
+  content: { padding: 24 },
+
+  statsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: THEME.SURFACE,
+    padding: 20,
+    borderRadius: 16,
+    marginBottom: 32,
+    borderWidth: 1,
+    borderColor: THEME.BORDER,
+  },
+  statBox: { alignItems: 'center', flex: 1 },
+  statValue: { fontSize: 20, fontWeight: 'bold', color: THEME.TEXT },
+  statLabel: { fontSize: 12, color: THEME.TEXT_SEC, marginTop: 4 },
+  divider: { width: 1, height: 30, backgroundColor: THEME.BORDER },
+
+  sectionTitle: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: THEME.TEXT_SEC,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    marginBottom: 16,
+  },
+  menuItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: THEME.SURFACE,
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: THEME.BORDER,
+  },
+  menuLeft: { flexDirection: 'row', alignItems: 'center', gap: 16 },
+  menuIcon: {
     width: 40,
     height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    borderRadius: 10,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 8,
   },
-  statValue: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#FFF',
-    marginBottom: 2,
-  },
-  statLabel: {
-    fontSize: 11,
-    color: 'rgba(255, 255, 255, 0.9)',
-  },
-  tabsContainer: {
-    flexDirection: 'row',
-    backgroundColor: '#FFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
-  },
-  tab: {
-    flex: 1,
-    paddingVertical: 16,
-    alignItems: 'center',
-  },
-  tabActive: {
-    borderBottomWidth: 2,
-    borderBottomColor: '#22C55E',
-  },
-  tabText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#6B7280',
-  },
-  tabTextActive: {
-    color: '#22C55E',
-  },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    padding: 20,
-  },
-  card: {
-    backgroundColor: '#FFF',
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 16,
-    ...SHADOWS.MEDIUM,
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  cardTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#1F2937',
-    marginBottom: 16,
-  },
-  cardContent: {
-    gap: 12,
-  },
-  seeAllText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#22C55E',
-  },
-  infoRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 8,
-  },
-  infoLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  infoLabel: {
-    fontSize: 14,
-    color: '#6B7280',
-  },
-  infoValue: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#1F2937',
-  },
-  actionsCard: {
-    gap: 12,
-  },
-  actionButton: {
-    borderRadius: 12,
-    overflow: 'hidden',
-    ...SHADOWS.SMALL,
-  },
-  actionGradient: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 14,
-    gap: 8,
-  },
-  actionText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#FFF',
-  },
-  membersContainer: {
-    gap: 12,
-  },
-  memberCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 8,
-    backgroundColor: '#F9FAFB',
-    borderRadius: 12,
-  },
-  memberAvatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: '#22C55E20',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 8,
-  },
-  memberInfo: {
-    flex: 1,
-  },
-  memberHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 4,
-  },
-  memberName: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#1F2937',
-  },
-  captainBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    backgroundColor: '#FEF3C7',
-    borderRadius: 6,
-    gap: 4,
-  },
-  captainText: {
-    fontSize: 10,
-    fontWeight: '600',
-    color: '#F59E0B',
-  },
-  memberMeta: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  memberMetaItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  memberMetaText: {
-    fontSize: 12,
-    color: '#6B7280',
-  },
-  memberOptions: {
-    padding: 8,
-  },
-  emptyMembersText: {
-    textAlign: 'center',
-    fontSize: 14,
-    color: '#9CA3AF',
-    paddingVertical: 20,
-  },
+  menuText: { fontSize: 16, color: THEME.TEXT, fontWeight: '600' },
+
+  description: { fontSize: 14, color: THEME.TEXT_SEC, lineHeight: 22 },
 });

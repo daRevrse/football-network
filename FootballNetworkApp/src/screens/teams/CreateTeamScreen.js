@@ -1,516 +1,137 @@
-// ====== src/screens/teams/CreateTeamScreen.js - NOUVEAU DESIGN + BACKEND ======
-import React, { useState, useCallback, useRef } from 'react';
+// ====== src/screens/teams/CreateTeamScreen.js ======
+import React, { useState } from 'react';
 import {
   View,
   Text,
   TextInput,
   StyleSheet,
-  ScrollView,
   TouchableOpacity,
+  ScrollView,
   Alert,
-  Platform,
-  StatusBar,
-  KeyboardAvoidingView,
   ActivityIndicator,
-  Animated,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
-import LinearGradient from 'react-native-linear-gradient';
-import { DIMENSIONS, FONTS, SHADOWS } from '../../styles/theme';
 import { teamsApi } from '../../services/api';
 
-const HEADER_MAX_HEIGHT = 250;
-const HEADER_MIN_HEIGHT = Platform.OS === 'ios' ? 100 : 80;
-const HEADER_SCROLL_DISTANCE = HEADER_MAX_HEIGHT - HEADER_MIN_HEIGHT;
-
-// Composant ModernInput
-const ModernInput = ({
-  label,
-  value,
-  onChangeText,
-  placeholder,
-  error,
-  icon,
-  multiline,
-  keyboardType,
-  maxLength,
-  ...props
-}) => (
-  <View style={styles.inputContainer}>
-    {label && (
-      <View style={styles.inputLabelContainer}>
-        <Text style={styles.inputLabel}>{label}</Text>
-        {maxLength && (
-          <Text style={styles.inputCounter}>
-            {value?.length || 0}/{maxLength}
-          </Text>
-        )}
-      </View>
-    )}
-    <View
-      style={[
-        styles.inputWrapper,
-        error && styles.inputWrapperError,
-        multiline && styles.inputWrapperMultiline,
-      ]}
-    >
-      {icon && (
-        <Icon
-          name={icon}
-          size={20}
-          color={error ? '#EF4444' : '#9CA3AF'}
-          style={styles.inputIcon}
-        />
-      )}
-      <TextInput
-        value={value}
-        onChangeText={onChangeText}
-        placeholder={placeholder}
-        placeholderTextColor="#9CA3AF"
-        multiline={multiline}
-        keyboardType={keyboardType}
-        maxLength={maxLength}
-        style={[
-          styles.input,
-          icon && styles.inputWithIcon,
-          multiline && styles.inputMultiline,
-        ]}
-        {...props}
-      />
-    </View>
-    {error && (
-      <View style={styles.errorContainer}>
-        <Icon name="alert-circle" size={14} color="#EF4444" />
-        <Text style={styles.errorText}>{error}</Text>
-      </View>
-    )}
-  </View>
-);
-
-// Composant SectionCard
-const SectionCard = ({ title, description, icon, iconBg, children }) => (
-  <View style={styles.sectionCard}>
-    <View style={styles.sectionHeader}>
-      <View style={[styles.sectionIcon, { backgroundColor: iconBg }]}>
-        <Icon name={icon} size={22} color="#FFF" />
-      </View>
-      <View style={styles.sectionTitleContainer}>
-        <Text style={styles.sectionTitle}>{title}</Text>
-        {description && (
-          <Text style={styles.sectionDescription}>{description}</Text>
-        )}
-      </View>
-    </View>
-    <View style={styles.sectionContent}>{children}</View>
-  </View>
-);
-
-// Composant SkillLevelCard
-const SkillLevelCard = ({ level, isSelected, onPress }) => {
-  const skillLevels = {
-    beginner: {
-      label: 'Débutant',
-      description: 'Premiers pas dans le football',
-      icon: 'user',
-      gradient: ['#10B981', '#059669'],
-    },
-    amateur: {
-      label: 'Amateur',
-      description: 'Je joue régulièrement',
-      icon: 'users',
-      gradient: ['#3B82F6', '#2563EB'],
-    },
-    intermediate: {
-      label: 'Intermédiaire',
-      description: 'Bon niveau technique',
-      icon: 'target',
-      gradient: ['#F59E0B', '#D97706'],
-    },
-    advanced: {
-      label: 'Avancé',
-      description: 'Très bon joueur',
-      icon: 'star',
-      gradient: ['#EF4444', '#DC2626'],
-    },
-    semi_pro: {
-      label: 'Semi-pro',
-      description: 'Niveau compétitif',
-      icon: 'award',
-      gradient: ['#8B5CF6', '#7C3AED'],
-    },
-  };
-
-  const skillInfo = skillLevels[level];
-
-  return (
-    <TouchableOpacity
-      style={[styles.skillCard, isSelected && styles.skillCardSelected]}
-      onPress={() => onPress(level)}
-      activeOpacity={0.7}
-    >
-      {isSelected && (
-        <View style={styles.selectedBadge}>
-          <Icon name="check" size={16} color="#FFF" />
-        </View>
-      )}
-      <LinearGradient
-        colors={isSelected ? skillInfo.gradient : ['#F3F4F6', '#F3F4F6']}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={styles.skillIconContainer}
-      >
-        <Icon
-          name={skillInfo.icon}
-          size={24}
-          color={isSelected ? '#FFF' : '#6B7280'}
-        />
-      </LinearGradient>
-      <Text
-        style={[styles.skillLabel, isSelected && styles.skillLabelSelected]}
-      >
-        {skillInfo.label}
-      </Text>
-      <Text
-        style={[
-          styles.skillDescription,
-          isSelected && styles.skillDescriptionSelected,
-        ]}
-      >
-        {skillInfo.description}
-      </Text>
-    </TouchableOpacity>
-  );
+const THEME = {
+  BG: '#0F172A',
+  SURFACE: '#1E293B',
+  TEXT: '#F8FAFC',
+  TEXT_SEC: '#94A3B8',
+  ACCENT: '#22C55E',
+  BORDER: '#334155',
 };
 
+const InputField = ({
+  label,
+  value,
+  onChange,
+  placeholder,
+  multiline,
+  keyboardType,
+}) => (
+  <View style={styles.inputGroup}>
+    <Text style={styles.label}>{label}</Text>
+    <TextInput
+      style={[
+        styles.input,
+        multiline && { height: 100, textAlignVertical: 'top' },
+      ]}
+      value={value}
+      onChangeText={onChange}
+      placeholder={placeholder}
+      placeholderTextColor={THEME.TEXT_SEC}
+      multiline={multiline}
+      keyboardType={keyboardType}
+    />
+  </View>
+);
+
 export const CreateTeamScreen = ({ navigation }) => {
-  const [isLoading, setIsLoading] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
     description: '',
-    skillLevel: 'amateur',
-    maxPlayers: '15',
     locationCity: '',
+    maxPlayers: '15',
   });
-  const [errors, setErrors] = useState({});
+  const [loading, setLoading] = useState(false);
 
-  const scrollY = useRef(new Animated.Value(0)).current;
-
-  // Animations du header
-  const headerHeight = scrollY.interpolate({
-    inputRange: [0, HEADER_SCROLL_DISTANCE],
-    outputRange: [HEADER_MAX_HEIGHT, HEADER_MIN_HEIGHT],
-    extrapolate: 'clamp',
-  });
-
-  const headerContentOpacity = scrollY.interpolate({
-    inputRange: [0, HEADER_SCROLL_DISTANCE / 2],
-    outputRange: [1, 0],
-    extrapolate: 'clamp',
-  });
-
-  const headerContentTranslateY = scrollY.interpolate({
-    inputRange: [0, HEADER_SCROLL_DISTANCE],
-    outputRange: [0, -20],
-    extrapolate: 'clamp',
-  });
-
-  const headerIconScale = scrollY.interpolate({
-    inputRange: [0, HEADER_SCROLL_DISTANCE],
-    outputRange: [1, 0.6],
-    extrapolate: 'clamp',
-  });
-
-  const headerTitleScale = scrollY.interpolate({
-    inputRange: [0, HEADER_SCROLL_DISTANCE],
-    outputRange: [1, 0.9],
-    extrapolate: 'clamp',
-  });
-
-  const headerTitleTranslateY = scrollY.interpolate({
-    inputRange: [0, HEADER_SCROLL_DISTANCE],
-    outputRange: [0, -140],
-    extrapolate: 'clamp',
-  });
-
-  const updateFormData = (field, value) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
-    // Effacer l'erreur du champ modifié
-    if (errors[field]) {
-      setErrors(prev => ({ ...prev, [field]: null }));
-    }
-  };
-
-  const validateForm = () => {
-    const newErrors = {};
-
-    if (!formData.name.trim()) {
-      newErrors.name = 'Le nom est requis';
-    } else if (formData.name.trim().length < 3) {
-      newErrors.name = 'Minimum 3 caractères';
-    } else if (formData.name.trim().length > 100) {
-      newErrors.name = 'Maximum 100 caractères';
-    }
-
-    if (formData.description && formData.description.length > 500) {
-      newErrors.description = 'Maximum 500 caractères';
-    }
-
-    const maxPlayers = parseInt(formData.maxPlayers);
-    if (!formData.maxPlayers || isNaN(maxPlayers)) {
-      newErrors.maxPlayers = 'Nombre invalide';
-    } else if (maxPlayers < 8) {
-      newErrors.maxPlayers = 'Minimum 8 joueurs';
-    } else if (maxPlayers > 30) {
-      newErrors.maxPlayers = 'Maximum 30 joueurs';
-    }
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
-
-  const handleSubmit = async () => {
-    if (!validateForm()) {
-      Alert.alert('Erreur', 'Veuillez corriger les erreurs du formulaire');
-      return;
-    }
-
+  const handleCreate = async () => {
+    if (!formData.name.trim()) return Alert.alert('Erreur', 'Nom requis');
+    setLoading(true);
     try {
-      setIsLoading(true);
-
-      const teamData = {
-        name: formData.name.trim(),
-        description: formData.description.trim() || undefined,
-        skillLevel: formData.skillLevel,
+      const res = await teamsApi.createTeam({
+        ...formData,
         maxPlayers: parseInt(formData.maxPlayers),
-        locationCity: formData.locationCity.trim() || undefined,
-      };
-
-      const result = await teamsApi.createTeam(teamData);
-
-      if (result.success) {
-        Alert.alert(
-          'Succès',
-          `L'équipe "${formData.name}" a été créée avec succès !`,
-          [
-            {
-              text: 'Voir mon équipe',
-              onPress: () => {
-                navigation.navigate('TeamDetail', {
-                  teamId: result.data.id,
-                  teamName: result.data.name,
-                });
-              },
-            },
-          ],
-        );
+      });
+      if (res.success) {
+        navigation.replace('TeamDetail', { teamId: res.data.id });
       } else {
-        Alert.alert('Erreur', result.error || "Impossible de créer l'équipe");
+        Alert.alert('Erreur', res.error);
       }
-    } catch (error) {
-      console.error('Create team error:', error);
-      Alert.alert('Erreur', 'Une erreur est survenue');
+    } catch (e) {
+      Alert.alert('Erreur', 'Problème technique');
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
   };
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" />
-
-      {/* Header animé */}
-      <Animated.View
-        style={[
-          styles.header,
-          {
-            height: headerHeight,
-          },
-        ]}
-      >
-        <LinearGradient
-          colors={['#22C55E', '#16A34A']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.headerGradient}
-        >
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={() => navigation.navigate('MyTeams')}
-          >
-            <Icon name="x" size={24} color="#FFF" />
-          </TouchableOpacity>
-
-          <Animated.View
-            style={[
-              styles.headerContent,
-              {
-                // opacity: headerContentOpacity,
-                transform: [{ translateY: headerContentTranslateY }],
-              },
-            ]}
-          >
-            <Animated.View
-              style={[
-                styles.headerIconContainer,
-                {
-                  transform: [{ scale: headerIconScale }],
-                  opacity: headerContentOpacity,
-                },
-              ]}
-            >
-              <Icon name="plus-circle" size={32} color="#FFF" />
-            </Animated.View>
-            <Animated.Text
-              style={[
-                styles.headerTitle,
-                {
-                  transform: [
-                    {
-                      scale: headerTitleScale,
-                    },
-                    {
-                      translateY: headerTitleTranslateY,
-                    },
-                  ],
-                },
-              ]}
-            >
-              Nouvelle équipe
-            </Animated.Text>
-            <Animated.Text
-              style={[styles.headerSubtitle, { opacity: headerContentOpacity }]}
-            >
-              Quelques infos pour commencer
-            </Animated.Text>
-          </Animated.View>
-        </LinearGradient>
-      </Animated.View>
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => navigation.goBack()}>
+          <Icon name="x" size={24} color={THEME.TEXT} />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Nouvelle Équipe</Text>
+        <View style={{ width: 24 }} />
+      </View>
 
       <KeyboardAvoidingView
-        style={styles.keyboardView}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={{ flex: 1 }}
       >
-        <Animated.ScrollView
-          style={styles.scrollView}
-          contentContainerStyle={[
-            styles.scrollContent,
-            { paddingTop: HEADER_MAX_HEIGHT + 24 },
-          ]}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-          scrollEventThrottle={16}
-          onScroll={Animated.event(
-            [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-            { useNativeDriver: false },
-          )}
-        >
-          {/* Section Identité */}
-          <SectionCard
-            title="Identité"
-            description="Comment s'appelle votre équipe ?"
-            icon="edit-3"
-            iconBg="#22C55E"
-          >
-            <ModernInput
-              label="Nom de l'équipe"
-              value={formData.name}
-              onChangeText={text => updateFormData('name', text)}
-              placeholder="Les Tigres de Paris"
-              error={errors.name}
-              icon="shield"
-              maxLength={100}
-            />
+        <ScrollView contentContainerStyle={styles.content}>
+          <InputField
+            label="Nom de l'équipe"
+            value={formData.name}
+            onChange={t => setFormData({ ...formData, name: t })}
+            placeholder="Ex: Les Lions de Paris"
+          />
+          <InputField
+            label="Ville"
+            value={formData.locationCity}
+            onChange={t => setFormData({ ...formData, locationCity: t })}
+            placeholder="Ex: Paris"
+          />
+          <InputField
+            label="Joueurs Max"
+            value={formData.maxPlayers}
+            onChange={t => setFormData({ ...formData, maxPlayers: t })}
+            keyboardType="numeric"
+            placeholder="15"
+          />
+          <InputField
+            label="Description"
+            value={formData.description}
+            onChange={t => setFormData({ ...formData, description: t })}
+            multiline
+            placeholder="Décrivez votre équipe..."
+          />
+        </ScrollView>
 
-            <ModernInput
-              label="Description (optionnel)"
-              value={formData.description}
-              onChangeText={text => updateFormData('description', text)}
-              placeholder="Décrivez votre équipe, votre style de jeu..."
-              error={errors.description}
-              icon="align-left"
-              multiline
-              maxLength={500}
-            />
-          </SectionCard>
-
-          {/* Section Niveau */}
-          <SectionCard
-            title="Niveau de jeu"
-            description="Quel est le niveau recherché ?"
-            icon="trending-up"
-            iconBg="#3B82F6"
-          >
-            <View style={styles.skillSelector}>
-              {[
-                'beginner',
-                'amateur',
-                'intermediate',
-                'advanced',
-                'semi_pro',
-              ].map(level => (
-                <SkillLevelCard
-                  key={level}
-                  level={level}
-                  isSelected={formData.skillLevel === level}
-                  onPress={updateFormData.bind(null, 'skillLevel')}
-                />
-              ))}
-            </View>
-          </SectionCard>
-
-          {/* Section Configuration */}
-          <SectionCard
-            title="Configuration"
-            description="Paramètres de l'équipe"
-            icon="settings"
-            iconBg="#F59E0B"
-          >
-            <ModernInput
-              label="Nombre maximum de joueurs"
-              value={formData.maxPlayers}
-              onChangeText={text => updateFormData('maxPlayers', text)}
-              placeholder="15"
-              error={errors.maxPlayers}
-              icon="users"
-              keyboardType="number-pad"
-              maxLength={2}
-            />
-
-            <ModernInput
-              label="Ville (optionnel)"
-              value={formData.locationCity}
-              onChangeText={text => updateFormData('locationCity', text)}
-              placeholder="Paris, Lyon, Marseille..."
-              icon="map-pin"
-              maxLength={100}
-            />
-          </SectionCard>
-        </Animated.ScrollView>
-
-        {/* Bouton Créer */}
         <View style={styles.footer}>
           <TouchableOpacity
-            style={styles.submitButton}
-            onPress={handleSubmit}
-            disabled={isLoading}
-            activeOpacity={0.8}
+            style={styles.btn}
+            onPress={handleCreate}
+            disabled={loading}
           >
-            <LinearGradient
-              colors={['#22C55E', '#16A34A']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.submitGradient}
-            >
-              {isLoading ? (
-                <ActivityIndicator color="#FFF" />
-              ) : (
-                <>
-                  <Icon name="check" size={22} color="#FFF" />
-                  <Text style={styles.submitText}>Créer l'équipe</Text>
-                </>
-              )}
-            </LinearGradient>
+            {loading ? (
+              <ActivityIndicator color="#000" />
+            ) : (
+              <Text style={styles.btnText}>CRÉER L'ÉQUIPE</Text>
+            )}
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
@@ -519,239 +140,42 @@ export const CreateTeamScreen = ({ navigation }) => {
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F8FAFC',
-  },
-  keyboardView: {
-    flex: 1,
-  },
+  container: { flex: 1, backgroundColor: THEME.BG },
   header: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    zIndex: 10,
-    overflow: 'hidden',
-  },
-  headerGradient: {
-    flex: 1,
-    paddingTop: Platform.OS === 'ios' ? 60 : 30,
-    paddingHorizontal: DIMENSIONS.CONTAINER_PADDING,
-    paddingBottom: DIMENSIONS.SPACING_XL,
-  },
-  backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: DIMENSIONS.SPACING_LG,
-  },
-  headerContent: {
-    alignItems: 'center',
-  },
-  headerIconContainer: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: DIMENSIONS.SPACING_MD,
-  },
-  headerTitle: {
-    fontSize: FONTS.SIZE.XXL,
-    fontWeight: FONTS.WEIGHT.BOLD,
-    color: '#FFFFFF',
-    marginBottom: DIMENSIONS.SPACING_XS,
-  },
-  headerSubtitle: {
-    fontSize: FONTS.SIZE.MD,
-    color: 'rgba(255, 255, 255, 0.9)',
-  },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    padding: DIMENSIONS.CONTAINER_PADDING,
-    paddingBottom: DIMENSIONS.SPACING_XXL,
-  },
-  sectionCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: DIMENSIONS.BORDER_RADIUS_LG,
-    padding: DIMENSIONS.SPACING_LG,
-    marginBottom: DIMENSIONS.SPACING_LG,
-    ...SHADOWS.MEDIUM,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginBottom: DIMENSIONS.SPACING_LG,
-  },
-  sectionIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: DIMENSIONS.SPACING_MD,
-  },
-  sectionTitleContainer: {
-    flex: 1,
-  },
-  sectionTitle: {
-    fontSize: FONTS.SIZE.LG,
-    fontWeight: FONTS.WEIGHT.BOLD,
-    color: '#1F2937',
-    marginBottom: DIMENSIONS.SPACING_XXS,
-  },
-  sectionDescription: {
-    fontSize: FONTS.SIZE.SM,
-    color: '#6B7280',
-    lineHeight: FONTS.SIZE.SM * FONTS.LINE_HEIGHT.NORMAL,
-  },
-  sectionContent: {
-    gap: DIMENSIONS.SPACING_MD,
-  },
-  inputContainer: {
-    gap: DIMENSIONS.SPACING_XS,
-  },
-  inputLabelContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    paddingHorizontal: 24,
+    paddingTop: Platform.OS === 'ios' ? 60 : 30,
+    paddingBottom: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: THEME.BORDER,
   },
-  inputLabel: {
-    fontSize: FONTS.SIZE.SM,
-    fontWeight: FONTS.WEIGHT.SEMIBOLD,
-    color: '#374151',
-  },
-  inputCounter: {
-    fontSize: FONTS.SIZE.XS,
-    color: '#9CA3AF',
-  },
-  inputWrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F9FAFB',
-    borderRadius: DIMENSIONS.BORDER_RADIUS_MD,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-  },
-  inputWrapperError: {
-    borderColor: '#EF4444',
-    backgroundColor: '#FEF2F2',
-  },
-  inputWrapperMultiline: {
-    alignItems: 'flex-start',
-  },
-  inputIcon: {
-    marginLeft: DIMENSIONS.SPACING_MD,
+  headerTitle: { fontSize: 16, fontWeight: 'bold', color: THEME.TEXT },
+  content: { padding: 24 },
+  inputGroup: { marginBottom: 20 },
+  label: {
+    color: THEME.TEXT_SEC,
+    fontSize: 12,
+    marginBottom: 8,
+    textTransform: 'uppercase',
   },
   input: {
-    flex: 1,
-    padding: DIMENSIONS.SPACING_MD,
-    fontSize: FONTS.SIZE.MD,
-    color: '#1F2937',
-  },
-  inputWithIcon: {
-    paddingLeft: 0,
-  },
-  inputMultiline: {
-    minHeight: 100,
-    textAlignVertical: 'top',
-    paddingTop: DIMENSIONS.SPACING_MD,
-  },
-  errorContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: DIMENSIONS.SPACING_XS,
-  },
-  errorText: {
-    fontSize: FONTS.SIZE.SM,
-    color: '#EF4444',
-  },
-  skillSelector: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: DIMENSIONS.SPACING_SM,
-  },
-  skillCard: {
-    flex: 1,
-    minWidth: '45%',
-    padding: DIMENSIONS.SPACING_MD,
-    borderRadius: DIMENSIONS.BORDER_RADIUS_MD,
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#E5E7EB',
-    backgroundColor: '#F9FAFB',
-    position: 'relative',
-  },
-  skillCardSelected: {
-    borderColor: '#22C55E',
-    backgroundColor: '#F0FDF4',
-    ...SHADOWS.SMALL,
-  },
-  selectedBadge: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-    width: 24,
-    height: 24,
+    backgroundColor: THEME.SURFACE,
     borderRadius: 12,
-    backgroundColor: '#22C55E',
+    padding: 16,
+    color: THEME.TEXT,
+    fontSize: 16,
+    borderWidth: 1,
+    borderColor: THEME.BORDER,
+  },
+  footer: { padding: 24, borderTopWidth: 1, borderTopColor: THEME.BORDER },
+  btn: {
+    backgroundColor: THEME.ACCENT,
+    borderRadius: 12,
+    height: 50,
     justifyContent: 'center',
     alignItems: 'center',
-    zIndex: 1,
   },
-  skillIconContainer: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: DIMENSIONS.SPACING_SM,
-  },
-  skillLabel: {
-    fontSize: FONTS.SIZE.MD,
-    fontWeight: FONTS.WEIGHT.SEMIBOLD,
-    color: '#374151',
-    marginBottom: DIMENSIONS.SPACING_XXS,
-  },
-  skillLabelSelected: {
-    color: '#22C55E',
-  },
-  skillDescription: {
-    fontSize: FONTS.SIZE.XS,
-    color: '#6B7280',
-    textAlign: 'center',
-  },
-  skillDescriptionSelected: {
-    color: '#16A34A',
-  },
-  footer: {
-    padding: DIMENSIONS.CONTAINER_PADDING,
-    backgroundColor: '#FFFFFF',
-    borderTopWidth: 1,
-    borderTopColor: '#E5E7EB',
-    ...SHADOWS.MEDIUM,
-  },
-  submitButton: {
-    borderRadius: DIMENSIONS.BORDER_RADIUS_MD,
-    overflow: 'hidden',
-  },
-  submitGradient: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: DIMENSIONS.SPACING_MD,
-    gap: DIMENSIONS.SPACING_SM,
-  },
-  submitText: {
-    fontSize: FONTS.SIZE.LG,
-    fontWeight: FONTS.WEIGHT.BOLD,
-    color: '#FFFFFF',
-  },
+  btnText: { fontWeight: 'bold', color: '#000', fontSize: 14 },
 });

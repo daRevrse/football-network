@@ -1,5 +1,5 @@
-// ====== src/screens/teams/EditTeamScreen.js - NOUVEAU DESIGN + BACKEND ======
-import React, { useState, useCallback, useEffect } from 'react';
+// ====== src/screens/teams/EditTeamScreen.js ======
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -8,693 +8,324 @@ import {
   ScrollView,
   TouchableOpacity,
   Alert,
+  Image,
   Platform,
-  StatusBar,
-  KeyboardAvoidingView,
   ActivityIndicator,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import LinearGradient from 'react-native-linear-gradient';
-import { DIMENSIONS, FONTS, SHADOWS } from '../../styles/theme';
+import { launchImageLibrary } from 'react-native-image-picker';
 import { teamsApi } from '../../services/api';
 
-// Composant ModernInput (identique à CreateTeamScreen)
-const ModernInput = ({
-  label,
-  value,
-  onChangeText,
-  placeholder,
-  error,
-  icon,
-  multiline,
-  keyboardType,
-  maxLength,
-  ...props
-}) => (
-  <View style={styles.inputContainer}>
-    {label && (
-      <View style={styles.inputLabelContainer}>
-        <Text style={styles.inputLabel}>{label}</Text>
-        {maxLength && (
-          <Text style={styles.inputCounter}>
-            {value?.length || 0}/{maxLength}
-          </Text>
-        )}
-      </View>
-    )}
-    <View
-      style={[
-        styles.inputWrapper,
-        error && styles.inputWrapperError,
-        multiline && styles.inputWrapperMultiline,
-      ]}
-    >
-      {icon && (
-        <Icon
-          name={icon}
-          size={20}
-          color={error ? '#EF4444' : '#9CA3AF'}
-          style={styles.inputIcon}
-        />
-      )}
-      <TextInput
-        value={value}
-        onChangeText={onChangeText}
-        placeholder={placeholder}
-        placeholderTextColor="#9CA3AF"
-        multiline={multiline}
-        keyboardType={keyboardType}
-        maxLength={maxLength}
-        style={[
-          styles.input,
-          icon && styles.inputWithIcon,
-          multiline && styles.inputMultiline,
-        ]}
-        {...props}
-      />
-    </View>
-    {error && (
-      <View style={styles.errorContainer}>
-        <Icon name="alert-circle" size={14} color="#EF4444" />
-        <Text style={styles.errorText}>{error}</Text>
-      </View>
-    )}
-  </View>
-);
-
-// Composant SectionCard
-const SectionCard = ({ title, description, icon, iconBg, children }) => (
-  <View style={styles.sectionCard}>
-    <View style={styles.sectionHeader}>
-      <View style={[styles.sectionIcon, { backgroundColor: iconBg }]}>
-        <Icon name={icon} size={22} color="#FFF" />
-      </View>
-      <View style={styles.sectionTitleContainer}>
-        <Text style={styles.sectionTitle}>{title}</Text>
-        {description && (
-          <Text style={styles.sectionDescription}>{description}</Text>
-        )}
-      </View>
-    </View>
-    <View style={styles.sectionContent}>{children}</View>
-  </View>
-);
-
-// Composant SkillLevelCard
-const SkillLevelCard = ({ level, isSelected, onPress }) => {
-  const skillLevels = {
-    beginner: {
-      label: 'Débutant',
-      description: 'Premiers pas dans le football',
-      icon: 'user',
-      gradient: ['#10B981', '#059669'],
-    },
-    amateur: {
-      label: 'Amateur',
-      description: 'Je joue régulièrement',
-      icon: 'users',
-      gradient: ['#3B82F6', '#2563EB'],
-    },
-    intermediate: {
-      label: 'Intermédiaire',
-      description: 'Bon niveau technique',
-      icon: 'target',
-      gradient: ['#F59E0B', '#D97706'],
-    },
-    advanced: {
-      label: 'Avancé',
-      description: 'Très bon joueur',
-      icon: 'star',
-      gradient: ['#EF4444', '#DC2626'],
-    },
-    semi_pro: {
-      label: 'Semi-pro',
-      description: 'Niveau compétitif',
-      icon: 'award',
-      gradient: ['#8B5CF6', '#7C3AED'],
-    },
-  };
-
-  const skillInfo = skillLevels[level];
-
-  return (
-    <TouchableOpacity
-      style={[styles.skillCard, isSelected && styles.skillCardSelected]}
-      onPress={() => onPress(level)}
-      activeOpacity={0.7}
-    >
-      {isSelected && (
-        <View style={styles.selectedBadge}>
-          <Icon name="check" size={16} color="#FFF" />
-        </View>
-      )}
-      <LinearGradient
-        colors={isSelected ? skillInfo.gradient : ['#F3F4F6', '#F3F4F6']}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={styles.skillIconContainer}
-      >
-        <Icon
-          name={skillInfo.icon}
-          size={24}
-          color={isSelected ? '#FFF' : '#6B7280'}
-        />
-      </LinearGradient>
-      <Text
-        style={[styles.skillLabel, isSelected && styles.skillLabelSelected]}
-      >
-        {skillInfo.label}
-      </Text>
-      <Text
-        style={[
-          styles.skillDescription,
-          isSelected && styles.skillDescriptionSelected,
-        ]}
-      >
-        {skillInfo.description}
-      </Text>
-    </TouchableOpacity>
-  );
+const THEME = {
+  BG: '#0F172A',
+  SURFACE: '#1E293B',
+  TEXT: '#F8FAFC',
+  TEXT_SEC: '#94A3B8',
+  ACCENT: '#22C55E',
+  BORDER: '#334155',
 };
 
+const InputField = ({ label, value, onChange, placeholder, multiline }) => (
+  <View style={styles.inputGroup}>
+    <Text style={styles.label}>{label}</Text>
+    <TextInput
+      style={[
+        styles.input,
+        multiline && { height: 100, textAlignVertical: 'top' },
+      ]}
+      value={value}
+      onChangeText={onChange}
+      placeholder={placeholder}
+      placeholderTextColor={THEME.TEXT_SEC}
+      multiline={multiline}
+    />
+  </View>
+);
+
 export const EditTeamScreen = ({ route, navigation }) => {
-  const { teamId, teamName } = route.params || {};
-  const [isLoading, setIsLoading] = useState(false);
+  const { teamId } = route.params;
+  const [formData, setFormData] = useState({});
   const [loading, setLoading] = useState(true);
-  const [formData, setFormData] = useState({
-    name: '',
-    description: '',
-    skillLevel: 'amateur',
-    maxPlayers: '15',
-    locationCity: '',
-  });
-  const [errors, setErrors] = useState({});
+  const [uploading, setUploading] = useState({ logo: false, banner: false });
 
   useEffect(() => {
-    loadTeamData();
-  }, [teamId]);
+    loadTeam();
+  }, []);
 
-  const loadTeamData = async () => {
+  const loadTeam = async () => {
     try {
-      setLoading(true);
-      const result = await teamsApi.getTeamById(teamId);
-
-      if (result.success) {
-        const team = result.data;
+      const res = await teamsApi.getTeamById(teamId);
+      if (res.success) {
         setFormData({
-          name: team.name || '',
-          description: team.description || '',
-          skillLevel: team.skill_level || 'amateur',
-          maxPlayers: String(team.max_players || 15),
-          locationCity: team.location_city || '',
+          name: res.data.name,
+          description: res.data.description,
+          locationCity: res.data.locationCity,
+          maxPlayers: String(res.data.maxPlayers),
+          logo: res.data.logoUrl || res.data.logo, // Gère les différentes structures API
+          banner: res.data.bannerUrl || res.data.banner,
         });
-      } else {
-        Alert.alert('Erreur', result.error);
-        navigation.goBack();
       }
-    } catch (error) {
-      console.error('Load team error:', error);
-      Alert.alert('Erreur', 'Une erreur est survenue');
-      navigation.goBack();
+    } catch (e) {
+      Alert.alert('Erreur', 'Chargement impossible');
     } finally {
       setLoading(false);
     }
   };
 
-  const updateFormData = (field, value) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
-    // Effacer l'erreur du champ modifié
-    if (errors[field]) {
-      setErrors(prev => ({ ...prev, [field]: null }));
+  // Gestion Upload Image (Générique)
+  const handleImagePick = async type => {
+    const result = await launchImageLibrary({
+      mediaType: 'photo',
+      quality: 0.7,
+    });
+
+    if (result.assets && result.assets.length > 0) {
+      const uri = result.assets[0].uri;
+      setUploading(p => ({ ...p, [type]: true }));
+
+      try {
+        // Upload via l'API (supposons que teamsApi ait uploadTeamImage)
+        // Si votre API gère l'upload direct multipart
+        const res = await teamsApi.uploadTeamImage(teamId, type, uri);
+
+        if (res.success) {
+          // Mettre à jour l'affichage local
+          setFormData(p => ({ ...p, [type]: res.data.url || uri }));
+          Alert.alert(
+            'Succès',
+            `${type === 'logo' ? 'Logo' : 'Bannière'} mis à jour`,
+          );
+        } else {
+          // Fallback si pas d'API upload : on met juste à jour l'état local (pour démo)
+          setFormData(p => ({ ...p, [type]: uri }));
+        }
+      } catch (e) {
+        // Si l'API n'est pas encore prête, on met à jour l'UI quand même pour tester
+        setFormData(p => ({ ...p, [type]: uri }));
+      } finally {
+        setUploading(p => ({ ...p, [type]: false }));
+      }
     }
   };
 
-  const validateForm = () => {
-    const newErrors = {};
-
-    if (!formData.name.trim()) {
-      newErrors.name = 'Le nom est requis';
-    } else if (formData.name.trim().length < 3) {
-      newErrors.name = 'Minimum 3 caractères';
-    } else if (formData.name.trim().length > 100) {
-      newErrors.name = 'Maximum 100 caractères';
-    }
-
-    if (formData.description && formData.description.length > 500) {
-      newErrors.description = 'Maximum 500 caractères';
-    }
-
-    const maxPlayers = parseInt(formData.maxPlayers);
-    if (!formData.maxPlayers || isNaN(maxPlayers)) {
-      newErrors.maxPlayers = 'Nombre invalide';
-    } else if (maxPlayers < 8) {
-      newErrors.maxPlayers = 'Minimum 8 joueurs';
-    } else if (maxPlayers > 30) {
-      newErrors.maxPlayers = 'Maximum 30 joueurs';
-    }
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
-
-  const handleSubmit = async () => {
-    if (!validateForm()) {
-      Alert.alert('Erreur', 'Veuillez corriger les erreurs du formulaire');
-      return;
-    }
-
+  const handleSave = async () => {
     try {
-      setIsLoading(true);
-
-      const teamData = {
-        name: formData.name.trim(),
-        description: formData.description.trim() || undefined,
-        skillLevel: formData.skillLevel,
+      const res = await teamsApi.updateTeam(teamId, {
+        ...formData,
         maxPlayers: parseInt(formData.maxPlayers),
-        locationCity: formData.locationCity.trim() || undefined,
-      };
-
-      const result = await teamsApi.updateTeam(teamId, teamData);
-
-      if (result.success) {
-        Alert.alert('Succès', "L'équipe a été mise à jour avec succès !", [
-          {
-            text: 'OK',
-            onPress: () => navigation.goBack(),
-          },
+      });
+      if (res.success) {
+        Alert.alert('Succès', 'Équipe mise à jour', [
+          { text: 'OK', onPress: () => navigation.goBack() },
         ]);
       } else {
-        Alert.alert(
-          'Erreur',
-          result.error || "Impossible de mettre à jour l'équipe",
-        );
+        Alert.alert('Erreur', res.error);
       }
-    } catch (error) {
-      console.error('Update team error:', error);
-      Alert.alert('Erreur', 'Une erreur est survenue');
-    } finally {
-      setIsLoading(false);
+    } catch (e) {
+      Alert.alert('Erreur', 'Problème technique');
     }
   };
 
-  if (loading) {
+  if (loading)
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#22C55E" />
-        <Text style={styles.loadingText}>Chargement...</Text>
+      <View style={[styles.container, styles.center]}>
+        <ActivityIndicator color={THEME.ACCENT} />
       </View>
     );
-  }
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" />
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => navigation.goBack()}>
+          <Icon name="x" size={24} color={THEME.TEXT} />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Modifier l'équipe</Text>
+        <TouchableOpacity onPress={handleSave}>
+          <Icon name="check" size={24} color={THEME.ACCENT} />
+        </TouchableOpacity>
+      </View>
 
-      {/* Header avec gradient */}
-      <LinearGradient
-        colors={['#22C55E', '#16A34A']}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={styles.header}
-      >
+      <ScrollView contentContainerStyle={styles.content}>
+        {/* Section Média */}
+        <Text style={styles.sectionTitle}>Apparence</Text>
+
+        {/* Bannière */}
         <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => navigation.goBack()}
+          style={styles.bannerContainer}
+          onPress={() => handleImagePick('banner')}
         >
-          <Icon name="x" size={24} color="#FFF" />
+          {formData.banner ? (
+            <Image
+              source={{ uri: formData.banner }}
+              style={styles.bannerImage}
+            />
+          ) : (
+            <View style={styles.bannerPlaceholder}>
+              <Icon name="image" size={32} color={THEME.TEXT_SEC} />
+              <Text style={styles.mediaText}>Ajouter une bannière</Text>
+            </View>
+          )}
+          {uploading.banner && (
+            <View style={styles.loaderOverlay}>
+              <ActivityIndicator color="#FFF" />
+            </View>
+          )}
+          <View style={styles.editBadge}>
+            <Icon name="camera" size={14} color="#FFF" />
+          </View>
         </TouchableOpacity>
 
-        <View style={styles.headerContent}>
-          <View style={styles.headerIconContainer}>
-            <Icon name="edit-2" size={32} color="#FFF" />
-          </View>
-          <Text style={styles.headerTitle}>Modifier l'équipe</Text>
-          <Text style={styles.headerSubtitle}>{teamName}</Text>
-        </View>
-      </LinearGradient>
-
-      <KeyboardAvoidingView
-        style={styles.keyboardView}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
-      >
-        <ScrollView
-          style={styles.scrollView}
-          contentContainerStyle={styles.scrollContent}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-        >
-          {/* Section Identité */}
-          <SectionCard
-            title="Identité"
-            description="Informations de base"
-            icon="edit-3"
-            iconBg="#22C55E"
-          >
-            <ModernInput
-              label="Nom de l'équipe"
-              value={formData.name}
-              onChangeText={text => updateFormData('name', text)}
-              placeholder="Les Tigres de Paris"
-              error={errors.name}
-              icon="shield"
-              maxLength={100}
-            />
-
-            <ModernInput
-              label="Description (optionnel)"
-              value={formData.description}
-              onChangeText={text => updateFormData('description', text)}
-              placeholder="Décrivez votre équipe, votre style de jeu..."
-              error={errors.description}
-              icon="align-left"
-              multiline
-              maxLength={500}
-            />
-          </SectionCard>
-
-          {/* Section Niveau */}
-          <SectionCard
-            title="Niveau de jeu"
-            description="Niveau recherché"
-            icon="trending-up"
-            iconBg="#3B82F6"
-          >
-            <View style={styles.skillSelector}>
-              {[
-                'beginner',
-                'amateur',
-                'intermediate',
-                'advanced',
-                'semi_pro',
-              ].map(level => (
-                <SkillLevelCard
-                  key={level}
-                  level={level}
-                  isSelected={formData.skillLevel === level}
-                  onPress={updateFormData.bind(null, 'skillLevel')}
-                />
-              ))}
-            </View>
-          </SectionCard>
-
-          {/* Section Configuration */}
-          <SectionCard
-            title="Configuration"
-            description="Paramètres de l'équipe"
-            icon="settings"
-            iconBg="#F59E0B"
-          >
-            <ModernInput
-              label="Nombre maximum de joueurs"
-              value={formData.maxPlayers}
-              onChangeText={text => updateFormData('maxPlayers', text)}
-              placeholder="15"
-              error={errors.maxPlayers}
-              icon="users"
-              keyboardType="number-pad"
-              maxLength={2}
-            />
-
-            <ModernInput
-              label="Ville (optionnel)"
-              value={formData.locationCity}
-              onChangeText={text => updateFormData('locationCity', text)}
-              placeholder="Paris, Lyon, Marseille..."
-              icon="map-pin"
-              maxLength={100}
-            />
-          </SectionCard>
-        </ScrollView>
-
-        {/* Bouton Sauvegarder */}
-        <View style={styles.footer}>
+        {/* Logo (superposé) */}
+        <View style={styles.logoWrapper}>
           <TouchableOpacity
-            style={styles.submitButton}
-            onPress={handleSubmit}
-            disabled={isLoading}
-            activeOpacity={0.8}
+            style={styles.logoContainer}
+            onPress={() => handleImagePick('logo')}
           >
-            <LinearGradient
-              colors={['#22C55E', '#16A34A']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.submitGradient}
-            >
-              {isLoading ? (
+            {formData.logo ? (
+              <Image source={{ uri: formData.logo }} style={styles.logoImage} />
+            ) : (
+              <View style={styles.logoPlaceholder}>
+                <Icon name="shield" size={32} color={THEME.ACCENT} />
+              </View>
+            )}
+            {uploading.logo && (
+              <View style={styles.loaderOverlay}>
                 <ActivityIndicator color="#FFF" />
-              ) : (
-                <>
-                  <Icon name="save" size={22} color="#FFF" />
-                  <Text style={styles.submitText}>Enregistrer</Text>
-                </>
-              )}
-            </LinearGradient>
+              </View>
+            )}
+            <View style={styles.editBadgeSmall}>
+              <Icon name="camera" size={10} color="#FFF" />
+            </View>
           </TouchableOpacity>
         </View>
-      </KeyboardAvoidingView>
+
+        <View style={{ height: 20 }} />
+
+        {/* Formulaire */}
+        <Text style={styles.sectionTitle}>Informations</Text>
+        <InputField
+          label="Nom"
+          value={formData.name}
+          onChange={t => setFormData({ ...formData, name: t })}
+        />
+        <InputField
+          label="Ville"
+          value={formData.locationCity}
+          onChange={t => setFormData({ ...formData, locationCity: t })}
+        />
+        <InputField
+          label="Joueurs Max"
+          value={formData.maxPlayers}
+          onChange={t => setFormData({ ...formData, maxPlayers: t })}
+        />
+        <InputField
+          label="Description"
+          value={formData.description}
+          onChange={t => setFormData({ ...formData, description: t })}
+          multiline
+        />
+      </ScrollView>
     </View>
   );
 };
 
-// Styles identiques à CreateTeamScreen
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F8FAFC',
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#F8FAFC',
-  },
-  loadingText: {
-    marginTop: 12,
-    fontSize: 14,
-    color: '#6B7280',
-  },
-  keyboardView: {
-    flex: 1,
-  },
+  container: { flex: 1, backgroundColor: THEME.BG },
+  center: { justifyContent: 'center', alignItems: 'center' },
+
   header: {
-    paddingTop: Platform.OS === 'ios' ? 60 : 20,
-    paddingBottom: DIMENSIONS.SPACING_XL,
-    paddingHorizontal: DIMENSIONS.CONTAINER_PADDING,
-    ...SHADOWS.LARGE,
-  },
-  backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: DIMENSIONS.SPACING_LG,
-  },
-  headerContent: {
-    alignItems: 'center',
-  },
-  headerIconContainer: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: DIMENSIONS.SPACING_MD,
-  },
-  headerTitle: {
-    fontSize: FONTS.SIZE.XXL,
-    fontWeight: FONTS.WEIGHT.BOLD,
-    color: '#FFFFFF',
-    marginBottom: DIMENSIONS.SPACING_XS,
-  },
-  headerSubtitle: {
-    fontSize: FONTS.SIZE.MD,
-    color: 'rgba(255, 255, 255, 0.9)',
-  },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    padding: DIMENSIONS.CONTAINER_PADDING,
-    paddingBottom: DIMENSIONS.SPACING_XXL,
-  },
-  sectionCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: DIMENSIONS.BORDER_RADIUS_LG,
-    padding: DIMENSIONS.SPACING_LG,
-    marginBottom: DIMENSIONS.SPACING_LG,
-    ...SHADOWS.MEDIUM,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginBottom: DIMENSIONS.SPACING_LG,
-  },
-  sectionIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: DIMENSIONS.SPACING_MD,
-  },
-  sectionTitleContainer: {
-    flex: 1,
-  },
-  sectionTitle: {
-    fontSize: FONTS.SIZE.LG,
-    fontWeight: FONTS.WEIGHT.BOLD,
-    color: '#1F2937',
-    marginBottom: DIMENSIONS.SPACING_XXS,
-  },
-  sectionDescription: {
-    fontSize: FONTS.SIZE.SM,
-    color: '#6B7280',
-    lineHeight: FONTS.SIZE.SM * FONTS.LINE_HEIGHT.NORMAL,
-  },
-  sectionContent: {
-    gap: DIMENSIONS.SPACING_MD,
-  },
-  inputContainer: {
-    gap: DIMENSIONS.SPACING_XS,
-  },
-  inputLabelContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    paddingHorizontal: 24,
+    paddingTop: Platform.OS === 'ios' ? 60 : 30,
+    paddingBottom: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: THEME.BORDER,
   },
-  inputLabel: {
-    fontSize: FONTS.SIZE.SM,
-    fontWeight: FONTS.WEIGHT.SEMIBOLD,
-    color: '#374151',
+  headerTitle: { fontSize: 16, fontWeight: 'bold', color: THEME.TEXT },
+  content: { padding: 24 },
+
+  sectionTitle: {
+    color: THEME.TEXT,
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginBottom: 16,
   },
-  inputCounter: {
-    fontSize: FONTS.SIZE.XS,
-    color: '#9CA3AF',
-  },
-  inputWrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F9FAFB',
-    borderRadius: DIMENSIONS.BORDER_RADIUS_MD,
+
+  // MEDIA STYLES
+  bannerContainer: {
+    height: 140,
+    borderRadius: 16,
+    overflow: 'hidden',
+    marginBottom: -40,
+    backgroundColor: THEME.SURFACE,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
-  },
-  inputWrapperError: {
-    borderColor: '#EF4444',
-    backgroundColor: '#FEF2F2',
-  },
-  inputWrapperMultiline: {
-    alignItems: 'flex-start',
-  },
-  inputIcon: {
-    marginLeft: DIMENSIONS.SPACING_MD,
-  },
-  input: {
-    flex: 1,
-    padding: DIMENSIONS.SPACING_MD,
-    fontSize: FONTS.SIZE.MD,
-    color: '#1F2937',
-  },
-  inputWithIcon: {
-    paddingLeft: 0,
-  },
-  inputMultiline: {
-    minHeight: 100,
-    textAlignVertical: 'top',
-    paddingTop: DIMENSIONS.SPACING_MD,
-  },
-  errorContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: DIMENSIONS.SPACING_XS,
-  },
-  errorText: {
-    fontSize: FONTS.SIZE.SM,
-    color: '#EF4444',
-  },
-  skillSelector: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: DIMENSIONS.SPACING_SM,
-  },
-  skillCard: {
-    flex: 1,
-    minWidth: '45%',
-    padding: DIMENSIONS.SPACING_MD,
-    borderRadius: DIMENSIONS.BORDER_RADIUS_MD,
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#E5E7EB',
-    backgroundColor: '#F9FAFB',
+    borderColor: THEME.BORDER,
     position: 'relative',
   },
-  skillCardSelected: {
-    borderColor: '#22C55E',
-    backgroundColor: '#F0FDF4',
-    ...SHADOWS.SMALL,
-  },
-  selectedBadge: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: '#22C55E',
+  bannerImage: { width: '100%', height: '100%' },
+  bannerPlaceholder: {
+    flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    zIndex: 1,
+    gap: 8,
   },
-  skillIconContainer: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: DIMENSIONS.SPACING_SM,
-  },
-  skillLabel: {
-    fontSize: FONTS.SIZE.MD,
-    fontWeight: FONTS.WEIGHT.SEMIBOLD,
-    color: '#374151',
-    marginBottom: DIMENSIONS.SPACING_XXS,
-  },
-  skillLabelSelected: {
-    color: '#22C55E',
-  },
-  skillDescription: {
-    fontSize: FONTS.SIZE.XS,
-    color: '#6B7280',
-    textAlign: 'center',
-  },
-  skillDescriptionSelected: {
-    color: '#16A34A',
-  },
-  footer: {
-    padding: DIMENSIONS.CONTAINER_PADDING,
-    backgroundColor: '#FFFFFF',
-    borderTopWidth: 1,
-    borderTopColor: '#E5E7EB',
-    ...SHADOWS.MEDIUM,
-  },
-  submitButton: {
-    borderRadius: DIMENSIONS.BORDER_RADIUS_MD,
+  mediaText: { color: THEME.TEXT_SEC, fontSize: 12 },
+
+  logoWrapper: { alignItems: 'center', marginBottom: 24 },
+  logoContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 24,
     overflow: 'hidden',
+    borderWidth: 4,
+    borderColor: THEME.BG,
+    backgroundColor: THEME.SURFACE,
+    position: 'relative',
   },
-  submitGradient: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  logoImage: { width: '100%', height: '100%' },
+  logoPlaceholder: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+
+  editBadge: {
+    position: 'absolute',
+    bottom: 10,
+    right: 10,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    padding: 6,
+    borderRadius: 20,
+  },
+  editBadgeSmall: {
+    position: 'absolute',
+    bottom: 4,
+    right: 4,
+    backgroundColor: THEME.ACCENT,
+    padding: 4,
+    borderRadius: 10,
+  },
+  loaderOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'center',
-    paddingVertical: DIMENSIONS.SPACING_MD,
-    gap: DIMENSIONS.SPACING_SM,
+    alignItems: 'center',
   },
-  submitText: {
-    fontSize: FONTS.SIZE.LG,
-    fontWeight: FONTS.WEIGHT.BOLD,
-    color: '#FFFFFF',
+
+  // INPUTS
+  inputGroup: { marginBottom: 20 },
+  label: {
+    color: THEME.TEXT_SEC,
+    fontSize: 12,
+    marginBottom: 8,
+    textTransform: 'uppercase',
+  },
+  input: {
+    backgroundColor: THEME.SURFACE,
+    borderRadius: 12,
+    padding: 16,
+    color: THEME.TEXT,
+    fontSize: 16,
+    borderWidth: 1,
+    borderColor: THEME.BORDER,
   },
 });

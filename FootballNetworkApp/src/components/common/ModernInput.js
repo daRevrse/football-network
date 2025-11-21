@@ -16,7 +16,8 @@ export const ModernInput = ({
   onChangeText,
   placeholder,
   error,
-  leftIcon,
+  leftIcon, // Supporte leftIcon
+  leftIconName, // Supporte leftIconName (rétrocompatibilité)
   rightIcon,
   onRightIconPress,
   secureTextEntry,
@@ -28,6 +29,9 @@ export const ModernInput = ({
   autoCapitalize = 'sentences',
   autoCorrect = true,
   style,
+  inputStyle, // Nouveau prop pour surcharger le style de l'input
+  labelStyle, // Nouveau prop pour le label
+  placeholderTextColor, // Nouveau prop
   ...props
 }) => {
   const [isFocused, setIsFocused] = useState(false);
@@ -37,10 +41,15 @@ export const ModernInput = ({
     setIsPasswordVisible(!isPasswordVisible);
   };
 
+  // Gestion double props pour l'icône
+  const iconName = leftIcon || leftIconName;
+
   return (
     <View style={[styles.container, style]}>
       {label && (
-        <Text style={[styles.label, { color: COLORS.TEXT_PRIMARY }]}>
+        <Text
+          style={[styles.label, { color: COLORS.TEXT_PRIMARY }, labelStyle]}
+        >
           {label}
         </Text>
       )}
@@ -49,26 +58,28 @@ export const ModernInput = ({
         style={[
           styles.inputContainer,
           {
+            // Par défaut blanc, mais surchargeable via inputStyle
             backgroundColor: editable ? COLORS.WHITE : COLORS.BACKGROUND_LIGHT,
             borderColor: error
               ? COLORS.ERROR
               : isFocused
               ? COLORS.PRIMARY
-              : COLORS.TEXT_ULTRA_LIGHT,
+              : COLORS.BORDER,
           },
           multiline && styles.inputContainerMultiline,
+          inputStyle, // Appliquer la surcharge ici
         ]}
       >
-        {leftIcon && (
+        {iconName && (
           <Icon
-            name={leftIcon}
+            name={iconName}
             size={20}
             color={
               error
                 ? COLORS.ERROR
                 : isFocused
                 ? COLORS.PRIMARY
-                : COLORS.TEXT_MUTED
+                : inputStyle?.color || COLORS.TEXT_MUTED // Adapter la couleur de l'icône
             }
             style={styles.leftIcon}
           />
@@ -79,12 +90,13 @@ export const ModernInput = ({
             styles.input,
             { color: COLORS.TEXT_PRIMARY },
             !editable && { color: COLORS.TEXT_MUTED },
+            inputStyle && { color: inputStyle.color }, // Adapter la couleur du texte
             multiline && styles.inputMultiline,
           ]}
           value={value}
           onChangeText={onChangeText}
           placeholder={placeholder}
-          placeholderTextColor={COLORS.TEXT_MUTED}
+          placeholderTextColor={placeholderTextColor || COLORS.TEXT_MUTED}
           secureTextEntry={secureTextEntry && !isPasswordVisible}
           keyboardType={keyboardType}
           multiline={multiline}
@@ -106,14 +118,8 @@ export const ModernInput = ({
             <Icon
               name={isPasswordVisible ? 'eye-off' : 'eye'}
               size={20}
-              color={COLORS.TEXT_MUTED}
+              color={inputStyle?.color || COLORS.TEXT_MUTED}
             />
-          </TouchableOpacity>
-        )}
-
-        {rightIcon && !secureTextEntry && (
-          <TouchableOpacity onPress={onRightIconPress} style={styles.rightIcon}>
-            <Icon name={rightIcon} size={20} color={COLORS.TEXT_MUTED} />
           </TouchableOpacity>
         )}
       </View>
@@ -126,12 +132,6 @@ export const ModernInput = ({
           </Text>
         </View>
       )}
-
-      {maxLength && !error && (
-        <Text style={[styles.helperText, { color: COLORS.TEXT_MUTED }]}>
-          {value?.length || 0}/{maxLength}
-        </Text>
-      )}
     </View>
   );
 };
@@ -141,51 +141,46 @@ const styles = StyleSheet.create({
     marginBottom: DIMENSIONS.SPACING_MD,
   },
   label: {
-    fontSize: FONTS.SIZE_SM,
-    fontWeight: FONTS.WEIGHT_MEDIUM,
-    marginBottom: DIMENSIONS.SPACING_XS,
+    fontSize: 14,
+    fontWeight: '600',
+    marginBottom: 8,
   },
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderWidth: 1.5,
-    borderRadius: DIMENSIONS.BORDER_RADIUS_MD,
-    paddingHorizontal: DIMENSIONS.PADDING_MD,
-    ...SHADOWS.SMALL,
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    height: 56, // Hauteur fixe plus moderne
   },
   inputContainerMultiline: {
     alignItems: 'flex-start',
-    paddingVertical: DIMENSIONS.PADDING_SM,
+    paddingVertical: 12,
+    height: 'auto',
+    minHeight: 100,
   },
   leftIcon: {
-    marginRight: DIMENSIONS.SPACING_SM,
+    marginRight: 12,
   },
   rightIcon: {
-    marginLeft: DIMENSIONS.SPACING_SM,
-    padding: DIMENSIONS.PADDING_XS,
+    marginLeft: 12,
   },
   input: {
     flex: 1,
-    fontSize: FONTS.SIZE_MD,
-    paddingVertical: DIMENSIONS.PADDING_MD,
+    fontSize: 16,
+    height: '100%',
   },
   inputMultiline: {
-    minHeight: 100,
     textAlignVertical: 'top',
-    paddingTop: DIMENSIONS.PADDING_MD,
+    paddingTop: 0,
   },
   errorContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: DIMENSIONS.SPACING_XS,
+    marginTop: 6,
     gap: 4,
   },
   errorText: {
-    fontSize: FONTS.SIZE_SM,
-  },
-  helperText: {
-    fontSize: FONTS.SIZE_XS,
-    textAlign: 'right',
-    marginTop: DIMENSIONS.SPACING_XS,
+    fontSize: 12,
   },
 });

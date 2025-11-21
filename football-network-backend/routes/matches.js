@@ -523,20 +523,26 @@ router.get("/my-matches", authenticateToken, async (req, res) => {
         ht.id AS home_team_id,
         ht.name AS home_team_name,
         ht.skill_level AS home_skill_level,
+        ht.logo_id AS home_team_logo_id,
+        home_logo.stored_filename AS home_team_logo_filename,
         at.id AS away_team_id,
         at.name AS away_team_name,
         at.skill_level AS away_skill_level,
+        at.logo_id AS away_team_logo_id,
+        away_logo.stored_filename AS away_team_logo_filename,
         l.id AS location_id,
         l.name AS location_name,
         l.address AS location_address,
-        CASE 
-          WHEN ht.captain_id = ? THEN true 
-          WHEN at.captain_id = ? THEN true 
-          ELSE false 
+        CASE
+          WHEN ht.captain_id = ? THEN true
+          WHEN at.captain_id = ? THEN true
+          ELSE false
         END AS is_organizer
       FROM matches m
       JOIN teams ht ON m.home_team_id = ht.id
+      LEFT JOIN uploads home_logo ON ht.logo_id = home_logo.id AND home_logo.is_active = true
       LEFT JOIN teams at ON m.away_team_id = at.id
+      LEFT JOIN uploads away_logo ON at.logo_id = away_logo.id AND away_logo.is_active = true
       LEFT JOIN locations l ON m.location_id = l.id
       WHERE (m.home_team_id IN (${placeholders}) OR m.away_team_id IN (${placeholders}))
     `;
@@ -563,12 +569,18 @@ router.get("/my-matches", authenticateToken, async (req, res) => {
         id: m.home_team_id,
         name: m.home_team_name,
         skillLevel: m.home_skill_level,
+        logoUrl: m.home_team_logo_filename
+          ? `/uploads/teams/${m.home_team_logo_filename}`
+          : null,
       },
       awayTeam: m.away_team_id
         ? {
             id: m.away_team_id,
             name: m.away_team_name,
             skillLevel: m.away_skill_level,
+            logoUrl: m.away_team_logo_filename
+              ? `/uploads/teams/${m.away_team_logo_filename}`
+              : null,
           }
         : null,
       location: m.location_id
@@ -601,15 +613,21 @@ router.get("/:id", authenticateToken, async (req, res) => {
       `SELECT m.id, m.match_date, m.duration_minutes, m.match_type, m.status,
               m.home_score, m.away_score, m.referee_contact, m.notes, m.created_at,
               ht.id as home_team_id, ht.name as home_team_name, ht.skill_level as home_skill_level,
+              ht.logo_id as home_team_logo_id,
+              home_logo.stored_filename as home_team_logo_filename,
               at.id as away_team_id, at.name as away_team_name, at.skill_level as away_skill_level,
+              at.logo_id as away_team_logo_id,
+              away_logo.stored_filename as away_team_logo_filename,
               l.id as location_id, l.name as location_name, l.address as location_address,
               l.city, l.field_type, l.price_per_hour, l.amenities,
               hc.first_name as home_captain_first_name, hc.last_name as home_captain_last_name, hc.id as home_captain_id,
               ac.first_name as away_captain_first_name, ac.last_name as away_captain_last_name, ac.id as away_captain_id
        FROM matches m
        JOIN teams ht ON m.home_team_id = ht.id
+       LEFT JOIN uploads home_logo ON ht.logo_id = home_logo.id AND home_logo.is_active = true
        JOIN users hc ON ht.captain_id = hc.id
        LEFT JOIN teams at ON m.away_team_id = at.id
+       LEFT JOIN uploads away_logo ON at.logo_id = away_logo.id AND away_logo.is_active = true
        LEFT JOIN users ac ON at.captain_id = ac.id
        LEFT JOIN locations l ON m.location_id = l.id
        WHERE m.id = ?`,
@@ -664,6 +682,9 @@ router.get("/:id", authenticateToken, async (req, res) => {
         id: match.home_team_id,
         name: match.home_team_name,
         skillLevel: match.home_skill_level,
+        logoUrl: match.home_team_logo_filename
+          ? `/uploads/teams/${match.home_team_logo_filename}`
+          : null,
         captain: {
           id: match.home_captain_id,
           firstName: match.home_captain_first_name,
@@ -675,6 +696,9 @@ router.get("/:id", authenticateToken, async (req, res) => {
             id: match.away_team_id,
             name: match.away_team_name,
             skillLevel: match.away_skill_level,
+            logoUrl: match.away_team_logo_filename
+              ? `/uploads/teams/${match.away_team_logo_filename}`
+              : null,
             captain: {
               id: match.away_captain_id,
               firstName: match.away_captain_first_name,

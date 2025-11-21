@@ -3,480 +3,266 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import { ModernInput } from '../../components/common';
-import { COLORS, DIMENSIONS, FONTS, SHADOWS } from '../../styles/theme';
 
-// ========== ÉTAPE 1 : Informations personnelles ==========
-export const PersonalInfoStep = ({ formData, updateField, errors }) => {
-  return (
-    <View style={styles.stepContainer}>
-      <View style={styles.stepHeader}>
-        <View style={styles.iconContainer}>
-          <Icon name="user" size={24} color={COLORS.PRIMARY} />
-        </View>
-        <Text style={styles.stepTitle}>Informations personnelles</Text>
-        <Text style={styles.stepDescription}>
-          Commençons par faire connaissance
-        </Text>
-      </View>
-
-      <View style={styles.row}>
-        <View style={styles.halfInput}>
-          <ModernInput
-            label="Prénom *"
-            value={formData.firstName || ''}
-            onChangeText={value => updateField('firstName', value)}
-            placeholder="Jean"
-            error={errors.firstName}
-            leftIconName="user"
-            autoCapitalize="words"
-          />
-        </View>
-        <View style={styles.halfInput}>
-          <ModernInput
-            label="Nom *"
-            value={formData.lastName || ''}
-            onChangeText={value => updateField('lastName', value)}
-            placeholder="Dupont"
-            error={errors.lastName}
-            leftIconName="user"
-            autoCapitalize="words"
-          />
-        </View>
-      </View>
-
-      <ModernInput
-        label="Email *"
-        value={formData.email || ''}
-        onChangeText={value => updateField('email', value)}
-        placeholder="jean.dupont@email.com"
-        keyboardType="email-address"
-        autoCapitalize="none"
-        error={errors.email}
-        leftIconName="mail"
-      />
-
-      <ModernInput
-        label="Téléphone"
-        value={formData.phone || ''}
-        onChangeText={value => updateField('phone', value)}
-        placeholder="+33 6 12 34 56 78"
-        keyboardType="phone-pad"
-        error={errors.phone}
-        leftIconName="phone"
-      />
-    </View>
-  );
+// On réutilise le thème défini plus haut ou on le passe en props
+const THEME = {
+  SURFACE: '#1E293B',
+  TEXT: '#F8FAFC',
+  TEXT_SEC: '#94A3B8',
+  ACCENT: '#22C55E',
+  BORDER: '#334155',
+  ERROR: '#EF4444',
 };
 
-// ========== ÉTAPE 2 : Sécurité ==========
-export const SecurityStep = ({ formData, updateField, errors }) => {
-  return (
-    <View style={styles.stepContainer}>
-      <View style={styles.stepHeader}>
-        <View style={styles.iconContainer}>
-          <Icon name="shield" size={24} color={COLORS.PRIMARY} />
-        </View>
-        <Text style={styles.stepTitle}>Sécurité</Text>
-        <Text style={styles.stepDescription}>
-          Créez un mot de passe sécurisé
-        </Text>
-      </View>
-
-      <ModernInput
-        label="Mot de passe *"
-        value={formData.password || ''}
-        onChangeText={value => updateField('password', value)}
-        placeholder="Minimum 6 caractères"
-        secureTextEntry
-        error={errors.password}
-        leftIconName="lock"
-      />
-
-      <ModernInput
-        label="Confirmer le mot de passe *"
-        value={formData.confirmPassword || ''}
-        onChangeText={value => updateField('confirmPassword', value)}
-        placeholder="Confirmez votre mot de passe"
-        secureTextEntry
-        error={errors.confirmPassword}
-        leftIconName="lock"
-      />
-
-      <View style={styles.passwordHints}>
-        <View style={styles.hintRow}>
-          <Icon
-            name={formData.password?.length >= 6 ? 'check-circle' : 'circle'}
-            size={14}
-            color={
-              formData.password?.length >= 6
-                ? COLORS.SUCCESS
-                : COLORS.TEXT_MUTED
-            }
-          />
-          <Text
-            style={[
-              styles.hintText,
-              formData.password?.length >= 6 && styles.hintTextMet,
-            ]}
-          >
-            6 caractères minimum
-          </Text>
-        </View>
-        <View style={styles.hintRow}>
-          <Icon
-            name={/[A-Z]/.test(formData.password) ? 'check-circle' : 'circle'}
-            size={14}
-            color={
-              /[A-Z]/.test(formData.password)
-                ? COLORS.SUCCESS
-                : COLORS.TEXT_MUTED
-            }
-          />
-          <Text
-            style={[
-              styles.hintText,
-              /[A-Z]/.test(formData.password) && styles.hintTextMet,
-            ]}
-          >
-            Une majuscule
-          </Text>
-        </View>
-        <View style={styles.hintRow}>
-          <Icon
-            name={/[0-9]/.test(formData.password) ? 'check-circle' : 'circle'}
-            size={14}
-            color={
-              /[0-9]/.test(formData.password)
-                ? COLORS.SUCCESS
-                : COLORS.TEXT_MUTED
-            }
-          />
-          <Text
-            style={[
-              styles.hintText,
-              /[0-9]/.test(formData.password) && styles.hintTextMet,
-            ]}
-          >
-            Un chiffre
-          </Text>
-        </View>
-      </View>
-    </View>
-  );
+// Styles partagés pour les inputs dark
+const inputProps = {
+  inputStyle: {
+    backgroundColor: THEME.SURFACE,
+    borderColor: THEME.BORDER,
+    color: THEME.TEXT,
+    borderWidth: 1,
+  },
+  labelStyle: {
+    color: THEME.TEXT_SEC,
+    fontSize: 12,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+  placeholderTextColor: THEME.TEXT_SEC,
 };
 
-// ========== ÉTAPE 3 : Profil Football ==========
-const POSITIONS = [
-  { value: 'goalkeeper', label: 'Gardien', icon: 'shield' },
-  { value: 'defender', label: 'Défenseur', icon: 'shield-off' },
-  { value: 'midfielder', label: 'Milieu', icon: 'target' },
-  { value: 'forward', label: 'Attaquant', icon: 'arrow-up' },
-  { value: 'any', label: 'Polyvalent', icon: 'grid' },
-];
+const StepTitle = ({ title, subtitle }) => (
+  <View style={{ marginBottom: 32 }}>
+    <Text style={styles.title}>{title}</Text>
+    <Text style={styles.subtitle}>{subtitle}</Text>
+  </View>
+);
 
-const SKILL_LEVELS = [
-  { value: 'beginner', label: 'Débutant', icon: 'user' },
-  { value: 'amateur', label: 'Amateur', icon: 'award' },
-  { value: 'intermediate', label: 'Intermédiaire', icon: 'star' },
-  { value: 'advanced', label: 'Avancé', icon: 'zap' },
-  { value: 'expert', label: 'Expert', icon: 'trending-up' },
-];
+export const PersonalInfoStep = ({ formData, updateField, errors }) => (
+  <View>
+    <StepTitle title="Identité" subtitle="Commençons par les présentations." />
+
+    <ModernInput
+      label="Prénom"
+      placeholder="Jean"
+      value={formData.firstName}
+      onChangeText={v => updateField('firstName', v)}
+      leftIcon="user"
+      error={errors.firstName}
+      {...inputProps}
+    />
+    <ModernInput
+      label="Nom"
+      placeholder="Dupont"
+      value={formData.lastName}
+      onChangeText={v => updateField('lastName', v)}
+      leftIcon="user"
+      error={errors.lastName}
+      {...inputProps}
+    />
+    <ModernInput
+      label="Email"
+      value={formData.email}
+      placeholder="email@example.com"
+      onChangeText={v => updateField('email', v)}
+      leftIcon="mail"
+      error={errors.email}
+      {...inputProps}
+    />
+  </View>
+);
+
+export const SecurityStep = ({ formData, updateField, errors }) => (
+  <View>
+    <StepTitle title="Sécurité" subtitle="Protégez votre compte joueur." />
+
+    <ModernInput
+      label="Mot de passe"
+      value={formData.password}
+      placeholder="••••••••"
+      onChangeText={v => updateField('password', v)}
+      secureTextEntry
+      leftIcon="lock"
+      error={errors.password}
+      {...inputProps}
+    />
+    <ModernInput
+      label="Confirmation"
+      value={formData.confirmPassword}
+      placeholder="••••••••"
+      onChangeText={v => updateField('confirmPassword', v)}
+      secureTextEntry
+      leftIcon="lock"
+      error={errors.confirmPassword}
+      {...inputProps}
+    />
+  </View>
+);
+
+// Composant personnalisé pour les sélections Dark Mode
+const DarkOption = ({ label, icon, selected, onPress }) => (
+  <TouchableOpacity
+    style={[styles.optionCard, selected && styles.optionCardSelected]}
+    onPress={onPress}
+  >
+    <View
+      style={[styles.iconBox, selected && { backgroundColor: THEME.ACCENT }]}
+    >
+      <Icon name={icon} size={20} color={selected ? '#000' : THEME.TEXT} />
+    </View>
+    <Text
+      style={[
+        styles.optionText,
+        selected && { color: THEME.ACCENT, fontWeight: 'bold' },
+      ]}
+    >
+      {label}
+    </Text>
+  </TouchableOpacity>
+);
 
 export const FootballProfileStep = ({ formData, updateField, errors }) => {
+  const POSITIONS = [
+    { id: 'goalkeeper', label: 'Gardien', icon: 'shield' },
+    { id: 'defender', label: 'Défenseur', icon: 'anchor' }, // anchor exists in feather
+    { id: 'midfielder', label: 'Milieu', icon: 'activity' },
+    { id: 'forward', label: 'Attaquant', icon: 'target' },
+  ];
+
   return (
-    <View style={styles.stepContainer}>
-      <View style={styles.stepHeader}>
-        <View style={styles.iconContainer}>
-          <Icon name="dribbble" size={24} color={COLORS.PRIMARY} />
-        </View>
-        <Text style={styles.stepTitle}>Profil football</Text>
-        <Text style={styles.stepDescription}>Parlez-nous de votre jeu</Text>
-      </View>
+    <View>
+      <StepTitle
+        title="Profil Sportif"
+        subtitle="Quel est votre style de jeu ?"
+      />
 
       <ModernInput
         label="Ville"
-        value={formData.locationCity || ''}
-        onChangeText={value => updateField('locationCity', value)}
+        value={formData.locationCity}
         placeholder="Paris"
+        onChangeText={v => updateField('locationCity', v)}
+        leftIcon="map-pin"
         error={errors.locationCity}
-        leftIconName="map-pin"
+        {...inputProps}
       />
 
-      <View style={styles.selectorContainer}>
-        <Text style={styles.selectorLabel}>Position préférée</Text>
-        <View style={styles.optionsGrid}>
-          {POSITIONS.map(position => (
-            <TouchableOpacity
-              key={position.value}
-              style={[
-                styles.option,
-                formData.position === position.value && styles.optionSelected,
-              ]}
-              onPress={() => updateField('position', position.value)}
-            >
-              <Icon
-                name={position.icon}
-                size={16}
-                color={
-                  formData.position === position.value
-                    ? COLORS.PRIMARY
-                    : COLORS.TEXT_MUTED
-                }
-              />
-              <Text
-                style={[
-                  styles.optionText,
-                  formData.position === position.value &&
-                    styles.optionTextSelected,
-                ]}
-              >
-                {position.label}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-      </View>
-
-      <View style={styles.selectorContainer}>
-        <Text style={styles.selectorLabel}>Niveau</Text>
-        <View style={styles.optionsGrid}>
-          {SKILL_LEVELS.map(level => (
-            <TouchableOpacity
-              key={level.value}
-              style={[
-                styles.option,
-                formData.skillLevel === level.value && styles.optionSelected,
-              ]}
-              onPress={() => updateField('skillLevel', level.value)}
-            >
-              <Icon
-                name={level.icon}
-                size={16}
-                color={
-                  formData.skillLevel === level.value
-                    ? COLORS.PRIMARY
-                    : COLORS.TEXT_MUTED
-                }
-              />
-              <Text
-                style={[
-                  styles.optionText,
-                  formData.skillLevel === level.value &&
-                    styles.optionTextSelected,
-                ]}
-              >
-                {level.label}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-      </View>
-    </View>
-  );
-};
-
-// ========== ÉTAPE 4 : Récapitulatif ==========
-export const SummaryStep = ({ formData }) => {
-  const SummaryItem = ({ icon, label, value }) => (
-    <View style={styles.summaryItem}>
-      <View style={styles.summaryIconContainer}>
-        <Icon name={icon} size={16} color={COLORS.PRIMARY} />
-      </View>
-      <View style={styles.summaryContent}>
-        <Text style={styles.summaryLabel}>{label}</Text>
-        <Text style={styles.summaryValue}>{value || 'Non renseigné'}</Text>
-      </View>
-    </View>
-  );
-
-  const getPositionLabel = () => {
-    const position = POSITIONS.find(p => p.value === formData.position);
-    return position?.label || 'Non renseigné';
-  };
-
-  const getSkillLevelLabel = () => {
-    const level = SKILL_LEVELS.find(l => l.value === formData.skillLevel);
-    return level?.label || 'Non renseigné';
-  };
-
-  return (
-    <View style={styles.stepContainer}>
-      <View style={styles.stepHeader}>
-        <View style={styles.iconContainer}>
-          <Icon name="check-circle" size={24} color={COLORS.PRIMARY} />
-        </View>
-        <Text style={styles.stepTitle}>Récapitulatif</Text>
-        <Text style={styles.stepDescription}>Vérifiez vos informations</Text>
-      </View>
-
-      <View style={styles.summaryCard}>
-        <Text style={styles.summarySection}>Informations personnelles</Text>
-        <SummaryItem
-          icon="user"
-          label="Nom complet"
-          value={`${formData.firstName || ''} ${formData.lastName || ''}`}
-        />
-        <SummaryItem icon="mail" label="Email" value={formData.email} />
-        {formData.phone && (
-          <SummaryItem icon="phone" label="Téléphone" value={formData.phone} />
-        )}
-
-        <Text style={styles.summarySection}>Profil football</Text>
-        {formData.locationCity && (
-          <SummaryItem
-            icon="map-pin"
-            label="Ville"
-            value={formData.locationCity}
+      <Text style={inputProps.labelStyle}>Votre Poste</Text>
+      <View style={styles.grid}>
+        {POSITIONS.map(p => (
+          <DarkOption
+            key={p.id}
+            label={p.label}
+            icon={p.icon}
+            selected={formData.position === p.id}
+            onPress={() => updateField('position', p.id)}
           />
-        )}
-        <SummaryItem
-          icon="target"
-          label="Position"
-          value={getPositionLabel()}
-        />
-        <SummaryItem icon="star" label="Niveau" value={getSkillLevelLabel()} />
+        ))}
       </View>
+      {errors.position && <Text style={styles.error}>{errors.position}</Text>}
     </View>
   );
 };
+
+export const SummaryStep = ({ formData }) => (
+  <View>
+    <StepTitle
+      title="Récapitulatif"
+      subtitle="Prêt à entrer sur le terrain ?"
+    />
+
+    <View style={styles.summaryBox}>
+      <InfoRow
+        label="Nom"
+        value={`${formData.firstName} ${formData.lastName}`}
+      />
+      <InfoRow label="Email" value={formData.email} />
+      <View style={styles.divider} />
+      <InfoRow label="Ville" value={formData.locationCity} />
+      <InfoRow label="Poste" value={formData.position?.toUpperCase()} />
+    </View>
+  </View>
+);
+
+const InfoRow = ({ label, value }) => (
+  <View style={styles.infoRow}>
+    <Text style={styles.infoLabel}>{label}</Text>
+    <Text style={styles.infoValue}>{value}</Text>
+  </View>
+);
 
 const styles = StyleSheet.create({
-  stepContainer: {
-    flex: 1,
-    paddingTop: DIMENSIONS.SPACING_MD,
+  title: {
+    fontSize: 32,
+    fontWeight: 'bold',
+    color: THEME.TEXT,
+    marginBottom: 8,
   },
-  stepHeader: {
-    alignItems: 'center',
-    marginBottom: DIMENSIONS.SPACING_LG,
+  subtitle: {
+    fontSize: 16,
+    color: THEME.TEXT_SEC,
   },
-  iconContainer: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: COLORS.PRIMARY_ULTRA_LIGHT,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: DIMENSIONS.SPACING_SM,
-  },
-  stepTitle: {
-    fontSize: FONTS.SIZE.XL,
-    fontWeight: FONTS.WEIGHT.BOLD,
-    color: COLORS.TEXT_PRIMARY,
-    marginBottom: DIMENSIONS.SPACING_XXS,
-  },
-  stepDescription: {
-    fontSize: FONTS.SIZE.SM,
-    color: COLORS.TEXT_SECONDARY,
-    textAlign: 'center',
-  },
-  row: {
-    flexDirection: 'row',
-    marginHorizontal: -DIMENSIONS.SPACING_XS,
-  },
-  halfInput: {
-    flex: 1,
-    paddingHorizontal: DIMENSIONS.SPACING_XS,
-  },
-  passwordHints: {
-    backgroundColor: COLORS.INFO_LIGHT,
-    borderRadius: DIMENSIONS.BORDER_RADIUS_MD,
-    padding: DIMENSIONS.SPACING_SM,
-    borderLeftWidth: 3,
-    borderLeftColor: COLORS.INFO,
-  },
-  hintRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: DIMENSIONS.SPACING_XXS,
-  },
-  hintText: {
-    fontSize: FONTS.SIZE.XS,
-    color: COLORS.TEXT_MUTED,
-    marginLeft: DIMENSIONS.SPACING_XS,
-  },
-  hintTextMet: {
-    color: COLORS.SUCCESS,
-    fontWeight: FONTS.WEIGHT.MEDIUM,
-  },
-  selectorContainer: {
-    marginBottom: DIMENSIONS.SPACING_MD,
-  },
-  selectorLabel: {
-    fontSize: FONTS.SIZE.SM,
-    fontWeight: FONTS.WEIGHT.SEMIBOLD,
-    color: COLORS.TEXT_PRIMARY,
-    marginBottom: DIMENSIONS.SPACING_SM,
-  },
-  optionsGrid: {
+  grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    marginHorizontal: -DIMENSIONS.SPACING_XXS,
+    gap: 12,
+    marginTop: 12,
+    marginBottom: 24,
   },
-  option: {
-    flexDirection: 'row',
+  optionCard: {
+    width: '48%',
+    backgroundColor: THEME.SURFACE,
+    borderRadius: 12,
+    padding: 16,
     alignItems: 'center',
-    backgroundColor: COLORS.WHITE,
-    borderWidth: DIMENSIONS.BORDER_WIDTH_MEDIUM,
-    borderColor: COLORS.BORDER,
-    borderRadius: DIMENSIONS.BORDER_RADIUS_SM,
-    paddingHorizontal: DIMENSIONS.SPACING_SM,
-    paddingVertical: DIMENSIONS.SPACING_XS,
-    margin: DIMENSIONS.SPACING_XXS,
+    borderWidth: 1,
+    borderColor: THEME.BORDER,
   },
-  optionSelected: {
-    borderColor: COLORS.PRIMARY,
-    backgroundColor: COLORS.PRIMARY_ULTRA_LIGHT,
+  optionCardSelected: {
+    borderColor: THEME.ACCENT,
+    backgroundColor: 'rgba(34, 197, 94, 0.1)',
   },
-  optionText: {
-    fontSize: FONTS.SIZE.XS,
-    fontWeight: FONTS.WEIGHT.MEDIUM,
-    color: COLORS.TEXT_SECONDARY,
-    marginLeft: DIMENSIONS.SPACING_XS,
-  },
-  optionTextSelected: {
-    color: COLORS.PRIMARY,
-    fontWeight: FONTS.WEIGHT.SEMIBOLD,
-  },
-  summaryCard: {
-    backgroundColor: COLORS.WHITE,
-    borderRadius: DIMENSIONS.BORDER_RADIUS_MD,
-    padding: DIMENSIONS.SPACING_MD,
-    ...SHADOWS.SMALL,
-  },
-  summarySection: {
-    fontSize: FONTS.SIZE.MD,
-    fontWeight: FONTS.WEIGHT.BOLD,
-    color: COLORS.TEXT_PRIMARY,
-    marginTop: DIMENSIONS.SPACING_SM,
-    marginBottom: DIMENSIONS.SPACING_SM,
-  },
-  summaryItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: DIMENSIONS.SPACING_XS,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.BORDER,
-  },
-  summaryIconContainer: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: COLORS.PRIMARY_ULTRA_LIGHT,
+  iconBox: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#0F172A',
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: DIMENSIONS.SPACING_SM,
+    marginBottom: 12,
   },
-  summaryContent: {
-    flex: 1,
+  optionText: {
+    color: THEME.TEXT,
+    fontSize: 14,
   },
-  summaryLabel: {
-    fontSize: FONTS.SIZE.XS,
-    color: COLORS.TEXT_SECONDARY,
-    marginBottom: 2,
+  error: {
+    color: THEME.ERROR,
+    marginTop: -16,
+    marginBottom: 16,
   },
-  summaryValue: {
-    fontSize: FONTS.SIZE.SM,
-    fontWeight: FONTS.WEIGHT.SEMIBOLD,
-    color: COLORS.TEXT_PRIMARY,
+  summaryBox: {
+    backgroundColor: THEME.SURFACE,
+    borderRadius: 16,
+    padding: 24,
+    borderWidth: 1,
+    borderColor: THEME.BORDER,
+  },
+  infoRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  infoLabel: {
+    color: THEME.TEXT_SEC,
+    fontSize: 14,
+  },
+  infoValue: {
+    color: THEME.TEXT,
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: THEME.BORDER,
+    marginVertical: 16,
   },
 });

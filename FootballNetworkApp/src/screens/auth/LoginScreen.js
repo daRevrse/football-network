@@ -10,203 +10,124 @@ import {
   TouchableOpacity,
   StatusBar,
   StyleSheet,
+  Dimensions,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
-import { ModernInput, ModernButton, InfoBox } from '../../components/common';
-import { COLORS, DIMENSIONS, FONTS, SHADOWS } from '../../styles/theme';
+import { ModernInput, ModernButton } from '../../components/common';
+import { COLORS, DIMENSIONS } from '../../styles/theme';
 import { useAuthImproved } from '../../utils/hooks/useAuthImproved';
+
+const { height } = Dimensions.get('window');
+
+// Constantes du thème Dark
+const DARK_THEME = {
+  BG: '#0F172A', // Slate 900
+  SURFACE: '#1E293B', // Slate 800
+  TEXT: '#F8FAFC', // Slate 50
+  TEXT_SEC: '#94A3B8', // Slate 400
+  ACCENT: '#22C55E', // Green 500
+  BORDER: '#334155', // Slate 700
+};
 
 export const LoginScreen = ({ navigation }) => {
   const [email, setEmail] = useState(__DEV__ ? 'test@example.com' : '');
   const [password, setPassword] = useState(__DEV__ ? 'password123' : '');
   const [errors, setErrors] = useState({});
-
-  // Utiliser le hook useAuthImproved qui gère tout
-  const { login, isLoading, error } = useAuthImproved();
-
-  const handleEmailChange = useCallback(
-    value => {
-      setEmail(value);
-      if (errors.email) {
-        setErrors(prev => ({ ...prev, email: null }));
-      }
-    },
-    [errors.email],
-  );
-
-  const handlePasswordChange = useCallback(
-    value => {
-      setPassword(value);
-      if (errors.password) {
-        setErrors(prev => ({ ...prev, password: null }));
-      }
-    },
-    [errors.password],
-  );
-
-  const validateForm = useCallback(() => {
-    const newErrors = {};
-
-    if (!email) {
-      newErrors.email = "L'email est requis";
-    } else if (!/\S+@\S+\.\S+/.test(email)) {
-      newErrors.email = "Format d'email invalide";
-    }
-
-    if (!password) {
-      newErrors.password = 'Le mot de passe est requis';
-    } else if (password.length < 6) {
-      newErrors.password = 'Minimum 6 caractères';
-    }
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  }, [email, password]);
+  const { login, isLoading } = useAuthImproved();
 
   const handleLogin = useCallback(async () => {
-    if (!validateForm()) {
+    if (!email || !password) {
+      Alert.alert('Erreur', 'Veuillez remplir tous les champs');
       return;
     }
-
     const result = await login(email, password);
-
-    if (result.success) {
-      // Navigation automatique gérée par AppNavigator
-      console.log('✅ Connexion réussie');
-    } else {
-      // Afficher l'erreur à l'utilisateur
-      Alert.alert(
-        'Erreur de connexion',
-        result.error || 'Une erreur est survenue',
-        [{ text: 'OK' }],
-      );
+    if (!result.success) {
+      Alert.alert('Erreur de connexion', result.error);
     }
-  }, [email, password, validateForm, login]);
+  }, [email, password, login]);
 
   return (
-    <View style={[styles.container, { backgroundColor: COLORS.PRIMARY }]}>
-      <StatusBar barStyle="light-content" backgroundColor={COLORS.PRIMARY} />
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor={DARK_THEME.BG} />
+
+      {/* Décoration de fond subtile */}
+      <View style={styles.glowEffect} />
 
       <KeyboardAvoidingView
-        style={styles.keyboardView}
+        style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
         <ScrollView
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
         >
-          {/* Header */}
           <View style={styles.header}>
-            <View style={styles.logoContainer}>
-              <Icon name="activity" size={48} color={COLORS.WHITE} />
+            <View style={styles.logoBox}>
+              <Icon name="activity" size={40} color={DARK_THEME.ACCENT} />
             </View>
-            <Text style={styles.title}>Football Network</Text>
-            <Text style={styles.subtitle}>Connectez-vous à votre compte</Text>
+            <Text style={styles.title}>FOOTBALL{'\n'}NETWORK</Text>
+            <Text style={styles.subtitle}>Rejoignez le terrain.</Text>
           </View>
 
-          {/* Card de connexion */}
-          <View style={[styles.card, { backgroundColor: COLORS.WHITE }]}>
-            {/* Afficher l'erreur globale si elle existe */}
-            {error && (
-              <InfoBox
-                type="error"
-                message={error}
-                style={{ marginBottom: DIMENSIONS.SPACING_MD }}
-              />
-            )}
-
-            {/* Formulaire */}
+          <View style={styles.formSection}>
             <ModernInput
-              icon="mail"
-              placeholder="Email"
+              label="Email"
               value={email}
-              onChangeText={handleEmailChange}
+              onChangeText={setEmail}
+              placeholder="nom@exemple.com"
               keyboardType="email-address"
               autoCapitalize="none"
-              autoCorrect={false}
-              error={errors.email}
-              editable={!isLoading}
+              leftIcon="mail"
+              // Styles Dark Mode
+              inputStyle={styles.darkInput}
+              labelStyle={styles.darkLabel}
+              placeholderTextColor={DARK_THEME.TEXT_SEC}
+              style={{ marginBottom: 20 }}
             />
 
             <ModernInput
-              icon="lock"
-              placeholder="Mot de passe"
+              label="Mot de passe"
               value={password}
-              onChangeText={handlePasswordChange}
+              onChangeText={setPassword}
               secureTextEntry
-              error={errors.password}
-              editable={!isLoading}
+              leftIcon="lock"
+              // Styles Dark Mode
+              inputStyle={styles.darkInput}
+              labelStyle={styles.darkLabel}
+              placeholderTextColor={DARK_THEME.TEXT_SEC}
             />
 
-            {/* Mot de passe oublié */}
             <TouchableOpacity
-              style={styles.forgotPassword}
+              style={styles.forgotButton}
               onPress={() => navigation.navigate('ForgotPassword')}
-              disabled={isLoading}
             >
-              <Text
-                style={[styles.forgotPasswordText, { color: COLORS.PRIMARY }]}
-              >
-                Mot de passe oublié ?
-              </Text>
+              <Text style={styles.forgotText}>Mot de passe oublié ?</Text>
             </TouchableOpacity>
 
-            {/* Bouton de connexion */}
             <ModernButton
-              title="Se connecter"
+              title="SE CONNECTER"
               onPress={handleLogin}
               variant="primary"
               fullWidth
               isLoading={isLoading}
-              disabled={isLoading}
-              leftIconName="log-in"
+              style={styles.loginButton}
             />
 
-            {/* Séparateur */}
-            <View style={styles.divider}>
-              <View
-                style={[
-                  styles.dividerLine,
-                  { backgroundColor: COLORS.BORDER_LIGHT },
-                ]}
-              />
-              <Text style={[styles.dividerText, { color: COLORS.TEXT_MUTED }]}>
-                OU
-              </Text>
-              <View
-                style={[
-                  styles.dividerLine,
-                  { backgroundColor: COLORS.BORDER_LIGHT },
-                ]}
-              />
+            <View style={styles.dividerContainer}>
+              <View style={styles.divider} />
+              <Text style={styles.dividerText}>OU</Text>
+              <View style={styles.divider} />
             </View>
 
-            {/* Bouton d'inscription */}
-            <TouchableOpacity
-              style={[styles.signupButton, { borderColor: COLORS.PRIMARY }]}
+            <ModernButton
+              title="Créer un compte"
               onPress={() => navigation.navigate('Register')}
-              disabled={isLoading}
-            >
-              <Icon name="user-plus" size={20} color={COLORS.PRIMARY} />
-              <Text
-                style={[styles.signupButtonText, { color: COLORS.PRIMARY }]}
-              >
-                Créer un compte
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Footer */}
-          <View style={styles.footer}>
-            <Text style={[styles.footerText, { color: COLORS.WHITE }]}>
-              En vous connectant, vous acceptez nos
-            </Text>
-            <TouchableOpacity>
-              <Text style={[styles.footerLink, { color: COLORS.WHITE }]}>
-                Conditions d'utilisation
-              </Text>
-            </TouchableOpacity>
+              variant="outline"
+              fullWidth
+              // Override pour le style outline dark
+              style={styles.registerButton}
+              textStyle={{ color: DARK_THEME.TEXT }}
+            />
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -217,93 +138,103 @@ export const LoginScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: DARK_THEME.BG,
   },
-  keyboardView: {
-    flex: 1,
+  glowEffect: {
+    position: 'absolute',
+    top: -100,
+    left: -100,
+    width: 300,
+    height: 300,
+    borderRadius: 150,
+    backgroundColor: DARK_THEME.ACCENT,
+    opacity: 0.15,
+    transform: [{ scale: 1.5 }],
   },
   scrollContent: {
     flexGrow: 1,
-    paddingHorizontal: DIMENSIONS.CONTAINER_PADDING,
-    paddingTop: Platform.OS === 'ios' ? 80 : 60,
-    paddingBottom: DIMENSIONS.SPACING_XXL,
+    padding: 24,
+    justifyContent: 'center',
   },
   header: {
-    alignItems: 'center',
-    marginBottom: DIMENSIONS.SPACING_XXL,
+    marginBottom: 48,
+    marginTop: Platform.OS === 'ios' ? 60 : 40,
   },
-  logoContainer: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+  logoBox: {
+    width: 64,
+    height: 64,
+    borderRadius: 16,
+    backgroundColor: 'rgba(34, 197, 94, 0.15)',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: DIMENSIONS.SPACING_LG,
+    marginBottom: 24,
+    borderWidth: 1,
+    borderColor: 'rgba(34, 197, 94, 0.3)',
   },
   title: {
-    fontSize: FONTS.SIZE.XXXL,
-    fontWeight: FONTS.WEIGHT.BOLD,
-    color: COLORS.WHITE,
-    marginBottom: DIMENSIONS.SPACING_XS,
+    fontSize: 36,
+    fontWeight: '900',
+    color: DARK_THEME.TEXT,
+    lineHeight: 40,
+    letterSpacing: -1,
+    marginBottom: 8,
   },
   subtitle: {
-    fontSize: FONTS.SIZE.MD,
-    color: COLORS.WHITE,
-    opacity: 0.9,
+    fontSize: 18,
+    color: DARK_THEME.TEXT_SEC,
+    fontWeight: '500',
   },
-  card: {
-    borderRadius: DIMENSIONS.BORDER_RADIUS_XL,
-    padding: DIMENSIONS.SPACING_XL,
-    ...SHADOWS.LARGE,
+  formSection: {
+    flex: 1,
   },
-  forgotPassword: {
+  // Styles spécifiques Dark Mode pour ModernInput
+  darkInput: {
+    backgroundColor: DARK_THEME.SURFACE,
+    borderColor: DARK_THEME.BORDER,
+    color: DARK_THEME.TEXT,
+    borderWidth: 1,
+  },
+  darkLabel: {
+    color: DARK_THEME.TEXT_SEC,
+    textTransform: 'uppercase',
+    fontSize: 12,
+    letterSpacing: 1,
+    marginBottom: 8,
+  },
+  forgotButton: {
     alignSelf: 'flex-end',
-    marginBottom: DIMENSIONS.SPACING_LG,
-    paddingVertical: DIMENSIONS.SPACING_XS,
+    marginVertical: 16,
   },
-  forgotPasswordText: {
-    fontSize: FONTS.SIZE.SM,
-    fontWeight: FONTS.WEIGHT.SEMIBOLD,
+  forgotText: {
+    color: DARK_THEME.ACCENT,
+    fontWeight: '600',
+  },
+  loginButton: {
+    backgroundColor: DARK_THEME.ACCENT,
+    borderWidth: 0,
+    height: 56,
+    marginTop: 8,
+  },
+  dividerContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 32,
   },
   divider: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginVertical: DIMENSIONS.SPACING_LG,
-  },
-  dividerLine: {
     flex: 1,
     height: 1,
+    backgroundColor: DARK_THEME.BORDER,
   },
   dividerText: {
-    fontSize: FONTS.SIZE.SM,
-    fontWeight: FONTS.WEIGHT.SEMIBOLD,
-    marginHorizontal: DIMENSIONS.SPACING_MD,
+    color: DARK_THEME.TEXT_SEC,
+    marginHorizontal: 16,
+    fontWeight: '600',
+    fontSize: 12,
   },
-  signupButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: DIMENSIONS.SPACING_SM,
-    borderRadius: DIMENSIONS.BORDER_RADIUS_MD,
+  registerButton: {
+    borderColor: DARK_THEME.BORDER,
+    backgroundColor: 'transparent',
     borderWidth: 2,
-    gap: DIMENSIONS.SPACING_SM,
-  },
-  signupButtonText: {
-    fontSize: FONTS.SIZE.MD,
-    fontWeight: FONTS.WEIGHT.BOLD,
-  },
-  footer: {
-    alignItems: 'center',
-    marginTop: DIMENSIONS.SPACING_XL,
-  },
-  footerText: {
-    fontSize: FONTS.SIZE.SM,
-    opacity: 0.8,
-    marginBottom: DIMENSIONS.SPACING_XXS,
-  },
-  footerLink: {
-    fontSize: FONTS.SIZE.SM,
-    fontWeight: FONTS.WEIGHT.SEMIBOLD,
-    textDecorationLine: 'underline',
+    height: 56,
   },
 });

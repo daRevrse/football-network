@@ -1,7 +1,4 @@
-// ============================
-// FeedScreen.js - Écran du Feed Public
-// ============================
-
+// ====== src/screens/feed/FeedScreen.js ======
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
@@ -15,90 +12,97 @@ import {
   Alert,
   TextInput,
   Modal,
+  StatusBar,
+  Platform,
 } from 'react-native';
 import { useSelector } from 'react-redux';
 import Icon from 'react-native-vector-icons/Feather';
+import LinearGradient from 'react-native-linear-gradient';
 import { API_CONFIG } from '../../utils/constants/api';
 
-const COLORS = {
-  PRIMARY: '#22C55E',
-  SECONDARY: '#3B82F6',
-  BACKGROUND_LIGHT: '#F8FAFC',
-  BACKGROUND_DARK: '#1E293B',
-  TEXT_PRIMARY: '#1F2937',
-  TEXT_SECONDARY: '#6B7280',
-  TEXT_WHITE: '#FFFFFF',
-  BORDER: '#E5E7EB',
-  ERROR: '#EF4444',
-  SUCCESS: '#10B981',
-  WARNING: '#F59E0B',
+// Thème "Night Mode"
+const THEME = {
+  BG: '#0F172A', // Slate 900
+  SURFACE: '#1E293B', // Slate 800
+  SURFACE_LIGHT: '#334155', // Slate 700
+  TEXT: '#F8FAFC', // Slate 50
+  TEXT_SEC: '#94A3B8', // Slate 400
+  ACCENT: '#22C55E', // Green 500
+  BORDER: '#334155', // Slate 700
+  ERROR: '#EF4444', // Red 500
+  LIKE: '#F43F5E', // Rose 500
 };
 
 const POST_TYPES = {
-  match_announcement: { icon: 'calendar', color: COLORS.PRIMARY, label: 'Match à venir' },
-  match_result: { icon: 'award', color: COLORS.SUCCESS, label: 'Résultat' },
-  team_search: { icon: 'search', color: COLORS.SECONDARY, label: 'Cherche équipe' },
-  player_search: { icon: 'users', color: COLORS.WARNING, label: 'Cherche joueurs' },
-  media: { icon: 'image', color: '#EC4899', label: 'Media' },
-  general: { icon: 'message-circle', color: COLORS.TEXT_SECONDARY, label: 'Post' },
+  match_announcement: { icon: 'calendar', color: '#3B82F6', label: 'Match' },
+  match_result: { icon: 'trophy', color: '#EAB308', label: 'Résultat' },
+  team_search: { icon: 'shield', color: '#8B5CF6', label: 'Recrutement' },
+  player_search: { icon: 'user-plus', color: '#EC4899', label: 'Mercato' },
+  media: { icon: 'image', color: '#10B981', label: 'Média' },
+  general: {
+    icon: 'message-square',
+    color: THEME.TEXT_SEC,
+    label: 'Discussion',
+  },
 };
 
 const FeedScreen = ({ navigation }) => {
   const { token, user } = useSelector(state => state.auth);
-  
+
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [offset, setOffset] = useState(0);
   const [hasMore, setHasMore] = useState(true);
-  
-  // Filtres
+
+  // Filtres & Modal
   const [selectedType, setSelectedType] = useState('all');
   const [showFilters, setShowFilters] = useState(false);
-  
-  // Modal de création
   const [showCreateModal, setShowCreateModal] = useState(false);
+
+  // Création
   const [newPostContent, setNewPostContent] = useState('');
   const [newPostType, setNewPostType] = useState('general');
   const [creating, setCreating] = useState(false);
 
-  // Charger les posts
-  const loadPosts = useCallback(async (isRefresh = false) => {
-    try {
-      const currentOffset = isRefresh ? 0 : offset;
-      
-      const url = `${API_CONFIG.BASE_URL}/feed?limit=20&offset=${currentOffset}${
-        selectedType !== 'all' ? `&type=${selectedType}` : ''
-      }`;
+  // --- LOGIQUE API (Identique, juste nettoyage des logs) ---
+  const loadPosts = useCallback(
+    async (isRefresh = false) => {
+      try {
+        const currentOffset = isRefresh ? 0 : offset;
+        const url = `${
+          API_CONFIG.BASE_URL
+        }/feed?limit=20&offset=${currentOffset}${
+          selectedType !== 'all' ? `&type=${selectedType}` : ''
+        }`;
 
-      const response = await fetch(url, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
+        const response = await fetch(url, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
 
-      const data = await response.json();
+        const data = await response.json();
 
-      if (response.ok) {
-        if (isRefresh) {
-          setPosts(data.posts);
-          setOffset(20);
-        } else {
-          setPosts(prev => [...prev, ...data.posts]);
-          setOffset(prev => prev + 20);
+        if (response.ok) {
+          if (isRefresh) {
+            setPosts(data.posts);
+            setOffset(20);
+          } else {
+            setPosts(prev => [...prev, ...data.posts]);
+            setOffset(prev => prev + 20);
+          }
+          setHasMore(data.pagination.hasMore);
         }
-        setHasMore(data.pagination.hasMore);
+      } catch (error) {
+        console.error('Load posts error:', error);
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
+        setLoadingMore(false);
       }
-    } catch (error) {
-      console.error('Load posts error:', error);
-      Alert.alert('Erreur', 'Impossible de charger le feed');
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-      setLoadingMore(false);
-    }
-  }, [token, offset, selectedType]);
+    },
+    [token, offset, selectedType],
+  );
 
   useEffect(() => {
     loadPosts(true);
@@ -117,230 +121,35 @@ const FeedScreen = ({ navigation }) => {
     }
   };
 
-  // Liker un post
   const handleLike = async (postId, isLiked) => {
-    try {
-      const url = `${API_CONFIG.BASE_URL}/feed/${postId}/like`;
-      const response = await fetch(url, {
-        method: isLiked ? 'DELETE' : 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
+    // Optimistic UI update
+    setPosts(prev =>
+      prev.map(post =>
+        post.id === postId
+          ? {
+              ...post,
+              userLiked: !isLiked,
+              stats: {
+                ...post.stats,
+                likes: post.stats.likes + (isLiked ? -1 : 1),
+              },
+            }
+          : post,
+      ),
+    );
 
-      if (response.ok) {
-        setPosts(prev =>
-          prev.map(post =>
-            post.id === postId
-              ? {
-                  ...post,
-                  userLiked: !isLiked,
-                  stats: {
-                    ...post.stats,
-                    likes: post.stats.likes + (isLiked ? -1 : 1),
-                  },
-                }
-              : post
-          )
-        );
-      }
+    try {
+      await fetch(`${API_CONFIG.BASE_URL}/feed/${postId}/like`, {
+        method: isLiked ? 'DELETE' : 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
     } catch (error) {
       console.error('Like error:', error);
     }
   };
 
-  // Ouvrir les commentaires
-  const handleOpenComments = (postId) => {
-    console.log('💬 Opening comments for post:', postId);
-    // TODO: Naviguer vers l'écran de commentaires
-    // navigation.navigate('PostComments', { postId });
-    Alert.alert('Commentaires', 'Fonctionnalité bientôt disponible');
-  };
-
-  // Ajouter un commentaire
-  const handleAddComment = async (postId, content) => {
-    if (!content.trim()) {
-      Alert.alert('Erreur', 'Le commentaire ne peut pas être vide');
-      return;
-    }
-
-    try {
-      console.log('💬 Adding comment to post:', postId);
-      
-      const response = await fetch(`${API_CONFIG.BASE_URL}/feed/${postId}/comments`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ content }),
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        console.log('✅ Comment added:', data.comment);
-        
-        // Mettre à jour le compteur
-        setPosts(prev =>
-          prev.map(post =>
-            post.id === postId
-              ? {
-                  ...post,
-                  stats: {
-                    ...post.stats,
-                    comments: post.stats.comments + 1,
-                  },
-                }
-              : post
-          )
-        );
-
-        return data.comment;
-      } else {
-        Alert.alert('Erreur', 'Impossible d\'ajouter le commentaire');
-      }
-    } catch (error) {
-      console.error('Add comment error:', error);
-      Alert.alert('Erreur', 'Impossible d\'ajouter le commentaire');
-    }
-  };
-
-  // Partager un post
-  const handleShare = async (postId) => {
-    try {
-      console.log('📤 Sharing post:', postId);
-      
-      const response = await fetch(`${API_CONFIG.BASE_URL}/feed/${postId}/share`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          sharedTo: 'feed',
-          message: null,
-        }),
-      });
-
-      if (response.ok) {
-        console.log('✅ Post shared');
-        
-        // Mettre à jour le compteur
-        setPosts(prev =>
-          prev.map(post =>
-            post.id === postId
-              ? {
-                  ...post,
-                  stats: {
-                    ...post.stats,
-                    shares: post.stats.shares + 1,
-                  },
-                }
-              : post
-          )
-        );
-
-        Alert.alert('Succès', 'Post partagé !');
-      } else {
-        Alert.alert('Erreur', 'Impossible de partager le post');
-      }
-    } catch (error) {
-      console.error('Share error:', error);
-      Alert.alert('Erreur', 'Impossible de partager le post');
-    }
-  };
-
-  // Supprimer un post
-  const handleDeletePost = (postId) => {
-    Alert.alert(
-      'Supprimer le post',
-      'Êtes-vous sûr de vouloir supprimer ce post ?',
-      [
-        { text: 'Annuler', style: 'cancel' },
-        {
-          text: 'Supprimer',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              console.log('🗑️ Deleting post:', postId);
-              
-              const response = await fetch(`${API_CONFIG.BASE_URL}/feed/${postId}`, {
-                method: 'DELETE',
-                headers: {
-                  Authorization: `Bearer ${token}`,
-                },
-              });
-
-              if (response.ok) {
-                console.log('✅ Post deleted');
-                setPosts(prev => prev.filter(post => post.id !== postId));
-                Alert.alert('Succès', 'Post supprimé');
-              } else {
-                const data = await response.json();
-                if (response.status === 403) {
-                  Alert.alert('Erreur', 'Vous n\'êtes pas autorisé à supprimer ce post');
-                } else {
-                  Alert.alert('Erreur', data.error || 'Impossible de supprimer le post');
-                }
-              }
-            } catch (error) {
-              console.error('Delete error:', error);
-              Alert.alert('Erreur', 'Impossible de supprimer le post');
-            }
-          },
-        },
-      ]
-    );
-  };
-
-  // Signaler un post
-  const handleReportPost = (postId) => {
-    Alert.alert(
-      'Signaler le post',
-      'Choisissez une raison',
-      [
-        { text: 'Annuler', style: 'cancel' },
-        { text: 'Spam', onPress: () => submitReport(postId, 'spam') },
-        { text: 'Harcèlement', onPress: () => submitReport(postId, 'harassment') },
-        { text: 'Contenu inapproprié', onPress: () => submitReport(postId, 'inappropriate') },
-        { text: 'Fausses informations', onPress: () => submitReport(postId, 'false_info') },
-        { text: 'Autre', onPress: () => submitReport(postId, 'other') },
-      ]
-    );
-  };
-
-  const submitReport = async (postId, reason) => {
-    try {
-      console.log('🚩 Reporting post:', postId, reason);
-      
-      const response = await fetch(`${API_CONFIG.BASE_URL}/feed/${postId}/report`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ reason, description: null }),
-      });
-
-      if (response.ok) {
-        console.log('✅ Post reported');
-        Alert.alert('Merci', 'Votre signalement a été envoyé');
-      } else {
-        Alert.alert('Erreur', 'Impossible d\'envoyer le signalement');
-      }
-    } catch (error) {
-      console.error('Report error:', error);
-      Alert.alert('Erreur', 'Impossible d\'envoyer le signalement');
-    }
-  };
-
-  // Créer un post
   const handleCreatePost = async () => {
-    if (!newPostContent.trim()) {
-      Alert.alert('Erreur', 'Le contenu ne peut pas être vide');
-      return;
-    }
-
+    if (!newPostContent.trim()) return;
     setCreating(true);
     try {
       const response = await fetch(`${API_CONFIG.BASE_URL}/feed`, {
@@ -358,404 +167,290 @@ const FeedScreen = ({ navigation }) => {
 
       if (response.ok) {
         const data = await response.json();
-        const newPost = data.post;
-        
-        // Ajouter le post au state
-        setPosts(prev => [newPost, ...prev]);
-        
-        // Vérification du post ajouté
-        console.log('✅ Post créé avec succès:', {
-          id: newPost.id,
-          type: newPost.post_type || newPost.type,
-          content: newPost.content?.substring(0, 50),
-          author: newPost.user_id || newPost.author,
-          fullPost: newPost,
-        });
-        
+        setPosts(prev => [data.post, ...prev]);
         setNewPostContent('');
         setShowCreateModal(false);
-        Alert.alert('Succès', 'Post publié !');
-      } else {
-        Alert.alert('Erreur', 'Impossible de publier le post');
       }
     } catch (error) {
-      console.error('Create post error:', error);
       Alert.alert('Erreur', 'Impossible de publier le post');
     } finally {
       setCreating(false);
     }
   };
 
-  // Composant d'un post
+  // --- COMPOSANTS UI ---
+
+  const FilterChip = ({ type, label, icon }) => {
+    const isActive = selectedType === type;
+    return (
+      <TouchableOpacity
+        style={[styles.filterChip, isActive && styles.filterChipActive]}
+        onPress={() => {
+          setSelectedType(type);
+          setOffset(0);
+          setLoading(true);
+        }}
+      >
+        <Icon
+          name={icon}
+          size={14}
+          color={isActive ? '#000' : THEME.TEXT_SEC}
+        />
+        <Text style={[styles.filterText, isActive && styles.filterTextActive]}>
+          {label}
+        </Text>
+      </TouchableOpacity>
+    );
+  };
+
   const PostItem = ({ post }) => {
-    // Contrôle de validation du post
-    React.useEffect(() => {
-      console.log('🔍 Rendering PostItem:', {
-        id: post?.id,
-        hasAuthor: !!post?.author,
-        hasType: !!post?.type,
-        hasStats: !!post?.stats,
-        postData: JSON.stringify(post).substring(0, 200),
-      });
+    // Sécurité données
+    if (!post || !post.author) return null;
 
-      // Vérifications de sécurité
-      if (!post) {
-        console.error('❌ PostItem: post is undefined');
-        return;
-      }
-      if (!post.author) {
-        console.error('❌ PostItem: post.author is missing', post);
-        return;
-      }
-      if (!post.type) {
-        console.error('❌ PostItem: post.type is missing', post);
-        return;
-      }
-    }, [post]);
-
-    // Protection contre les données manquantes
-    if (!post || !post.author || !post.type) {
-      console.error('❌ PostItem: Invalid post data', post);
-      return (
-        <View style={[styles.postCard, { backgroundColor: '#FEE2E2', borderWidth: 1, borderColor: '#FCA5A5' }]}>
-          <Text style={{ color: '#DC2626', padding: 16 }}>
-            ⚠️ Erreur d'affichage du post
-          </Text>
-          <Text style={{ fontSize: 10, color: '#DC2626', padding: 16 }}>
-            {JSON.stringify(post, null, 2)}
-          </Text>
-        </View>
-      );
-    }
-
-    const postType = POST_TYPES[post.type];
-
-    if (!postType) {
-      console.error('❌ PostItem: Unknown post type', post.type);
-      return (
-        <View style={[styles.postCard, { backgroundColor: '#FEF3C7', borderWidth: 1, borderColor: '#FCD34D' }]}>
-          <Text style={{ color: '#D97706', padding: 16 }}>
-            ⚠️ Type de post inconnu: {post.type}
-          </Text>
-        </View>
-      );
-    }
+    const postType = POST_TYPES[post.type] || POST_TYPES.general;
+    const isMatch =
+      post.type === 'match_announcement' || post.type === 'match_result';
 
     return (
       <View style={styles.postCard}>
-        {/* Header du post */}
+        {/* En-tête Post */}
         <View style={styles.postHeader}>
-          <Image
-            source={{
-              uri: post.author.profilePicture || 'https://via.placeholder.com/40',
-            }}
-            style={styles.authorAvatar}
-          />
-          <View style={styles.authorInfo}>
-            <Text style={styles.authorName}>
-              {post.author.firstName} {post.author.lastName}
-            </Text>
-            <View style={styles.postMeta}>
-              <Icon name={postType.icon} size={12} color={postType.color} />
-              <Text style={styles.postTypeLabel}>{postType.label}</Text>
+          <View style={styles.authorRow}>
+            <Image
+              source={{
+                uri:
+                  post.author.profilePicture ||
+                  'https://via.placeholder.com/40',
+              }}
+              style={styles.avatar}
+            />
+            <View style={styles.authorInfo}>
+              <Text style={styles.authorName}>
+                {post.author.firstName} {post.author.lastName}
+              </Text>
               <Text style={styles.postTime}>
-                • {formatTime(post.createdAt)}
+                {formatTime(post.createdAt)} •{' '}
+                {post.author.position || 'Joueur'}
               </Text>
             </View>
           </View>
-          <TouchableOpacity 
-            style={styles.moreButton}
-            onPress={() => {
-              Alert.alert(
-                'Actions',
-                'Que voulez-vous faire ?',
-                [
-                  { text: 'Annuler', style: 'cancel' },
-                  ...(post.author.id === user?.id 
-                    ? [{
-                        text: 'Supprimer',
-                        style: 'destructive',
-                        onPress: () => handleDeletePost(post.id),
-                      }]
-                    : []
-                  ),
-                  {
-                    text: 'Signaler',
-                    onPress: () => handleReportPost(post.id),
-                  },
-                ]
-              );
-            }}
+
+          {/* Badge Type */}
+          <View
+            style={[
+              styles.typeBadge,
+              { backgroundColor: `${postType.color}20` },
+            ]}
           >
-            <Icon name="more-horizontal" size={20} color={COLORS.TEXT_SECONDARY} />
-          </TouchableOpacity>
+            <Icon name={postType.icon} size={12} color={postType.color} />
+            <Text style={[styles.typeText, { color: postType.color }]}>
+              {postType.label}
+            </Text>
+          </View>
         </View>
 
         {/* Contenu */}
         <Text style={styles.postContent}>{post.content}</Text>
 
-        {/* Media */}
+        {/* Média / Match Info */}
         {post.media && (
           <Image source={{ uri: post.media.url }} style={styles.postMedia} />
         )}
 
-        {/* Infos du match si applicable */}
-        {post.match && (
-          <View style={styles.matchInfo}>
-            <Icon name="calendar" size={16} color={COLORS.SECONDARY} />
-            <Text style={styles.matchText}>
-              Match {post.match.status === 'completed' ? 'terminé' : 'prévu'}
-            </Text>
-          </View>
-        )}
-
-        {/* Stats et actions */}
-        <View style={styles.postStats}>
+        {/* Stats Bar */}
+        <View style={styles.statsRow}>
+          <Text style={styles.statsText}>{post.stats.likes} J'aime</Text>
+          <View style={styles.dotSeparator} />
           <Text style={styles.statsText}>
-            {post.stats.likes} j'aime • {post.stats.comments} commentaires
+            {post.stats.comments} Commentaires
           </Text>
         </View>
 
-        <View style={styles.postActions}>
+        {/* Actions Bar */}
+        <View style={styles.actionsBar}>
           <TouchableOpacity
-            style={styles.actionButton}
+            style={styles.actionBtn}
             onPress={() => handleLike(post.id, post.userLiked)}
           >
             <Icon
               name="heart"
               size={20}
-              color={post.userLiked ? COLORS.ERROR : COLORS.TEXT_SECONDARY}
-              fill={post.userLiked ? COLORS.ERROR : 'none'}
+              color={post.userLiked ? THEME.LIKE : THEME.TEXT_SEC}
+              fill={post.userLiked ? THEME.LIKE : 'none'}
             />
-            <Text
-              style={[
-                styles.actionText,
-                post.userLiked && { color: COLORS.ERROR },
-              ]}
-            >
-              J'aime
-            </Text>
           </TouchableOpacity>
 
-          <TouchableOpacity
-            style={styles.actionButton}
-            onPress={() => handleOpenComments(post.id)}
-          >
-            <Icon name="message-circle" size={20} color={COLORS.TEXT_SECONDARY} />
-            <Text style={styles.actionText}>Commenter</Text>
+          <TouchableOpacity style={styles.actionBtn}>
+            <Icon name="message-circle" size={20} color={THEME.TEXT_SEC} />
           </TouchableOpacity>
 
-          <TouchableOpacity 
-            style={styles.actionButton}
-            onPress={() => handleShare(post.id)}
-          >
-            <Icon name="share-2" size={20} color={COLORS.TEXT_SECONDARY} />
-            <Text style={styles.actionText}>Partager</Text>
+          <TouchableOpacity style={styles.actionBtn}>
+            <Icon name="share-2" size={20} color={THEME.TEXT_SEC} />
           </TouchableOpacity>
         </View>
       </View>
     );
   };
 
-  // Filtres
-  const FilterChip = ({ type, label, icon }) => (
-    <TouchableOpacity
-      style={[
-        styles.filterChip,
-        selectedType === type && styles.filterChipActive,
-      ]}
-      onPress={() => {
-        setSelectedType(type);
-        setOffset(0);
-        setLoading(true);
-      }}
-    >
-      <Icon
-        name={icon}
-        size={16}
-        color={selectedType === type ? COLORS.TEXT_WHITE : COLORS.TEXT_SECONDARY}
-      />
-      <Text
-        style={[
-          styles.filterChipText,
-          selectedType === type && styles.filterChipTextActive,
-        ]}
-      >
-        {label}
-      </Text>
-    </TouchableOpacity>
-  );
-
-  if (loading && posts.length === 0) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={COLORS.PRIMARY} />
-        <Text style={styles.loadingText}>Chargement du feed...</Text>
-      </View>
-    );
-  }
-
   return (
     <View style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor={THEME.BG} />
+
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Le Terrain</Text>
-        <View style={styles.headerActions}>
+        <View style={styles.headerRight}>
           <TouchableOpacity
-            style={styles.headerButton}
+            style={[styles.iconButton, showFilters && styles.iconButtonActive]}
             onPress={() => setShowFilters(!showFilters)}
           >
-            <Icon name="filter" size={24} color={COLORS.TEXT_PRIMARY} />
+            <Icon
+              name="filter"
+              size={22}
+              color={showFilters ? THEME.ACCENT : THEME.TEXT}
+            />
           </TouchableOpacity>
           <TouchableOpacity
-            style={styles.headerButton}
+            style={[styles.iconButton, styles.createButton]}
             onPress={() => setShowCreateModal(true)}
           >
-            <Icon name="plus-circle" size={24} color={COLORS.PRIMARY} />
+            <Icon name="plus" size={24} color="#000" />
           </TouchableOpacity>
         </View>
       </View>
 
-      {/* Filtres */}
+      {/* Filtres Horizontal */}
       {showFilters && (
-        <View style={styles.filtersContainer}>
+        <View style={styles.filtersWrapper}>
           <FlatList
             horizontal
             showsHorizontalScrollIndicator={false}
             data={[
               { type: 'all', label: 'Tout', icon: 'grid' },
-              { type: 'match_announcement', label: 'Matchs', icon: 'calendar' },
-              { type: 'match_result', label: 'Résultats', icon: 'award' },
-              { type: 'team_search', label: 'Équipes', icon: 'search' },
-              { type: 'player_search', label: 'Joueurs', icon: 'users' },
+              ...Object.entries(POST_TYPES).map(([k, v]) => ({
+                type: k,
+                ...v,
+              })),
             ]}
             keyExtractor={item => item.type}
-            renderItem={({ item }) => (
-              <FilterChip type={item.type} label={item.label} icon={item.icon} />
-            )}
-            contentContainerStyle={styles.filtersList}
+            renderItem={({ item }) => <FilterChip {...item} />}
+            contentContainerStyle={styles.filtersContent}
           />
         </View>
       )}
 
-      {/* Feed */}
-      <FlatList
-        data={posts}
-        keyExtractor={item => item.id.toString()}
-        renderItem={({ item }) => <PostItem post={item} />}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={handleRefresh}
-            tintColor={COLORS.PRIMARY}
-          />
-        }
-        onEndReached={handleLoadMore}
-        onEndReachedThreshold={0.5}
-        ListFooterComponent={
-          loadingMore ? (
-            <ActivityIndicator
-              size="small"
-              color={COLORS.PRIMARY}
-              style={styles.footerLoader}
+      {/* Liste des Posts */}
+      {loading && !refreshing ? (
+        <View style={styles.loadingCenter}>
+          <ActivityIndicator size="large" color={THEME.ACCENT} />
+        </View>
+      ) : (
+        <FlatList
+          data={posts}
+          keyExtractor={item => item.id.toString()}
+          renderItem={({ item }) => <PostItem post={item} />}
+          contentContainerStyle={styles.feedContent}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={handleRefresh}
+              tintColor={THEME.ACCENT}
+              colors={[THEME.ACCENT]}
             />
-          ) : null
-        }
-        ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <Icon name="inbox" size={64} color={COLORS.TEXT_SECONDARY} />
-            <Text style={styles.emptyText}>Aucun post pour le moment</Text>
-            <Text style={styles.emptySubtext}>
-              Soyez le premier à partager quelque chose !
-            </Text>
-          </View>
-        }
-      />
+          }
+          onEndReached={handleLoadMore}
+          onEndReachedThreshold={0.5}
+          ListFooterComponent={
+            loadingMore && (
+              <ActivityIndicator color={THEME.ACCENT} style={{ margin: 20 }} />
+            )
+          }
+          ListEmptyComponent={
+            <View style={styles.emptyState}>
+              <Icon name="wind" size={48} color={THEME.TEXT_SEC} />
+              <Text style={styles.emptyText}>Le terrain est vide...</Text>
+              <Text style={styles.emptySub}>Lancez la discussion !</Text>
+            </View>
+          }
+        />
+      )}
 
-      {/* Modal de création */}
+      {/* Modal Création */}
       <Modal
         visible={showCreateModal}
         animationType="slide"
-        transparent={true}
+        presentationStyle="pageSheet"
         onRequestClose={() => setShowCreateModal(false)}
       >
         <View style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <TouchableOpacity onPress={() => setShowCreateModal(false)}>
+              <Text style={styles.modalCancel}>Annuler</Text>
+            </TouchableOpacity>
+            <Text style={styles.modalTitle}>Nouveau Post</Text>
+            <TouchableOpacity
+              onPress={handleCreatePost}
+              disabled={!newPostContent.trim() || creating}
+              style={[
+                styles.modalPublish,
+                (!newPostContent.trim() || creating) && { opacity: 0.5 },
+              ]}
+            >
+              {creating ? (
+                <ActivityIndicator color="#000" />
+              ) : (
+                <Text style={styles.modalPublishText}>Publier</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+
           <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Nouveau post</Text>
-              <TouchableOpacity onPress={() => setShowCreateModal(false)}>
-                <Icon name="x" size={24} color={COLORS.TEXT_PRIMARY} />
-              </TouchableOpacity>
-            </View>
-
-            {/* Type de post */}
-            <View style={styles.postTypeSelector}>
-              {Object.entries(POST_TYPES).map(([key, value]) => (
-                <TouchableOpacity
-                  key={key}
-                  style={[
-                    styles.postTypeOption,
-                    newPostType === key && {
-                      backgroundColor: value.color,
-                    },
-                  ]}
-                  onPress={() => setNewPostType(key)}
-                >
-                  <Icon
-                    name={value.icon}
-                    size={16}
-                    color={
-                      newPostType === key ? COLORS.TEXT_WHITE : value.color
-                    }
-                  />
-                  <Text
+            {/* Sélecteur Type */}
+            <View style={styles.typeSelector}>
+              <FlatList
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                data={Object.entries(POST_TYPES)}
+                keyExtractor={([k]) => k}
+                renderItem={({ item: [key, val] }) => (
+                  <TouchableOpacity
                     style={[
-                      styles.postTypeOptionText,
-                      newPostType === key && { color: COLORS.TEXT_WHITE },
+                      styles.typeOption,
+                      newPostType === key && {
+                        backgroundColor: val.color,
+                        borderColor: val.color,
+                      },
                     ]}
+                    onPress={() => setNewPostType(key)}
                   >
-                    {value.label}
-                  </Text>
-                </TouchableOpacity>
-              ))}
+                    <Icon
+                      name={val.icon}
+                      size={16}
+                      color={newPostType === key ? '#FFF' : THEME.TEXT_SEC}
+                    />
+                    <Text
+                      style={[
+                        styles.typeOptionText,
+                        newPostType === key && { color: '#FFF' },
+                      ]}
+                    >
+                      {val.label}
+                    </Text>
+                  </TouchableOpacity>
+                )}
+                style={{ flexGrow: 0, marginBottom: 16 }}
+              />
             </View>
 
-            {/* Contenu */}
             <TextInput
-              style={styles.postInput}
-              placeholder="Quoi de neuf ?"
-              placeholderTextColor={COLORS.TEXT_SECONDARY}
+              style={styles.modalInput}
+              placeholder="Exprimez-vous..."
+              placeholderTextColor={THEME.TEXT_SEC}
               multiline
-              numberOfLines={6}
+              autoFocus
               value={newPostContent}
               onChangeText={setNewPostContent}
-              textAlignVertical="top"
             />
-
-            {/* Actions */}
-            <View style={styles.modalActions}>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.cancelButton]}
-                onPress={() => setShowCreateModal(false)}
-              >
-                <Text style={styles.cancelButtonText}>Annuler</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  styles.modalButton,
-                  styles.publishButton,
-                  (!newPostContent.trim() || creating) && styles.buttonDisabled,
-                ]}
-                onPress={handleCreatePost}
-                disabled={!newPostContent.trim() || creating}
-              >
-                {creating ? (
-                  <ActivityIndicator size="small" color={COLORS.TEXT_WHITE} />
-                ) : (
-                  <Text style={styles.publishButtonText}>Publier</Text>
-                )}
-              </TouchableOpacity>
-            </View>
           </View>
         </View>
       </Modal>
@@ -763,296 +458,271 @@ const FeedScreen = ({ navigation }) => {
   );
 };
 
-// Fonction helper pour formater le temps
+// Utils
 const formatTime = dateString => {
   const date = new Date(dateString);
   const now = new Date();
-  const diffMs = now - date;
-  const diffMins = Math.floor(diffMs / 60000);
-  const diffHours = Math.floor(diffMins / 60);
-  const diffDays = Math.floor(diffHours / 24);
+  const diffHours = Math.floor((now - date) / (1000 * 60 * 60));
 
-  if (diffMins < 1) return 'À l\'instant';
-  if (diffMins < 60) return `Il y a ${diffMins}min`;
-  if (diffHours < 24) return `Il y a ${diffHours}h`;
-  if (diffDays < 7) return `Il y a ${diffDays}j`;
+  if (diffHours < 1) return "À l'instant";
+  if (diffHours < 24) return `${diffHours}h`;
   return date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.BACKGROUND_LIGHT,
+    backgroundColor: THEME.BG,
   },
+  // HEADER
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: COLORS.TEXT_WHITE,
+    paddingHorizontal: 20,
+    paddingTop: Platform.OS === 'ios' ? 60 : 30,
+    paddingBottom: 16,
+    backgroundColor: THEME.BG,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.BORDER,
+    borderBottomColor: THEME.BORDER,
   },
   headerTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: COLORS.TEXT_PRIMARY,
+    fontSize: 28,
+    fontWeight: '900',
+    color: THEME.TEXT,
+    letterSpacing: 0.5,
   },
-  headerActions: {
+  headerRight: {
     flexDirection: 'row',
     gap: 12,
   },
-  headerButton: {
-    padding: 8,
+  iconButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: THEME.SURFACE,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: THEME.BORDER,
   },
-  filtersContainer: {
-    backgroundColor: COLORS.TEXT_WHITE,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.BORDER,
+  iconButtonActive: {
+    borderColor: THEME.ACCENT,
+    backgroundColor: `${THEME.ACCENT}10`,
+  },
+  createButton: {
+    backgroundColor: THEME.ACCENT,
+    borderColor: THEME.ACCENT,
+  },
+  // FILTERS
+  filtersWrapper: {
+    backgroundColor: THEME.BG,
     paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: THEME.BORDER,
   },
-  filtersList: {
-    paddingHorizontal: 16,
+  filtersContent: {
+    paddingHorizontal: 20,
     gap: 8,
   },
   filterChip: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    paddingHorizontal: 16,
+    paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 20,
-    backgroundColor: COLORS.BACKGROUND_LIGHT,
-    marginRight: 8,
+    backgroundColor: THEME.SURFACE,
+    borderWidth: 1,
+    borderColor: THEME.BORDER,
   },
   filterChipActive: {
-    backgroundColor: COLORS.PRIMARY,
+    backgroundColor: THEME.ACCENT,
+    borderColor: THEME.ACCENT,
   },
-  filterChipText: {
-    fontSize: 14,
-    color: COLORS.TEXT_SECONDARY,
-    fontWeight: '500',
+  filterText: {
+    fontSize: 13,
+    color: THEME.TEXT_SEC,
+    fontWeight: '600',
   },
-  filterChipTextActive: {
-    color: COLORS.TEXT_WHITE,
+  filterTextActive: {
+    color: '#000',
+  },
+  // POST CARD
+  feedContent: {
+    padding: 16,
   },
   postCard: {
-    backgroundColor: COLORS.TEXT_WHITE,
-    marginBottom: 8,
-    paddingVertical: 16,
+    backgroundColor: THEME.SURFACE,
+    borderRadius: 16,
+    marginBottom: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: THEME.BORDER,
   },
   postHeader: {
     flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
     marginBottom: 12,
   },
-  authorAvatar: {
+  authorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  avatar: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: COLORS.BORDER,
+    backgroundColor: THEME.SURFACE_LIGHT,
+    borderWidth: 1,
+    borderColor: THEME.BORDER,
   },
   authorInfo: {
-    flex: 1,
     marginLeft: 12,
   },
   authorName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: COLORS.TEXT_PRIMARY,
-    marginBottom: 2,
+    color: THEME.TEXT,
+    fontSize: 15,
+    fontWeight: '700',
   },
-  postMeta: {
+  postTime: {
+    color: THEME.TEXT_SEC,
+    fontSize: 12,
+  },
+  typeBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
   },
-  postTypeLabel: {
-    fontSize: 12,
-    color: COLORS.TEXT_SECONDARY,
-  },
-  postTime: {
-    fontSize: 12,
-    color: COLORS.TEXT_SECONDARY,
-  },
-  moreButton: {
-    padding: 4,
+  typeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    textTransform: 'uppercase',
   },
   postContent: {
+    color: THEME.TEXT,
     fontSize: 15,
     lineHeight: 22,
-    color: COLORS.TEXT_PRIMARY,
-    paddingHorizontal: 16,
     marginBottom: 12,
   },
   postMedia: {
     width: '100%',
-    height: 300,
-    backgroundColor: COLORS.BORDER,
+    height: 200,
+    borderRadius: 12,
     marginBottom: 12,
+    backgroundColor: THEME.BG,
   },
-  matchInfo: {
+  statsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    backgroundColor: COLORS.BACKGROUND_LIGHT,
-    marginHorizontal: 16,
-    marginBottom: 12,
-    borderRadius: 8,
-  },
-  matchText: {
-    fontSize: 14,
-    color: COLORS.SECONDARY,
-    fontWeight: '500',
-  },
-  postStats: {
-    paddingHorizontal: 16,
     paddingBottom: 12,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.BORDER,
+    borderBottomColor: THEME.BORDER,
+    marginBottom: 12,
   },
   statsText: {
-    fontSize: 13,
-    color: COLORS.TEXT_SECONDARY,
+    color: THEME.TEXT_SEC,
+    fontSize: 12,
   },
-  postActions: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    paddingTop: 8,
-    paddingHorizontal: 16,
+  dotSeparator: {
+    width: 3,
+    height: 3,
+    borderRadius: 1.5,
+    backgroundColor: THEME.TEXT_SEC,
+    marginHorizontal: 6,
   },
-  actionButton: {
+  actionsBar: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingVertical: 8,
+    justifyContent: 'space-between', // Space around cleaner look
     paddingHorizontal: 12,
   },
-  actionText: {
-    fontSize: 14,
-    color: COLORS.TEXT_SECONDARY,
-    fontWeight: '500',
+  actionBtn: {
+    padding: 8,
   },
-  loadingContainer: {
+  // EMPTY STATE
+  loadingCenter: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: COLORS.BACKGROUND_LIGHT,
   },
-  loadingText: {
-    marginTop: 12,
-    fontSize: 16,
-    color: COLORS.TEXT_SECONDARY,
-  },
-  footerLoader: {
-    paddingVertical: 20,
-  },
-  emptyContainer: {
-    flex: 1,
-    justifyContent: 'center',
+  emptyState: {
     alignItems: 'center',
     paddingVertical: 60,
   },
   emptyText: {
+    color: THEME.TEXT,
     fontSize: 18,
-    fontWeight: '600',
-    color: COLORS.TEXT_PRIMARY,
+    fontWeight: 'bold',
     marginTop: 16,
   },
-  emptySubtext: {
-    fontSize: 14,
-    color: COLORS.TEXT_SECONDARY,
+  emptySub: {
+    color: THEME.TEXT_SEC,
     marginTop: 8,
   },
+  // MODAL
   modalContainer: {
     flex: 1,
-    justifyContent: 'flex-end',
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-  },
-  modalContent: {
-    backgroundColor: COLORS.TEXT_WHITE,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    paddingBottom: 32,
-    maxHeight: '80%',
+    backgroundColor: THEME.BG,
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
+    padding: 16,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.BORDER,
+    borderBottomColor: THEME.BORDER,
   },
   modalTitle: {
-    fontSize: 20,
+    color: THEME.TEXT,
+    fontSize: 18,
     fontWeight: 'bold',
-    color: COLORS.TEXT_PRIMARY,
   },
-  postTypeSelector: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    paddingHorizontal: 20,
-    paddingVertical: 16,
+  modalCancel: {
+    color: THEME.TEXT_SEC,
+    fontSize: 16,
   },
-  postTypeOption: {
+  modalPublish: {
+    backgroundColor: THEME.ACCENT,
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    borderRadius: 20,
+  },
+  modalPublishText: {
+    color: '#000',
+    fontWeight: 'bold',
+    fontSize: 14,
+  },
+  modalContent: {
+    padding: 16,
+  },
+  typeSelector: {
+    marginBottom: 16,
+  },
+  typeOption: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
     paddingHorizontal: 12,
     paddingVertical: 8,
-    borderRadius: 16,
+    borderRadius: 20,
     borderWidth: 1,
-    borderColor: COLORS.BORDER,
+    borderColor: THEME.BORDER,
+    marginRight: 8,
   },
-  postTypeOptionText: {
+  typeOptionText: {
+    color: THEME.TEXT_SEC,
     fontSize: 13,
-    fontWeight: '500',
+    fontWeight: '600',
   },
-  postInput: {
+  modalInput: {
+    color: THEME.TEXT,
+    fontSize: 16,
     minHeight: 150,
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    fontSize: 16,
-    color: COLORS.TEXT_PRIMARY,
-  },
-  modalActions: {
-    flexDirection: 'row',
-    gap: 12,
-    paddingHorizontal: 20,
-    paddingTop: 16,
-  },
-  modalButton: {
-    flex: 1,
-    paddingVertical: 14,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  cancelButton: {
-    backgroundColor: COLORS.BACKGROUND_LIGHT,
-  },
-  cancelButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: COLORS.TEXT_PRIMARY,
-  },
-  publishButton: {
-    backgroundColor: COLORS.PRIMARY,
-  },
-  publishButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: COLORS.TEXT_WHITE,
-  },
-  buttonDisabled: {
-    opacity: 0.5,
+    textAlignVertical: 'top',
   },
 });
 
