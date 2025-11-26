@@ -158,7 +158,10 @@ function App() {
               >
                 <Route index element={<VenueOwnerDashboard />} />
                 <Route path="bookings" element={<VenueOwnerBookings />} />
-                <Route path="bookings/:id" element={<VenueBookingDetails />} />
+                <Route
+                  path="venues/:id/bookings"
+                  element={<VenueBookingDetails />}
+                />
                 <Route path="venues/new" element={<VenueForm />} />
                 <Route path="venues/:id/calendar" element={<VenueCalendar />} />
                 <Route path="stats" element={<VenueStats />} />

@@ -3,7 +3,7 @@ import { useForm } from "react-hook-form";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import toast from "react-hot-toast";
-import { MapPin, Upload, Save, Info } from "lucide-react";
+import { MapPin, Save, ArrowLeft } from "lucide-react";
 
 const API_BASE_URL =
   process.env.REACT_APP_API_URL || "http://localhost:5000/api";
@@ -22,28 +22,16 @@ const VenueForm = () => {
       setLoading(true);
       const token = localStorage.getItem("token");
 
-      // Préparer le payload selon les attentes du backend
-      const payload = {
-        name: data.name,
-        address: data.address,
-        city: data.city,
-        field_type: data.field_type,
-        surface: data.surface,
-        capacity: data.capacity ? parseInt(data.capacity) : undefined,
-        pricePerHour: data.pricePerHour ? parseFloat(data.pricePerHour) : undefined,
-      };
-
-      await axios.post(`${API_BASE_URL}/venue-owner/venues`, payload, {
+      // Envoi des données vers la nouvelle route venue-owner
+      await axios.post(`${API_BASE_URL}/venue-owner/venues`, data, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
-      toast.success("Terrain ajouté avec succès !");
+      toast.success("Terrain créé avec succès !");
       navigate("/venue-owner");
     } catch (error) {
       console.error(error);
-      toast.error(
-        "Erreur lors de la création (Vérifiez que vous avez les droits)"
-      );
+      toast.error("Erreur lors de la création du terrain");
     } finally {
       setLoading(false);
     }
@@ -51,13 +39,18 @@ const VenueForm = () => {
 
   return (
     <div className="max-w-3xl mx-auto">
+      <button
+        onClick={() => navigate("/venue-owner")}
+        className="flex items-center text-gray-500 mb-4 hover:text-gray-900"
+      >
+        <ArrowLeft className="w-4 h-4 mr-1" /> Retour
+      </button>
+
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900">
           Ajouter un nouveau terrain
         </h1>
-        <p className="text-gray-500">
-          Remplissez les informations pour rendre votre terrain visible.
-        </p>
+        <p className="text-gray-500">Remplissez les informations ci-dessous.</p>
       </div>
 
       <form
@@ -65,16 +58,15 @@ const VenueForm = () => {
         className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden"
       >
         <div className="p-6 space-y-6">
-          {/* Info de base */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="md:col-span-2">
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Nom du complexe / terrain
+                Nom du terrain
               </label>
               <input
                 {...register("name", { required: "Le nom est requis" })}
                 className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 outline-none"
-                placeholder="Ex: Five Sport Arena"
+                placeholder="Ex: Urban Soccer Center"
               />
               {errors.name && (
                 <span className="text-red-500 text-xs">
@@ -85,7 +77,7 @@ const VenueForm = () => {
 
             <div className="md:col-span-2">
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Adresse complète
+                Adresse
               </label>
               <div className="relative">
                 <MapPin className="absolute left-3 top-2.5 h-5 w-5 text-gray-400" />
@@ -109,23 +101,30 @@ const VenueForm = () => {
               />
             </div>
 
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Téléphone Manager
+              </label>
+              <input
+                {...register("managerPhone")}
+                className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 outline-none"
+              />
+            </div>
           </div>
 
           <div className="border-t border-gray-100 my-6"></div>
 
-          {/* Caractéristiques Techniques */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Type de terrain
+                Type
               </label>
               <select
-                {...register("field_type")}
+                {...register("fieldType")}
                 className="w-full p-2 border border-gray-300 rounded-lg bg-white"
               >
                 <option value="indoor">Indoor (Intérieur)</option>
                 <option value="outdoor">Outdoor (Extérieur)</option>
-                <option value="hybrid">Hybride</option>
               </select>
             </div>
 
@@ -134,7 +133,7 @@ const VenueForm = () => {
                 Surface
               </label>
               <select
-                {...register("surface")}
+                {...register("fieldSurface")}
                 className="w-full p-2 border border-gray-300 rounded-lg bg-white"
               >
                 <option value="synthetic">Synthétique</option>
@@ -145,29 +144,16 @@ const VenueForm = () => {
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Capacité (Joueurs)
+                Format
               </label>
-              <input
-                type="number"
-                {...register("capacity")}
-                className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 outline-none"
-                placeholder="Ex: 22"
-                min="1"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Prix par Heure (€)
-              </label>
-              <input
-                type="number"
-                step="0.01"
-                {...register("pricePerHour")}
-                className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 outline-none"
-                placeholder="Ex: 50.00"
-                min="0"
-              />
+              <select
+                {...register("fieldSize")}
+                className="w-full p-2 border border-gray-300 rounded-lg bg-white"
+              >
+                <option value="5v5">5 vs 5</option>
+                <option value="7v7">7 vs 7</option>
+                <option value="11v11">11 vs 11</option>
+              </select>
             </div>
           </div>
         </div>
@@ -185,13 +171,8 @@ const VenueForm = () => {
             disabled={loading}
             className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition font-medium flex items-center gap-2"
           >
-            {loading ? (
-              "Création..."
-            ) : (
-              <>
-                <Save className="w-4 h-4" /> Créer le terrain
-              </>
-            )}
+            <Save className="w-4 h-4" />{" "}
+            {loading ? "Création..." : "Créer le terrain"}
           </button>
         </div>
       </form>

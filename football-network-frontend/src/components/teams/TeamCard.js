@@ -184,9 +184,9 @@ const TeamCard = ({ team, onLeaveTeam, isOwner, onEditTeam, onDeleteTeam }) => {
           </div>
           <div className="text-center border-l border-gray-200">
             <div className="text-sm font-bold text-gray-900 flex items-center justify-center">
-              {team.stats.averageRating > 0
+              {/* {team.stats.averageRating > 0
                 ? team.stats.averageRating.toFixed(1)
-                : "-"}{" "}
+                : "-"}{" "} */}
               <Star className="w-3 h-3 text-yellow-400 ml-1 fill-current" />
             </div>
             <div className="text-[10px] text-gray-500">Note</div>

@@ -73,7 +73,7 @@ const VenueBookingDetails = () => {
           action === "accept" ? "confirmée" : "refusée"
         } avec succès`
       );
-      fetchBookingDetails(); // Rafraîchir
+      fetchBookingDetails();
     } catch (error) {
       toast.error("Erreur lors du traitement");
     } finally {
@@ -89,13 +89,7 @@ const VenueBookingDetails = () => {
     );
   if (!booking) return null;
 
-  const statusColors = {
-    pending: "bg-yellow-100 text-yellow-800",
-    confirmed: "bg-green-100 text-green-800",
-    cancelled: "bg-red-100 text-red-800",
-    completed: "bg-gray-100 text-gray-800",
-  };
-
+  // Utilisation des clés camelCase ici
   return (
     <div className="max-w-4xl mx-auto space-y-6">
       <button
@@ -105,7 +99,6 @@ const VenueBookingDetails = () => {
         <ChevronLeft className="w-4 h-4 mr-1" /> Retour
       </button>
 
-      {/* En-tête Carte */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
         <div className="p-6 border-b border-gray-100 flex justify-between items-start">
           <div>
@@ -114,153 +107,125 @@ const VenueBookingDetails = () => {
             </h1>
             <span
               className={`px-3 py-1 rounded-full text-sm font-semibold ${
-                statusColors[booking.status]
+                booking.status === "confirmed"
+                  ? "bg-green-100 text-green-800"
+                  : booking.status === "pending"
+                  ? "bg-yellow-100 text-yellow-800"
+                  : "bg-red-100 text-red-800"
               }`}
             >
               {booking.status === "pending"
-                ? "En attente de validation"
+                ? "En attente"
                 : booking.status === "confirmed"
                 ? "Confirmée"
-                : booking.status === "cancelled"
-                ? "Annulée"
-                : "Terminée"}
+                : "Annulée"}
             </span>
           </div>
           <div className="text-right">
-            <p className="text-sm text-gray-500">Montant total</p>
+            <p className="text-sm text-gray-500">Prix</p>
             <p className="text-2xl font-bold text-green-600">
-              {booking.final_price || booking.base_price}€
+              {booking.price}€
             </p>
           </div>
         </div>
 
         <div className="p-6 grid md:grid-cols-2 gap-8">
-          {/* Détails Terrain & Date */}
           <div className="space-y-4">
             <h3 className="font-semibold text-gray-900 border-b pb-2">
-              Informations Session
+              Détails Terrain
             </h3>
-
             <div className="flex items-start gap-3">
               <MapPin className="w-5 h-5 text-gray-400 mt-1" />
               <div>
-                <p className="font-medium text-gray-900">
-                  {booking.venue_name}
-                </p>
-                <p className="text-sm text-gray-500">{booking.venue_address}</p>
-                <p className="text-xs text-gray-400 mt-1">
-                  {booking.field_type}
+                <p className="font-medium text-gray-900">{booking.venueName}</p>
+                <p className="text-sm text-gray-500">{booking.venueAddress}</p>
+                <p className="text-xs text-gray-400 mt-1 capitalize">
+                  {booking.fieldType}
                 </p>
               </div>
             </div>
-
             <div className="flex items-center gap-3">
               <Calendar className="w-5 h-5 text-gray-400" />
-              <div>
-                <p className="font-medium text-gray-900">
-                  {new Date(booking.booking_date).toLocaleDateString("fr-FR", {
-                    weekday: "long",
-                    day: "numeric",
-                    month: "long",
-                    year: "numeric",
-                  })}
-                </p>
-              </div>
+              <p className="font-medium text-gray-900">
+                {new Date(booking.bookingDate).toLocaleDateString()}
+              </p>
             </div>
-
             <div className="flex items-center gap-3">
               <Clock className="w-5 h-5 text-gray-400" />
-              <div>
-                <p className="font-medium text-gray-900">
-                  {booking.start_time.slice(0, 5)} -{" "}
-                  {booking.end_time.slice(0, 5)}
-                </p>
-                <p className="text-sm text-gray-500">
-                  {booking.duration_minutes} minutes
-                </p>
-              </div>
+              <p className="font-medium text-gray-900">
+                {booking.startTime} - {booking.endTime} (
+                {booking.durationMinutes} min)
+              </p>
             </div>
           </div>
 
-          {/* Détails Client */}
           <div className="space-y-4">
             <h3 className="font-semibold text-gray-900 border-b pb-2">
-              Client & Équipe
+              Client
             </h3>
-
             <div className="flex items-start gap-3">
               <Shield className="w-5 h-5 text-blue-500 mt-1" />
               <div>
-                <p className="font-medium text-gray-900">{booking.team_name}</p>
-                <p className="text-sm text-gray-500">Équipe organisatrice</p>
+                <p className="font-medium text-gray-900">{booking.teamName}</p>
+                <p className="text-sm text-gray-500">Équipe</p>
               </div>
             </div>
-
             <div className="flex items-start gap-3">
               <User className="w-5 h-5 text-gray-400 mt-1" />
               <div>
                 <p className="font-medium text-gray-900">
-                  {booking.booker_first_name} {booking.booker_last_name}
+                  {booking.bookerFirstName} {booking.bookerLastName}
                 </p>
-                <p className="text-sm text-gray-500">Responsable réservation</p>
+                <p className="text-sm text-gray-500">Contact</p>
               </div>
             </div>
-
             <div className="flex items-center gap-3">
               <Mail className="w-5 h-5 text-gray-400" />
               <a
-                href={`mailto:${booking.booker_email}`}
+                href={`mailto:${booking.bookerEmail}`}
                 className="text-sm text-blue-600 hover:underline"
               >
-                {booking.booker_email}
+                {booking.bookerEmail}
               </a>
             </div>
-
-            {booking.booker_phone && (
+            {booking.bookerPhone && (
               <div className="flex items-center gap-3">
                 <Phone className="w-5 h-5 text-gray-400" />
                 <a
-                  href={`tel:${booking.booker_phone}`}
+                  href={`tel:${booking.bookerPhone}`}
                   className="text-sm text-blue-600 hover:underline"
                 >
-                  {booking.booker_phone}
+                  {booking.bookerPhone}
                 </a>
               </div>
             )}
           </div>
         </div>
 
-        {/* Zone d'action pour les réservations en attente */}
         {booking.status === "pending" && (
           <div className="bg-gray-50 p-6 border-t border-gray-200">
             <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
-              <MessageSquare className="w-5 h-5" /> Répondre à la demande
+              <MessageSquare className="w-5 h-5" /> Réponse propriétaire
             </h3>
-
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Message (optionnel)
-              </label>
-              <textarea
-                value={responseMessage}
-                onChange={(e) => setResponseMessage(e.target.value)}
-                placeholder="Ajoutez une note pour le client..."
-                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 outline-none h-24 resize-none"
-              />
-            </div>
-
+            <textarea
+              value={responseMessage}
+              onChange={(e) => setResponseMessage(e.target.value)}
+              placeholder="Message pour le client (optionnel)..."
+              className="w-full p-3 border border-gray-300 rounded-lg mb-4 focus:ring-2 focus:ring-green-500 outline-none"
+              rows="3"
+            />
             <div className="flex gap-4">
               <button
                 onClick={() => handleResponse("accept")}
                 disabled={processing}
-                className="flex-1 bg-green-600 text-white py-3 px-4 rounded-lg font-bold hover:bg-green-700 transition flex items-center justify-center gap-2 disabled:opacity-50"
+                className="flex-1 bg-green-600 text-white py-2 px-4 rounded-lg font-bold hover:bg-green-700 transition flex justify-center items-center gap-2"
               >
-                <Check className="w-5 h-5" /> Accepter la réservation
+                <Check className="w-5 h-5" /> Accepter
               </button>
               <button
                 onClick={() => handleResponse("reject")}
                 disabled={processing}
-                className="flex-1 bg-white text-red-600 border border-red-200 py-3 px-4 rounded-lg font-bold hover:bg-red-50 transition flex items-center justify-center gap-2 disabled:opacity-50"
+                className="flex-1 bg-white text-red-600 border border-red-200 py-2 px-4 rounded-lg font-bold hover:bg-red-50 transition flex justify-center items-center gap-2"
               >
                 <X className="w-5 h-5" /> Refuser
               </button>

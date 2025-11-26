@@ -72,7 +72,8 @@ const InvitePlayerModal = ({ team, onClose, onPlayerInvited }) => {
         await Promise.all(
           selectedPlayers.map((p) =>
             axios.post(`${API_BASE_URL}/teams/${team.id}/invite`, {
-              playerId: p.id,
+              // CORRECTION ICI : 'userIdOrEmail' au lieu de 'playerId'
+              userIdOrEmail: p.id,
               message: invitationMessage,
             })
           )
@@ -88,7 +89,12 @@ const InvitePlayerModal = ({ team, onClose, onPlayerInvited }) => {
       }
       setTimeout(onPlayerInvited, 1000);
     } catch (error) {
-      toast.error(error.response?.data?.error || "Erreur lors de l'envoi");
+      // Amélioration de l'affichage de l'erreur
+      const errorMessage =
+        error.response?.data?.errors?.[0]?.msg || // Erreur de validation array
+        error.response?.data?.error || // Erreur simple
+        "Erreur lors de l'envoi";
+      toast.error(errorMessage);
     } finally {
       setSending(false);
     }
