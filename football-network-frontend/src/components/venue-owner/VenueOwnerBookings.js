@@ -14,16 +14,22 @@ const VenueOwnerBookings = () => {
   const [loading, setLoading] = useState(true);
   const [bookings, setBookings] = useState([]);
   const [filter, setFilter] = useState(searchParams.get('status') || 'all');
+  const venueIdFromUrl = searchParams.get('venue_id');
 
   useEffect(() => {
     loadBookings();
-  }, [filter]);
+  }, [filter, venueIdFromUrl]);
 
   const loadBookings = async () => {
     try {
       setLoading(true);
       const token = localStorage.getItem('token');
-      const params = filter !== 'all' ? `?status=${filter}` : '';
+
+      // Build query params
+      const queryParams = new URLSearchParams();
+      if (filter !== 'all') queryParams.append('status', filter);
+      if (venueIdFromUrl) queryParams.append('venue_id', venueIdFromUrl);
+      const params = queryParams.toString() ? `?${queryParams.toString()}` : '';
 
       const response = await axios.get(`${API_BASE_URL}/venue-owner/bookings${params}`, {
         headers: { Authorization: `Bearer ${token}` }
@@ -87,21 +93,18 @@ const VenueOwnerBookings = () => {
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center min-h-screen">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      <div className="flex justify-center items-center h-96">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600"></div>
       </div>
     );
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-8">
-      {/* Header */}
+    <>
+      {/* Summary */}
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">
-          Gestion des Réservations
-        </h1>
-        <p className="text-gray-600">
-          {bookings.length} réservation{bookings.length > 1 ? 's' : ''}
+        <p className="text-lg text-gray-700">
+          <span className="font-semibold text-green-600">{bookings.length}</span> réservation{bookings.length > 1 ? 's' : ''}
         </p>
       </div>
 
@@ -268,7 +271,7 @@ const VenueOwnerBookings = () => {
           })}
         </div>
       )}
-    </div>
+    </>
   );
 };
 

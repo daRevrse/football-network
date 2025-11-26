@@ -4,6 +4,7 @@ import {
   useState,
   useEffect,
   useCallback,
+  useMemo,
 } from "react";
 import { useAuth } from "./AuthContext";
 import axios from "axios";
@@ -15,9 +16,8 @@ const UserContext = createContext();
 
 export const useUserProfile = () => {
   const context = useContext(UserContext);
-  if (!context) {
+  if (!context)
     throw new Error("useUserProfile must be used within UserProfileProvider");
-  }
   return context;
 };
 
@@ -34,50 +34,64 @@ export const UserProfileProvider = ({ children }) => {
       return;
     }
 
+    // Évite de déclencher un re-render si on charge déjà
+    setLoading(true);
+
     try {
-      setLoading(true);
       const response = await axios.get(`${API_BASE_URL}/users/profile`);
 
       if (response.data.profilePictureUrl) {
-        const fullUrl = `${API_BASE_URL.replace("/api", "")}${
-          response.data.profilePictureUrl
-        }`;
-        setProfilePictureUrl(fullUrl);
+        setProfilePictureUrl(
+          `${API_BASE_URL.replace("/api", "")}${
+            response.data.profilePictureUrl
+          }`
+        );
       }
 
       if (response.data.coverPhotoUrl) {
-        const fullUrl = `${API_BASE_URL.replace("/api", "")}${
-          response.data.coverPhotoUrl
-        }`;
-        setCoverPhotoUrl(fullUrl);
+        setCoverPhotoUrl(
+          `${API_BASE_URL.replace("/api", "")}${response.data.coverPhotoUrl}`
+        );
       }
     } catch (error) {
       console.error("Error loading profile data:", error);
     } finally {
       setLoading(false);
     }
-  }, [user]);
+  }, [user]); // Dépendance stable grâce au useMemo dans AuthContext
 
   useEffect(() => {
     loadProfileData();
   }, [loadProfileData]);
 
-  const refreshProfilePicture = useCallback((newUrl) => {
-    setProfilePictureUrl(newUrl);
-  }, []);
+  const refreshProfilePicture = useCallback(
+    (newUrl) => setProfilePictureUrl(newUrl),
+    []
+  );
+  const refreshCoverPhoto = useCallback(
+    (newUrl) => setCoverPhotoUrl(newUrl),
+    []
+  );
 
-  const refreshCoverPhoto = useCallback((newUrl) => {
-    setCoverPhotoUrl(newUrl);
-  }, []);
-
-  const value = {
-    profilePictureUrl,
-    coverPhotoUrl,
-    loading,
-    refreshProfilePicture,
-    refreshCoverPhoto,
-    loadProfileData,
-  };
+  // CRITIQUE : useMemo pour éviter que les consommateurs (Navbar, etc.) ne re-rendent en boucle
+  const value = useMemo(
+    () => ({
+      profilePictureUrl,
+      coverPhotoUrl,
+      loading,
+      refreshProfilePicture,
+      refreshCoverPhoto,
+      loadProfileData,
+    }),
+    [
+      profilePictureUrl,
+      coverPhotoUrl,
+      loading,
+      refreshProfilePicture,
+      refreshCoverPhoto,
+      loadProfileData,
+    ]
+  );
 
   return <UserContext.Provider value={value}>{children}</UserContext.Provider>;
 };
