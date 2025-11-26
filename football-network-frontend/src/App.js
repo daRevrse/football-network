@@ -28,8 +28,21 @@ import TeamDetails from "./components/teams/TeamDetails";
 import PlayerInvitations from "./components/invitations/PlayerInvitations";
 import MatchValidation from "./components/matches/MatchValidation";
 import PendingValidations from "./components/matches/PendingValidations";
+import MatchParticipations from "./components/matches/MatchParticipations";
+import MyPendingParticipations from "./components/matches/MyPendingParticipations";
 import Feed from "./components/Feed";
 import LandingFeed from "./components/LandingFeed";
+// Phase 2 - Venues et Referees
+import VenueSearch from "./components/venues/VenueSearch";
+import VenueDetails from "./components/venues/VenueDetails";
+import RefereeSearch from "./components/referees/RefereeSearch";
+// Phase 4 - Admin
+import AdminDashboard from "./components/admin/AdminDashboard";
+// Phase 5 - Venue Owner
+import VenueOwnerDashboard from "./components/venue-owner/VenueOwnerDashboard";
+import VenueOwnerBookings from "./components/venue-owner/VenueOwnerBookings";
+// Protection de routes par rôle
+import { ManagerOnlyRoute, SuperadminOnlyRoute, PlayerOrManagerRoute } from "./components/routes/RoleProtectedRoute";
 import "./index.css";
 
 // Composant de protection des routes
@@ -180,9 +193,9 @@ function App() {
                 <Route
                   path="/matches"
                   element={
-                    <ProtectedRoute>
+                    <ManagerOnlyRoute>
                       <Matches />
-                    </ProtectedRoute>
+                    </ManagerOnlyRoute>
                   }
                 />
                 <Route
@@ -210,10 +223,88 @@ function App() {
                   }
                 />
                 <Route
+                  path="/matches/:matchId/participations"
+                  element={
+                    <ProtectedRoute>
+                      <MatchParticipations />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/my-participations"
+                  element={
+                    <ProtectedRoute>
+                      <MyPendingParticipations />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
                   path="/calendar"
                   element={
                     <ProtectedRoute>
                       <Calendar />
+                    </ProtectedRoute>
+                  }
+                />
+
+                {/* Phase 2 - Routes Venues et Referees */}
+                <Route
+                  path="/venues"
+                  element={
+                    <ProtectedRoute>
+                      <VenueSearch />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/venues/:id"
+                  element={
+                    <ProtectedRoute>
+                      <VenueDetails />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/referees"
+                  element={
+                    <ManagerOnlyRoute>
+                      <RefereeSearch />
+                    </ManagerOnlyRoute>
+                  }
+                />
+
+                {/* Phase 4 - Routes Admin (Superadmin uniquement) */}
+                <Route
+                  path="/admin"
+                  element={
+                    <SuperadminOnlyRoute>
+                      <AdminDashboard />
+                    </SuperadminOnlyRoute>
+                  }
+                />
+
+                {/* Phase 5 - Routes Venue Owner */}
+                <Route
+                  path="/venue-owner"
+                  element={
+                    <ProtectedRoute>
+                      <VenueOwnerDashboard />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/venue-owner/bookings"
+                  element={
+                    <ProtectedRoute>
+                      <VenueOwnerBookings />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/venue-owner/bookings/:id"
+                  element={
+                    <ProtectedRoute>
+                      <VenueOwnerBookings />
                     </ProtectedRoute>
                   }
                 />

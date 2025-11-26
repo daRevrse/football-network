@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "Bash(npm install:*)",
-      "Bash(node scripts/createPasswordResetTable.js:*)"
+      "Bash(node scripts/createPasswordResetTable.js:*)",
+      "Bash(node -e:*)"
     ],
     "deny": [],
     "ask": []

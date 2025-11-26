@@ -1,78 +1,245 @@
-// ====== src/screens/auth/RegisterScreen.js ======
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
+  Text,
   ScrollView,
   KeyboardAvoidingView,
   Platform,
+  Alert,
+  TouchableOpacity,
   StatusBar,
   StyleSheet,
-  Text,
-  TouchableOpacity,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
-import { ModernButton } from '../../components/common';
+import {
+  ModernInput,
+  ModernButton,
+  InfoBox,
+  StepIndicator,
+} from '../../components/common';
+import { COLORS, DIMENSIONS, FONTS, SHADOWS } from '../../styles/theme';
 import { useAuthImproved } from '../../utils/hooks/useAuthImproved';
+
+// Import des composants d'étapes (y compris les nouveaux)
 import {
   PersonalInfoStep,
-  SecurityStep,
   FootballProfileStep,
   SummaryStep,
+  UserTypeStep,
+  TeamInfoStep,
 } from './RegisterSteps';
-
-const DARK_THEME = {
-  BG: '#0F172A',
-  SURFACE: '#1E293B',
-  TEXT: '#F8FAFC',
-  TEXT_SEC: '#94A3B8',
-  ACCENT: '#22C55E',
-  BORDER: '#334155',
-};
 
 export const RegisterScreen = ({ navigation }) => {
   const [currentStep, setCurrentStep] = useState(1);
   const [formData, setFormData] = useState({
+    userType: 'player', // 'player' | 'manager'
+
+    // Étape : Informations personnelles
     firstName: '',
     lastName: '',
     email: '',
-    phone: '',
     password: '',
     confirmPassword: '',
-    position: '',
-    skillLevel: '',
+    phone: '',
+    birthDate: '',
+
+    // Étape : Football (Joueur)
+    position: 'any',
+    skillLevel: 'amateur',
+
+    // Étape : Équipe (Manager)
+    teamName: '',
+
+    // Étape : Localisation
     locationCity: '',
+    locationLatitude: null,
+    locationLongitude: null,
   });
+
   const [errors, setErrors] = useState({});
-  const { signup, isLoading } = useAuthImproved();
+  const { signup, isLoading, error: authError } = useAuthImproved();
 
-  // ... (Logique de validation identique à avant, je garde l'essentiel) ...
-  const updateField = (field, value) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
-    setErrors(prev => ({ ...prev, [field]: null }));
+  // Définition dynamique des étapes selon le rôle
+  const getSteps = () => {
+    const baseSteps = [
+      { id: 'role', label: 'Rôle', icon: 'users' },
+      { id: 'personal', label: 'Personnel', icon: 'user' },
+    ];
+
+    if (formData.userType === 'manager') {
+      baseSteps.push({ id: 'team', label: 'Équipe', icon: 'shield' });
+    } else {
+      baseSteps.push({ id: 'football', label: 'Football', icon: 'activity' });
+    }
+
+    baseSteps.push({ id: 'location', label: 'Localisation', icon: 'map-pin' });
+    baseSteps.push({ id: 'confirm', label: 'Fin', icon: 'check-circle' });
+
+    return baseSteps;
   };
 
-  const handleNext = () => {
-    // Validation simplifiée pour l'exemple
-    if (currentStep < 4) setCurrentStep(p => p + 1);
-    else handleSignup();
-  };
+  const STEPS = getSteps();
 
-  const handleSignup = async () => {
-    await signup(formData);
-    // Gérer le succès/échec
-  };
+  const updateField = useCallback(
+    (field, value) => {
+      setFormData(prev => ({ ...prev, [field]: value }));
+      if (errors[field]) {
+        setErrors(prev => ({ ...prev, [field]: null }));
+      }
+    },
+    [errors],
+  );
 
-  const renderStep = () => {
-    const props = { formData, updateField, errors, theme: DARK_THEME };
+  const validateStep = useCallback(
+    step => {
+      const newErrors = {};
+
+      // Note : Les numéros d'étape correspondent à l'index + 1
+      switch (step) {
+        case 1: // Rôle
+          // Pas de validation nécessaire, valeur par défaut
+          break;
+
+        case 2: // Informations personnelles
+          if (!formData.firstName?.trim()) newErrors.firstName = 'Requis';
+          if (!formData.lastName?.trim()) newErrors.lastName = 'Requis';
+          if (!formData.email?.trim()) {
+            newErrors.email = 'Requis';
+          } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
+            newErrors.email = 'Invalide';
+          }
+          if (!formData.password) {
+            newErrors.password = 'Requis';
+          } else if (formData.password.length < 6) {
+            newErrors.password = 'Min 6 car.';
+          }
+          if (formData.password !== formData.confirmPassword) {
+            newErrors.confirmPassword = 'Ne correspond pas';
+          }
+          break;
+
+        case 3: // Football OU Équipe
+          if (formData.userType === 'manager') {
+            if (!formData.teamName?.trim()) {
+              newErrors.teamName = "Le nom de l'équipe est requis";
+            } else if (formData.teamName.length < 3) {
+              newErrors.teamName = 'Min 3 caractères';
+            }
+          } else {
+            if (!formData.position) newErrors.position = 'Requis';
+            if (!formData.skillLevel) newErrors.skillLevel = 'Requis';
+          }
+          break;
+
+        case 4: // Localisation
+          if (!formData.locationCity?.trim()) {
+            newErrors.locationCity = 'La ville est requise';
+          }
+          break;
+      }
+
+      setErrors(newErrors);
+      return Object.keys(newErrors).length === 0;
+    },
+    [formData, currentStep],
+  );
+
+  const nextStep = useCallback(() => {
+    if (validateStep(currentStep)) {
+      setCurrentStep(prev => Math.min(prev + 1, STEPS.length));
+    }
+  }, [currentStep, validateStep, STEPS.length]);
+
+  const previousStep = useCallback(() => {
+    setCurrentStep(prev => Math.max(prev - 1, 1));
+  }, []);
+
+  const handleSignup = useCallback(async () => {
+    if (!validateStep(STEPS.length)) return;
+
+    // Préparer les données
+    const userData = {
+      userType: formData.userType,
+      firstName: formData.firstName.trim(),
+      lastName: formData.lastName.trim(),
+      email: formData.email.toLowerCase().trim(),
+      password: formData.password,
+      phone: formData.phone?.trim() || '',
+      locationCity: formData.locationCity.trim(),
+    };
+
+    if (formData.userType === 'manager') {
+      userData.teamName = formData.teamName.trim();
+    } else {
+      userData.position = formData.position;
+      userData.skillLevel = formData.skillLevel;
+    }
+
+    const result = await signup(userData);
+
+    if (result.success) {
+      Alert.alert(
+        'Bienvenue !',
+        formData.userType === 'manager'
+          ? `Compte créé et équipe "${formData.teamName}" initialisée !`
+          : `Compte créé avec succès !`,
+        [{ text: 'Commencer', onPress: () => {} }],
+      );
+    } else {
+      Alert.alert('Erreur', result.error || 'Impossible de créer le compte', [
+        { text: 'OK' },
+      ]);
+    }
+  }, [formData, validateStep, signup, STEPS.length]);
+
+  // Rendu du contenu de l'étape
+  const renderStepContent = () => {
     switch (currentStep) {
       case 1:
-        return <PersonalInfoStep {...props} />;
+        return <UserTypeStep formData={formData} updateField={updateField} />;
       case 2:
-        return <SecurityStep {...props} />;
+        return (
+          <PersonalInfoStep
+            formData={formData}
+            updateField={updateField}
+            errors={errors}
+          />
+        );
       case 3:
-        return <FootballProfileStep {...props} />;
+        return formData.userType === 'manager' ? (
+          <TeamInfoStep
+            formData={formData}
+            updateField={updateField}
+            errors={errors}
+          />
+        ) : (
+          <FootballProfileStep
+            formData={formData}
+            updateField={updateField}
+            errors={errors}
+          />
+        );
       case 4:
-        return <SummaryStep {...props} />;
+        return (
+          <View>
+            <Text style={styles.stepTitle}>
+              Où{' '}
+              {formData.userType === 'manager'
+                ? 'est basée votre équipe'
+                : 'jouez-vous'}{' '}
+              ?
+            </Text>
+            <ModernInput
+              icon="map-pin"
+              placeholder="Ville"
+              value={formData.locationCity}
+              onChangeText={value => updateField('locationCity', value)}
+              error={errors.locationCity}
+            />
+          </View>
+        );
+      case 5:
+        return <SummaryStep formData={formData} />;
       default:
         return null;
     }
@@ -80,95 +247,93 @@ export const RegisterScreen = ({ navigation }) => {
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={DARK_THEME.BG} />
-
-      {/* Custom Header */}
-      <View style={styles.header}>
-        <TouchableOpacity
-          onPress={() =>
-            currentStep > 1 ? setCurrentStep(c => c - 1) : navigation.goBack()
-          }
-          style={styles.backBtn}
-        >
-          <Icon name="arrow-left" size={24} color={DARK_THEME.TEXT} />
-        </TouchableOpacity>
-        <View style={styles.progressContainer}>
-          <View
-            style={[
-              styles.progressBar,
-              { width: `${(currentStep / 4) * 100}%` },
-            ]}
-          />
-        </View>
-        <Text style={styles.stepText}>{currentStep}/4</Text>
-      </View>
-
+      <StatusBar
+        barStyle="dark-content"
+        backgroundColor={COLORS.BACKGROUND_LIGHT}
+      />
       <KeyboardAvoidingView
-        style={{ flex: 1 }}
+        style={styles.keyboardView}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
-        <ScrollView contentContainerStyle={styles.content}>
-          {renderStep()}
-        </ScrollView>
-      </KeyboardAvoidingView>
+        <View style={styles.stepIndicatorContainer}>
+          <StepIndicator steps={STEPS} currentStep={currentStep} />
+        </View>
 
-      <View style={styles.footer}>
-        <ModernButton
-          title={currentStep === 4 ? "VALIDER L'INSCRIPTION" : 'SUIVANT'}
-          onPress={handleNext}
-          variant="primary"
-          isLoading={isLoading}
-          style={styles.nextButton}
-        />
-      </View>
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollContent}
+        >
+          {authError && (
+            <InfoBox
+              type="error"
+              message={authError}
+              style={{ marginBottom: 20 }}
+            />
+          )}
+          {renderStepContent()}
+        </ScrollView>
+
+        <View style={styles.footer}>
+          <View style={styles.buttonContainer}>
+            {currentStep > 1 && (
+              <ModernButton
+                title="Précédent"
+                onPress={previousStep}
+                variant="outline"
+                size="small"
+                disabled={isLoading}
+              />
+            )}
+            <View style={styles.spacer} />
+            {currentStep < STEPS.length ? (
+              <ModernButton
+                title="Suivant"
+                onPress={nextStep}
+                variant="primary"
+                disabled={isLoading}
+              />
+            ) : (
+              <ModernButton
+                title="Créer mon compte"
+                onPress={handleSignup}
+                isLoading={isLoading}
+                variant="primary"
+              />
+            )}
+          </View>
+
+          <View style={styles.loginLink}>
+            <Text style={styles.loginLinkText}>Déjà un compte ? </Text>
+            <TouchableOpacity onPress={() => navigation.navigate('Login')}>
+              <Text style={styles.loginLinkButton}>Se connecter</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </KeyboardAvoidingView>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: DARK_THEME.BG,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: Platform.OS === 'ios' ? 60 : 30,
+  container: { flex: 1, backgroundColor: COLORS.BACKGROUND_LIGHT },
+  keyboardView: { flex: 1 },
+  stepIndicatorContainer: {
+    paddingTop: Platform.OS === 'ios' ? 60 : 20,
     paddingBottom: 20,
+    backgroundColor: COLORS.WHITE,
   },
-  backBtn: {
-    padding: 8,
-    marginRight: 16,
-  },
-  progressContainer: {
-    flex: 1,
-    height: 4,
-    backgroundColor: DARK_THEME.SURFACE,
-    borderRadius: 2,
-    marginRight: 16,
-  },
-  progressBar: {
-    height: '100%',
-    backgroundColor: DARK_THEME.ACCENT,
-    borderRadius: 2,
-  },
-  stepText: {
-    color: DARK_THEME.TEXT_SEC,
+  scrollView: { flex: 1 },
+  scrollContent: { flexGrow: 1, padding: DIMENSIONS.CONTAINER_PADDING },
+  footer: { padding: 20, backgroundColor: COLORS.WHITE, ...SHADOWS.LARGE },
+  buttonContainer: { flexDirection: 'row', marginBottom: 15 },
+  spacer: { flex: 1 },
+  stepTitle: {
+    fontSize: 24,
     fontWeight: 'bold',
+    marginBottom: 10,
+    color: COLORS.TEXT_PRIMARY,
   },
-  content: {
-    padding: 24,
-  },
-  footer: {
-    padding: 24,
-    backgroundColor: DARK_THEME.BG,
-    borderTopWidth: 1,
-    borderTopColor: DARK_THEME.BORDER,
-  },
-  nextButton: {
-    backgroundColor: DARK_THEME.ACCENT,
-    height: 56,
-    borderRadius: 16,
-  },
+  loginLink: { flexDirection: 'row', justifyContent: 'center' },
+  loginLinkText: { color: COLORS.TEXT_MUTED },
+  loginLinkButton: { color: COLORS.PRIMARY, fontWeight: 'bold' },
 });

@@ -1,20 +1,16 @@
 import React, { useState } from "react";
 import {
-  Users,
   MapPin,
   Star,
-  Calendar,
-  Settings,
-  LogOut,
   Crown,
-  Trophy,
   MoreVertical,
   Edit,
   Trash2,
   MessageCircle,
   Eye,
-  Target,
+  LogOut,
   Shield,
+  Settings,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 
@@ -238,6 +234,7 @@ const TeamCard = ({ team, onLeaveTeam, isOwner, onEditTeam, onDeleteTeam }) => {
               <Settings className="w-4 h-4" />
             </button>
           ) : (
+            /* Le bouton Quitter est rendu ici si onLeaveTeam est passé */
             <button
               onClick={() => onLeaveTeam(team.id, team.name)}
               className="flex items-center justify-center p-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors"

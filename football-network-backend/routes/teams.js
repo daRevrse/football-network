@@ -108,12 +108,15 @@ router.get("/", authenticateToken, async (req, res) => {
       offset = 0,
     } = req.query;
 
+    // CORRECTION : Jointure supplémentaire avec users (u_mem) pour filtrer le count
     let query = `
       SELECT t.id, t.name, t.description, t.skill_level, t.max_players,
              t.location_city, t.location_lat, t.location_lng, t.created_at,
              t.logo_id, t.banner_id,
              u.first_name as captain_first_name, u.last_name as captain_last_name,
-             COUNT(tm.user_id) as current_players,
+             
+             COUNT(CASE WHEN u_mem.user_type = 'player' THEN 1 END) as current_players,
+             
              ts.matches_played, ts.matches_won, ts.average_rating,
              logo_up.stored_filename as logo_filename,
              banner_up.stored_filename as banner_filename, banner_up.variants as banner_variants,
@@ -129,6 +132,7 @@ router.get("/", authenticateToken, async (req, res) => {
       FROM teams t
       LEFT JOIN users u ON t.captain_id = u.id
       LEFT JOIN team_members tm ON t.id = tm.team_id AND tm.is_active = true
+      LEFT JOIN users u_mem ON tm.user_id = u_mem.id  
       LEFT JOIN team_stats ts ON t.id = ts.team_id
       LEFT JOIN uploads logo_up ON t.logo_id = logo_up.id AND logo_up.is_active = true
       LEFT JOIN uploads banner_up ON t.banner_id = banner_up.id AND banner_up.is_active = true
@@ -177,9 +181,13 @@ router.get("/", authenticateToken, async (req, res) => {
       if (team.banner_variants) {
         try {
           const variants = JSON.parse(team.banner_variants);
-          bannerUrl = variants.medium?.path || variants.large?.path || variants.small?.path || null;
+          bannerUrl =
+            variants.medium?.path ||
+            variants.large?.path ||
+            variants.small?.path ||
+            null;
         } catch (e) {
-          console.error('Error parsing banner variants:', e);
+          console.error("Error parsing banner variants:", e);
         }
       }
 
@@ -189,9 +197,11 @@ router.get("/", authenticateToken, async (req, res) => {
         description: team.description,
         skillLevel: team.skill_level,
         maxPlayers: team.max_players,
-        currentPlayers: team.current_players,
+        currentPlayers: team.current_players, // Contient maintenant uniquement les joueurs
         locationCity: team.location_city,
-        logoUrl: team.logo_filename ? `/uploads/teams/${team.logo_filename}` : null,
+        logoUrl: team.logo_filename
+          ? `/uploads/teams/${team.logo_filename}`
+          : null,
         bannerUrl,
         captain: {
           firstName: team.captain_first_name,
@@ -214,51 +224,10 @@ router.get("/", authenticateToken, async (req, res) => {
   }
 });
 
-// GET /api/teams/my - Récupérer les équipes de l'utilisateur
-// router.get("/my", authenticateToken, async (req, res) => {
-//   try {
-//     const [teams] = await db.execute(
-//       `SELECT t.id, t.name, t.description, t.skill_level, t.max_players,
-//               t.location_city, t.created_at,
-//               tm.role,
-//               COUNT(tm2.user_id) as current_players,
-//               ts.matches_played, ts.matches_won, ts.average_rating
-//        FROM teams t
-//        JOIN team_members tm ON t.id = tm.team_id
-//        LEFT JOIN team_members tm2 ON t.id = tm2.team_id AND tm2.is_active = true
-//        LEFT JOIN team_stats ts ON t.id = ts.team_id
-//        WHERE tm.user_id = ? AND tm.is_active = true AND t.is_active = true
-//        GROUP BY t.id, tm.role, ts.matches_played, ts.matches_won, ts.average_rating
-//        ORDER BY tm.role DESC, t.created_at DESC`,
-//       [req.user.id]
-//     );
-
-//     const formattedTeams = teams.map((team) => ({
-//       id: team.id,
-//       name: team.name,
-//       description: team.description,
-//       skillLevel: team.skill_level,
-//       maxPlayers: team.max_players,
-//       currentPlayers: team.current_players,
-//       locationCity: team.location_city,
-//       role: team.role,
-//       stats: {
-//         matchesPlayed: team.matches_played || 0,
-//         matchesWon: team.matches_won || 0,
-//         averageRating: team.average_rating || 0,
-//       },
-//       createdAt: team.created_at,
-//     }));
-
-//     res.json(formattedTeams);
-//   } catch (error) {
-//     console.error("Get my teams error:", error);
-//     res.status(500).json({ error: "Internal server error" });
-//   }
-// });
 // GET /api/teams/my - Récupérer les équipes de l'utilisateur (avec logo)
 router.get("/my", authenticateToken, async (req, res) => {
   try {
+    // CORRECTION : Jointure u_mem2 pour filtrer le count des joueurs
     const [teams] = await db.execute(
       `SELECT
           t.id,
@@ -275,13 +244,16 @@ router.get("/my", authenticateToken, async (req, res) => {
           banner_up.stored_filename AS banner_filename,
           banner_up.variants AS banner_variants,
           tm.role,
-          COUNT(tm2.user_id) AS current_players,
+          
+          COUNT(CASE WHEN u_mem2.user_type = 'player' THEN 1 END) AS current_players,
+          
           ts.matches_played,
           ts.matches_won,
           ts.average_rating
        FROM teams t
        JOIN team_members tm ON t.id = tm.team_id
        LEFT JOIN team_members tm2 ON t.id = tm2.team_id AND tm2.is_active = true
+       LEFT JOIN users u_mem2 ON tm2.user_id = u_mem2.id
        LEFT JOIN team_stats ts ON t.id = ts.team_id
        LEFT JOIN uploads logo_up ON t.logo_id = logo_up.id AND logo_up.is_active = true
        LEFT JOIN uploads banner_up ON t.banner_id = banner_up.id AND banner_up.is_active = true
@@ -307,9 +279,13 @@ router.get("/my", authenticateToken, async (req, res) => {
       if (team.banner_variants) {
         try {
           const variants = JSON.parse(team.banner_variants);
-          bannerUrl = variants.medium?.path || variants.large?.path || variants.small?.path || null;
+          bannerUrl =
+            variants.medium?.path ||
+            variants.large?.path ||
+            variants.small?.path ||
+            null;
         } catch (e) {
-          console.error('Error parsing banner variants:', e);
+          console.error("Error parsing banner variants:", e);
         }
       }
 
@@ -342,90 +318,6 @@ router.get("/my", authenticateToken, async (req, res) => {
   }
 });
 
-// // GET /api/teams/:id - Récupérer les détails d'une équipe
-// router.get("/:id", authenticateToken, async (req, res) => {
-//   try {
-//     const teamId = req.params.id;
-
-//     // Récupérer les informations de l'équipe
-//     const [teams] = await db.execute(
-//       `SELECT t.id, t.name, t.description, t.skill_level, t.max_players,
-//               t.location_city, t.location_lat, t.location_lng, t.created_at,
-//               u.id as captain_id, u.first_name as captain_first_name,
-//               u.last_name as captain_last_name, u.email as captain_email,
-//               ts.matches_played, ts.matches_won, ts.matches_drawn, ts.matches_lost,
-//               ts.goals_scored, ts.goals_conceded, ts.average_rating
-//        FROM teams t
-//        JOIN users u ON t.captain_id = u.id
-//        LEFT JOIN team_stats ts ON t.id = ts.team_id
-//        WHERE t.id = ? AND t.is_active = true`,
-//       [teamId]
-//     );
-
-//     if (teams.length === 0) {
-//       return res.status(404).json({ error: "Team not found" });
-//     }
-
-//     const team = teams[0];
-
-//     // Récupérer les membres de l'équipe
-//     const [members] = await db.execute(
-//       `SELECT u.id, u.first_name, u.last_name, u.position, u.skill_level,
-//               tm.role, tm.joined_at
-//        FROM team_members tm
-//        JOIN users u ON tm.user_id = u.id
-//        WHERE tm.team_id = ? AND tm.is_active = true
-//        ORDER BY tm.role DESC, tm.joined_at ASC`,
-//       [teamId]
-//     );
-
-//     // Vérifier si l'utilisateur fait partie de l'équipe
-//     const userMembership = members.find((member) => member.id === req.user.id);
-
-//     res.json({
-//       id: team.id,
-//       name: team.name,
-//       description: team.description,
-//       skillLevel: team.skill_level,
-//       maxPlayers: team.max_players,
-//       currentPlayers: members.length,
-//       locationCity: team.location_city,
-//       coordinates: {
-//         lat: team.location_lat,
-//         lng: team.location_lng,
-//       },
-//       captain: {
-//         id: team.captain_id,
-//         firstName: team.captain_first_name,
-//         lastName: team.captain_last_name,
-//         email: team.captain_email,
-//       },
-//       members: members.map((member) => ({
-//         id: member.id,
-//         firstName: member.first_name,
-//         lastName: member.last_name,
-//         position: member.position,
-//         skillLevel: member.skill_level,
-//         role: member.role,
-//         joinedAt: member.joined_at,
-//       })),
-//       stats: {
-//         matchesPlayed: team.matches_played || 0,
-//         matchesWon: team.matches_won || 0,
-//         matchesDrawn: team.matches_drawn || 0,
-//         matchesLost: team.matches_lost || 0,
-//         goalsScored: team.goals_scored || 0,
-//         goalsConceded: team.goals_conceded || 0,
-//         averageRating: team.average_rating || 0,
-//       },
-//       userRole: userMembership?.role || null,
-//       createdAt: team.created_at,
-//     });
-//   } catch (error) {
-//     console.error("Get team details error:", error);
-//     res.status(500).json({ error: "Internal server error" });
-//   }
-// });
 // GET /api/teams/:id - Récupérer les détails d'une équipe avec logo
 router.get("/:id", authenticateToken, async (req, res) => {
   try {
@@ -457,25 +349,29 @@ router.get("/:id", authenticateToken, async (req, res) => {
 
     const team = teams[0];
 
-    // Construire l'URL du logo
+    // URL Logo
     const logoUrl = team.logo_filename
       ? `/uploads/teams/${team.logo_filename}`
       : null;
 
-    // Construire l'URL de la bannière à partir des variants
+    // URL Bannière
     let bannerUrl = null;
     if (team.banner_variants) {
       try {
         const variants = JSON.parse(team.banner_variants);
-        bannerUrl = variants.medium?.path || variants.large?.path || variants.small?.path || null;
+        bannerUrl =
+          variants.medium?.path ||
+          variants.large?.path ||
+          variants.small?.path ||
+          null;
       } catch (e) {
-        console.error('Error parsing banner variants:', e);
+        console.error("Error parsing banner variants:", e);
       }
     }
 
-    // Récupérer les membres de l'équipe
+    // CORRECTION : Récupérer u.user_type pour le filtrage
     const [members] = await db.execute(
-      `SELECT u.id, u.first_name, u.last_name, u.position, u.skill_level,
+      `SELECT u.id, u.first_name, u.last_name, u.position, u.skill_level, u.user_type,
               tm.role, tm.joined_at
        FROM team_members tm
        JOIN users u ON tm.user_id = u.id
@@ -484,17 +380,18 @@ router.get("/:id", authenticateToken, async (req, res) => {
       [teamId]
     );
 
-    // Vérifier si l'utilisateur fait partie de l'équipe
     const userMembership = members.find((member) => member.id === req.user.id);
 
-    // Réponse finale formatée
+    // Calculer le nombre de joueurs (exclure les managers)
+    const playerCount = members.filter((m) => m.user_type === "player").length;
+
     res.json({
       id: team.id,
       name: team.name,
       description: team.description,
       skillLevel: team.skill_level,
       maxPlayers: team.max_players,
-      currentPlayers: members.length,
+      currentPlayers: playerCount, // Utilisation du compte filtré
       locationCity: team.location_city,
       coordinates: {
         lat: team.location_lat,
@@ -508,13 +405,14 @@ router.get("/:id", authenticateToken, async (req, res) => {
       },
       logoUrl,
       bannerUrl,
-      bannerPosition: team.banner_position || 'center',
+      bannerPosition: team.banner_position || "center",
       members: members.map((member) => ({
         id: member.id,
         firstName: member.first_name,
         lastName: member.last_name,
         position: member.position,
         skillLevel: member.skill_level,
+        userType: member.user_type, // Renvoi du type pour le frontend
         role: member.role,
         joinedAt: member.joined_at,
       })),
@@ -541,11 +439,14 @@ router.post("/:id/join", authenticateToken, async (req, res) => {
   try {
     const teamId = req.params.id;
 
-    // Vérifier que l'équipe existe et a de la place
+    // CORRECTION : Compter uniquement les joueurs pour vérifier la capacité
     const [teams] = await db.execute(
-      `SELECT t.max_players, COUNT(tm.user_id) as current_players, t.name
+      `SELECT t.max_players, 
+              COUNT(CASE WHEN u.user_type = 'player' THEN 1 END) as current_players, 
+              t.name
        FROM teams t
        LEFT JOIN team_members tm ON t.id = tm.team_id AND tm.is_active = true
+       LEFT JOIN users u ON tm.user_id = u.id
        WHERE t.id = ? AND t.is_active = true
        GROUP BY t.id, t.max_players, t.name`,
       [teamId]
@@ -560,7 +461,7 @@ router.post("/:id/join", authenticateToken, async (req, res) => {
       return res.status(400).json({ error: "Team is full" });
     }
 
-    // NOUVELLE SÉCURITÉ : Vérifier qu'il existe une invitation acceptée
+    // Vérifier invitation acceptée (Code existant...)
     const [acceptedInvitation] = await db.execute(
       'SELECT id FROM player_invitations WHERE team_id = ? AND user_id = ? AND status = "accepted"',
       [teamId, req.user.id]
@@ -573,7 +474,7 @@ router.post("/:id/join", authenticateToken, async (req, res) => {
       });
     }
 
-    // Vérifier si l'utilisateur a déjà un enregistrement pour cette équipe
+    // Vérifier membership existant
     const [existingMember] = await db.execute(
       "SELECT id, is_active FROM team_members WHERE team_id = ? AND user_id = ?",
       [teamId, req.user.id]
@@ -583,14 +484,12 @@ router.post("/:id/join", authenticateToken, async (req, res) => {
       if (existingMember[0].is_active) {
         return res.status(400).json({ error: "Already a member of this team" });
       } else {
-        // Réactiver le membership existant
         await db.execute(
           "UPDATE team_members SET is_active = true, joined_at = CURRENT_TIMESTAMP WHERE team_id = ? AND user_id = ?",
           [teamId, req.user.id]
         );
       }
     } else {
-      // Créer un nouvel enregistrement
       await db.execute(
         "INSERT INTO team_members (team_id, user_id, role) VALUES (?, ?, ?)",
         [teamId, req.user.id, "player"]
@@ -612,7 +511,6 @@ router.delete("/:id/leave", authenticateToken, async (req, res) => {
   try {
     const teamId = req.params.id;
 
-    // Vérifier que l'utilisateur est membre de l'équipe
     const [membership] = await db.execute(
       "SELECT role FROM team_members WHERE team_id = ? AND user_id = ? AND is_active = true",
       [teamId, req.user.id]
@@ -622,14 +520,12 @@ router.delete("/:id/leave", authenticateToken, async (req, res) => {
       return res.status(400).json({ error: "Not a member of this team" });
     }
 
-    // Un capitaine ne peut pas quitter son équipe (il doit la supprimer ou transférer le capitanat)
     if (membership[0].role === "captain") {
       return res.status(400).json({
         error: "Captain cannot leave team. Transfer captaincy or delete team.",
       });
     }
 
-    // Retirer l'utilisateur de l'équipe
     await db.execute(
       "UPDATE team_members SET is_active = false WHERE team_id = ? AND user_id = ?",
       [teamId, req.user.id]
@@ -642,7 +538,7 @@ router.delete("/:id/leave", authenticateToken, async (req, res) => {
   }
 });
 
-// PUT /api/teams/:id - Mettre à jour une équipe (capitaine seulement)
+// PUT /api/teams/:id - Mettre à jour une équipe
 router.put(
   "/:id",
   [
@@ -664,7 +560,6 @@ router.put(
 
       const teamId = req.params.id;
 
-      // Vérifier que l'utilisateur est le capitaine
       const [membership] = await db.execute(
         "SELECT role FROM team_members WHERE team_id = ? AND user_id = ? AND is_active = true",
         [teamId, req.user.id]
@@ -737,16 +632,13 @@ router.put(
   }
 );
 
-// POST /api/teams/:id/invite - Inviter un joueur (par ID utilisateur)
+// POST /api/teams/:id/invite - Inviter un joueur (par ID, email ou nom)
 router.post(
   "/:id/invite",
   [
     authenticateToken,
-    body("playerId").isInt().withMessage("Player ID is required"),
-    body("message")
-      .optional({ nullable: true, checkFalsy: true })
-      .isLength({ max: 500 })
-      .withMessage("Message too long"),
+    body("userIdOrEmail").trim().notEmpty().withMessage("User ID or email required"),
+    body("message").optional().isLength({ max: 500 }),
   ],
   async (req, res) => {
     try {
@@ -756,117 +648,135 @@ router.post(
       }
 
       const teamId = req.params.id;
-      const { playerId, message } = req.body;
+      const { userIdOrEmail, message } = req.body;
 
-      // Vérifier que l'utilisateur est capitaine de l'équipe
-      const [captainCheck] = await db.execute(
-        'SELECT tm.team_id, t.name as team_name, t.max_players FROM team_members tm JOIN teams t ON tm.team_id = t.id WHERE tm.user_id = ? AND tm.team_id = ? AND tm.role = "captain" AND tm.is_active = true AND t.is_active = true',
-        [req.user.id, teamId]
+      // Vérifier que l'utilisateur est capitaine
+      const [teamCheck] = await db.execute(
+        'SELECT id, name FROM teams WHERE id = ? AND captain_id = ?',
+        [teamId, req.user.id]
       );
 
-      if (captainCheck.length === 0) {
-        return res
-          .status(403)
-          .json({ error: "Only team captain can send invitations" });
+      if (teamCheck.length === 0) {
+        return res.status(403).json({ error: "Only team captain can invite players" });
       }
 
-      const team = captainCheck[0];
+      let userId = null;
+      let invitedEmail = null;
+      let invitedName = null;
 
-      // Vérifier que le joueur à inviter existe
-      const [playerCheck] = await db.execute(
-        "SELECT id, first_name, last_name, email FROM users WHERE id = ? AND is_active = true",
-        [playerId]
-      );
+      // Déterminer si c'est un ID ou un email
+      if (!isNaN(userIdOrEmail)) {
+        // C'est un ID
+        userId = parseInt(userIdOrEmail);
+        const [users] = await db.execute(
+          "SELECT id, email, first_name, last_name FROM users WHERE id = ? AND user_type = 'player'",
+          [userId]
+        );
 
-      if (playerCheck.length === 0) {
-        return res.status(404).json({ error: "Player not found" });
-      }
-
-      const player = playerCheck[0];
-
-      // Vérifier que le joueur n'est pas déjà membre de l'équipe
-      const [memberCheck] = await db.execute(
-        "SELECT id FROM team_members WHERE team_id = ? AND user_id = ? AND is_active = true",
-        [teamId, playerId]
-      );
-
-      if (memberCheck.length > 0) {
-        return res
-          .status(400)
-          .json({ error: "Player is already a member of this team" });
-      }
-
-      // Vérifier qu'il n'y a pas déjà une invitation pending
-      const [existingInvitation] = await db.execute(
-        'SELECT id FROM player_invitations WHERE team_id = ? AND user_id = ? AND status = "pending"',
-        [teamId, playerId]
-      );
-
-      if (existingInvitation.length > 0) {
-        return res
-          .status(400)
-          .json({ error: "Invitation already sent to this player" });
-      }
-
-      // Vérifier que l'équipe a encore de la place
-      const [memberCount] = await db.execute(
-        "SELECT COUNT(*) as count FROM team_members WHERE team_id = ? AND is_active = true",
-        [teamId]
-      );
-
-      if (memberCount[0].count >= team.max_players) {
-        return res.status(400).json({ error: "Team is full" });
-      }
-
-      // Créer l'invitation avec expiration dans 7 jours
-      const expiresAt = new Date();
-      expiresAt.setDate(expiresAt.getDate() + 7);
-
-      const [result] = await db.execute(
-        "INSERT INTO player_invitations (team_id, user_id, invited_by, message, expires_at) VALUES (?, ?, ?, ?, ?)",
-        [teamId, playerId, req.user.id, message || null, expiresAt]
-      );
-
-      // CORRECTION : Vérifier si le service de notification est disponible
-      if (
-        req.notificationService &&
-        req.notificationService.notifyPlayerInvitation
-      ) {
-        try {
-          await req.notificationService.notifyPlayerInvitation(playerId, {
-            invitationId: result.insertId,
-            teamId: teamId,
-            teamName: team.team_name,
-            inviterName: `${req.user.firstName || "Capitaine"} ${
-              req.user.lastName || ""
-            }`,
-          });
-          console.log("📨 Notification sent for invitation:", result.insertId);
-        } catch (notifError) {
-          console.error("⚠️ Failed to send notification:", notifError);
-          // Ne pas faire échouer la création de l'invitation si la notification échoue
+        if (users.length === 0) {
+          return res.status(404).json({ error: "Player not found" });
         }
+
+        invitedEmail = users[0].email;
+        invitedName = `${users[0].first_name} ${users[0].last_name}`;
       } else {
-        console.log("⚠️ Notification service not available");
+        // C'est un email ou un nom
+        const isEmail = userIdOrEmail.includes('@');
+
+        if (isEmail) {
+          // Recherche par email
+          invitedEmail = userIdOrEmail;
+          const [users] = await db.execute(
+            "SELECT id, first_name, last_name FROM users WHERE email = ? AND user_type = 'player'",
+            [invitedEmail]
+          );
+
+          if (users.length > 0) {
+            userId = users[0].id;
+            invitedName = `${users[0].first_name} ${users[0].last_name}`;
+          }
+        } else {
+          // Recherche par nom
+          invitedName = userIdOrEmail;
+          const searchPattern = `%${userIdOrEmail}%`;
+          const [users] = await db.execute(
+            `SELECT id, email, first_name, last_name
+             FROM users
+             WHERE (CONCAT(first_name, ' ', last_name) LIKE ?
+                    OR first_name LIKE ?
+                    OR last_name LIKE ?)
+             AND user_type = 'player'
+             LIMIT 5`,
+            [searchPattern, searchPattern, searchPattern]
+          );
+
+          if (users.length === 0) {
+            return res.status(404).json({ error: "No player found with this name" });
+          }
+
+          if (users.length > 1) {
+            // Plusieurs résultats, retourner la liste pour que l'utilisateur choisisse
+            return res.status(300).json({
+              message: "Multiple players found, please specify",
+              players: users.map(u => ({
+                id: u.id,
+                name: `${u.first_name} ${u.last_name}`,
+                email: u.email
+              }))
+            });
+          }
+
+          // Un seul résultat
+          userId = users[0].id;
+          invitedEmail = users[0].email;
+          invitedName = `${users[0].first_name} ${users[0].last_name}`;
+        }
       }
+
+      // Vérifier si déjà membre
+      if (userId) {
+        const [existing] = await db.execute(
+          "SELECT id FROM team_members WHERE team_id = ? AND user_id = ? AND is_active = true",
+          [teamId, userId]
+        );
+
+        if (existing.length > 0) {
+          return res.status(400).json({ error: "Player is already a team member" });
+        }
+
+        // Vérifier invitation en attente
+        const [pendingInvites] = await db.execute(
+          "SELECT id FROM player_invitations WHERE team_id = ? AND user_id = ? AND status = 'pending'",
+          [teamId, userId]
+        );
+
+        if (pendingInvites.length > 0) {
+          return res.status(400).json({ error: "Invitation already sent to this player" });
+        }
+      }
+
+      // Générer token pour invitation externe (si pas d'userId)
+      const token = !userId ? require('crypto').randomBytes(32).toString('hex') : null;
+      const tokenExpires = !userId ? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) : null;
+
+      // Créer l'invitation
+      const [result] = await db.execute(
+        `INSERT INTO player_invitations
+         (team_id, user_id, invited_by, invited_email, invited_name, message, invitation_token, token_expires_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [teamId, userId, req.user.id, invitedEmail, invitedName, message || null, token, tokenExpires]
+      );
+
+      // TODO: Envoyer email si invité externe (!userId)
 
       res.status(201).json({
         message: "Invitation sent successfully",
         invitationId: result.insertId,
-        playerName: `${player.first_name} ${player.last_name}`,
-        teamName: team.team_name,
-        expiresAt: expiresAt,
+        invitedPlayer: { email: invitedEmail, name: invitedName },
+        requiresEmailConfirmation: !userId
       });
     } catch (error) {
-      console.error("Send player invitation error:", error);
-
-      // Gérer l'erreur de contrainte unique
-      if (error.code === "ER_DUP_ENTRY") {
-        return res
-          .status(400)
-          .json({ error: "Invitation already exists for this player" });
-      }
-
+      console.error("Invite player error:", error);
       res.status(500).json({ error: "Internal server error" });
     }
   }
@@ -885,61 +795,27 @@ router.post(
   ],
   async (req, res) => {
     try {
-      const errors = validationResult(req);
-      if (!errors.isEmpty()) {
-        return res.status(400).json({ errors: errors.array() });
-      }
-
-      const teamId = req.params.id;
-      const { email, message } = req.body;
-
-      // Vérifier que l'utilisateur est capitaine de l'équipe
-      const [captainCheck] = await db.execute(
-        'SELECT tm.team_id, t.name as team_name FROM team_members tm JOIN teams t ON tm.team_id = t.id WHERE tm.user_id = ? AND tm.team_id = ? AND tm.role = "captain" AND tm.is_active = true AND t.is_active = true',
-        [req.user.id, teamId]
-      );
-
-      if (captainCheck.length === 0) {
-        return res
-          .status(403)
-          .json({ error: "Only team captain can send invitations" });
-      }
-
-      // Vérifier si un utilisateur avec cet email existe déjà
+      const { email } = req.body;
       const [userCheck] = await db.execute(
         "SELECT id FROM users WHERE email = ?",
         [email]
       );
-
       if (userCheck.length > 0) {
-        // Si l'utilisateur existe, créer une invitation normale
-        const playerId = userCheck[0].id;
-
-        // Réutiliser la logique de la route d'invitation normale
-        req.body.playerId = playerId;
-        delete req.body.email; // Supprimer l'email du body
-
-        // Appeler la logique d'invitation par ID
+        req.body.playerId = userCheck[0].id;
+        delete req.body.email;
         return router.stack
           .find(
-            (layer) =>
-              layer.route &&
-              layer.route.path === "/:id/invite" &&
-              layer.route.methods.post
+            (l) =>
+              l.route && l.route.path === "/:id/invite" && l.route.methods.post
           )
-          .route.stack.find((layer) => layer.name === "bound dispatch")
+          .route.stack.find((l) => l.name === "bound dispatch")
           .handle(req, res);
       }
-
-      // TODO: Implémenter l'envoi d'email pour les utilisateurs non inscrits
-      // Pour l'instant, on retourne une erreur explicative
-      res.status(400).json({
-        error:
-          "This email is not registered on the platform. Please ask the person to register first, then you can invite them by searching their name.",
-      });
-    } catch (error) {
-      console.error("Send email invitation error:", error);
-      res.status(500).json({ error: "Internal server error" });
+      res
+        .status(400)
+        .json({ error: "This email is not registered on the platform." });
+    } catch (e) {
+      res.status(500).json({ error: "Server error" });
     }
   }
 );

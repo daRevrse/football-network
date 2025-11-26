@@ -3,13 +3,13 @@ import {
   Plus,
   Users,
   Calendar,
-  Star,
   Settings,
   Search,
   Filter,
   Trophy,
   Shield,
   ArrowUpRight,
+  Briefcase, // Icone Manager
 } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
 import toast from "react-hot-toast";
@@ -38,6 +38,9 @@ const MyTeams = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [filterRole, setFilterRole] = useState("all");
   const [sortBy, setSortBy] = useState("name");
+
+  // Rôle Manager
+  const isManager = user?.userType === "manager";
 
   useEffect(() => {
     loadMyTeams();
@@ -139,6 +142,14 @@ const MyTeams = () => {
   };
 
   const handleLeaveTeam = async (teamId, teamName) => {
+    // Protection spécifique Manager
+    if (isManager) {
+      toast.error(
+        "En tant que manager, vous ne pouvez pas quitter votre équipe. Vous pouvez la supprimer ou transférer le capitanat."
+      );
+      return;
+    }
+
     if (!window.confirm(`Quitter "${teamName}" ?`)) return;
     try {
       await axios.delete(`${API_BASE_URL}/teams/${teamId}/leave`);
@@ -198,12 +209,18 @@ const MyTeams = () => {
         <div className="relative z-10 flex flex-col md:flex-row justify-between items-start md:items-end gap-6">
           <div>
             <h1 className="text-3xl font-bold text-white mb-2 flex items-center">
-              <Shield className="w-8 h-8 mr-3 text-green-400" />
-              Mes Équipes
+              {/* Icône et Titre dynamique */}
+              {isManager ? (
+                <Shield className="w-8 h-8 mr-3 text-green-400" />
+              ) : (
+                <Users className="w-8 h-8 mr-3 text-green-400" />
+              )}
+              {isManager ? "Gestion d'Équipe" : "Mes Équipes"}
             </h1>
             <p className="text-gray-400 max-w-lg">
-              Gérez vos effectifs, consultez vos statistiques et organisez vos
-              prochains matchs depuis votre quartier général.
+              {isManager
+                ? "Gérez votre effectif, vos remplacements et consultez vos statistiques d'équipe."
+                : "Gérez vos effectifs, consultez vos statistiques et organisez vos prochains matchs depuis votre quartier général."}
             </p>
 
             {/* Quick Stats Row */}
@@ -214,12 +231,15 @@ const MyTeams = () => {
                 label="Équipes"
                 color="text-blue-300"
               />
-              <StatBadge
-                icon={Trophy}
-                value={stats.captainTeams}
-                label="Capitaine"
-                color="text-yellow-300"
-              />
+              {/* Le badge Capitaine est moins pertinent pour un manager (toujours capitaine) */}
+              {!isManager && (
+                <StatBadge
+                  icon={Trophy}
+                  value={stats.captainTeams}
+                  label="Capitaine"
+                  color="text-yellow-300"
+                />
+              )}
               <StatBadge
                 icon={Calendar}
                 value={stats.totalMatches}
@@ -240,7 +260,7 @@ const MyTeams = () => {
             className="group flex items-center px-6 py-3 bg-green-500 text-white rounded-xl font-bold hover:bg-green-400 transition-all shadow-lg shadow-green-500/20 hover:shadow-green-500/40 transform hover:-translate-y-0.5"
           >
             <Plus className="w-5 h-5 mr-2 group-hover:rotate-90 transition-transform" />
-            Créer une équipe
+            {isManager ? "Créer une autre équipe" : "Créer une équipe"}
           </button>
         </div>
       </div>
@@ -260,18 +280,21 @@ const MyTeams = () => {
           </div>
 
           <div className="flex gap-3">
-            <div className="relative min-w-[160px]">
-              <Filter className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-              <select
-                value={filterRole}
-                onChange={(e) => setFilterRole(e.target.value)}
-                className="w-full pl-9 pr-8 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-green-500 outline-none appearance-none cursor-pointer text-sm font-medium text-gray-700"
-              >
-                <option value="all">Tous les rôles</option>
-                <option value="captain">Capitaine</option>
-                <option value="player">Joueur</option>
-              </select>
-            </div>
+            {/* Filtre de rôle inutile pour les managers (ils sont tous capitaines) */}
+            {!isManager && (
+              <div className="relative min-w-[160px]">
+                <Filter className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                <select
+                  value={filterRole}
+                  onChange={(e) => setFilterRole(e.target.value)}
+                  className="w-full pl-9 pr-8 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-green-500 outline-none appearance-none cursor-pointer text-sm font-medium text-gray-700"
+                >
+                  <option value="all">Tous les rôles</option>
+                  <option value="captain">Capitaine</option>
+                  <option value="player">Joueur</option>
+                </select>
+              </div>
+            )}
 
             <div className="relative min-w-[160px]">
               <Settings className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
@@ -294,14 +317,19 @@ const MyTeams = () => {
       {teams.length === 0 ? (
         <div className="text-center py-16 bg-white rounded-2xl shadow-sm border-2 border-dashed border-gray-200">
           <div className="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-4">
-            <Users className="w-10 h-10 text-gray-300" />
+            {isManager ? (
+              <Briefcase className="w-10 h-10 text-gray-300" />
+            ) : (
+              <Users className="w-10 h-10 text-gray-300" />
+            )}
           </div>
           <h3 className="text-xl font-bold text-gray-900 mb-2">
-            C'est un peu vide ici
+            {isManager ? "Aucune équipe active" : "C'est un peu vide ici"}
           </h3>
           <p className="text-gray-500 max-w-md mx-auto mb-6">
-            Vous ne faites partie d'aucune équipe pour le moment. Rejoignez une
-            équipe existante ou créez la vôtre pour commencer.
+            {isManager
+              ? "Vous n'avez pas encore d'équipe. Créez-en une pour commencer votre carrière de manager."
+              : "Vous ne faites partie d'aucune équipe pour le moment. Rejoignez une équipe existante ou créez la vôtre."}
           </p>
           <button
             onClick={() => setShowCreateModal(true)}

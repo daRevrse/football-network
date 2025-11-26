@@ -3,6 +3,8 @@ const { body, validationResult } = require("express-validator");
 const db = require("../config/database");
 const { authenticateToken } = require("../middleware/auth");
 const NotificationService = require("../services/NotificationService");
+const { validateTeamPlayerCount, logTeamValidation } = require("../utils/teamValidation");
+const { createParticipationsForMatch } = require("../utils/matchParticipation");
 
 const router = express.Router();
 
@@ -11,12 +13,15 @@ router.post(
   "/invitations",
   [
     authenticateToken,
-    body("senderTeamId").isInt().withMessage("Sender team ID is required"), // AJOUTÉ
+    body("senderTeamId").isInt().withMessage("Sender team ID is required"),
     body("receiverTeamId").isInt().withMessage("Receiver team ID is required"),
     body("proposedDate").isISO8601().withMessage("Valid date is required"),
     body("proposedLocationId")
       .optional({ nullable: true, checkFalsy: true })
       .isInt(),
+    body("venueId").optional({ nullable: true, checkFalsy: true }).isInt(),
+    body("requiresReferee").optional().isBoolean(),
+    body("preferredRefereeId").optional({ nullable: true, checkFalsy: true }).isInt(),
     body("message")
       .optional({ nullable: true, checkFalsy: true })
       .isLength({ max: 500 }),
@@ -33,8 +38,11 @@ router.post(
         receiverTeamId,
         proposedDate,
         proposedLocationId,
+        venueId,
+        requiresReferee,
+        preferredRefereeId,
         message,
-      } = req.body; // MODIFIÉ
+      } = req.body;
 
       // Vérifier que l'utilisateur est capitaine de l'équipe spécifiée (MODIFIÉ)
       const [senderTeamCheck] = await db.execute(
@@ -45,8 +53,30 @@ router.post(
       if (senderTeamCheck.length === 0) {
         return res
           .status(403)
-          .json({ error: "You are not the captain of this team" }); // MODIFIÉ
+          .json({ error: "You are not the captain of this team" });
       }
+
+      // Vérifier que l'équipe a minimum 6 joueurs
+      const senderValidation = await validateTeamPlayerCount(senderTeamId, 6);
+      if (!senderValidation.isValid) {
+        return res.status(400).json({
+          error: "Insufficient players",
+          message: senderValidation.message,
+          playersCount: senderValidation.playersCount,
+          minimumRequired: 6
+        });
+      }
+
+      // Enregistrer la validation (l'invitationId sera mis à jour après création)
+      const validationLogId = await logTeamValidation({
+        teamId: senderTeamId,
+        invitationId: null,
+        validationType: 'send_invitation',
+        playersCount: senderValidation.playersCount,
+        minimumRequired: 6,
+        isValid: true,
+        validatedBy: req.user.id
+      });
 
       // Vérifier que l'équipe receveuse existe
       const [receiverTeams] = await db.execute(
@@ -91,14 +121,18 @@ router.post(
 
       // Créer l'invitation
       const [result] = await db.execute(
-        `INSERT INTO match_invitations 
-       (sender_team_id, receiver_team_id, proposed_date, proposed_location_id, message, expires_at) 
-       VALUES (?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO match_invitations
+       (sender_team_id, receiver_team_id, proposed_date, proposed_location_id,
+        venue_id, requires_referee, preferred_referee_id, message, expires_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
-          senderTeamId, // MODIFIÉ - utilise senderTeamId du formulaire
+          senderTeamId,
           receiverTeamId,
           proposedDate,
           proposedLocationId || null,
+          venueId || null,
+          requiresReferee || false,
+          preferredRefereeId || null,
           message || null,
           expiresAt,
         ]
@@ -330,6 +364,30 @@ router.patch(
         return res.status(400).json({ error: "Invitation has expired" });
       }
 
+      // Vérifier que l'équipe receveuse a minimum 6 joueurs (si acceptation)
+      if (response === 'accepted') {
+        const receiverValidation = await validateTeamPlayerCount(invitation.receiver_team_id, 6);
+        if (!receiverValidation.isValid) {
+          return res.status(400).json({
+            error: "Insufficient players",
+            message: receiverValidation.message,
+            playersCount: receiverValidation.playersCount,
+            minimumRequired: 6
+          });
+        }
+
+        // Enregistrer la validation
+        await logTeamValidation({
+          teamId: invitation.receiver_team_id,
+          invitationId: invitationId,
+          validationType: 'accept_invitation',
+          playersCount: receiverValidation.playersCount,
+          minimumRequired: 6,
+          isValid: true,
+          validatedBy: req.user.id
+        });
+      }
+
       const connection = await db.getConnection();
       await connection.beginTransaction();
 
@@ -342,21 +400,48 @@ router.patch(
 
         // Si acceptée, créer le match
         if (response === "accepted") {
+          // Créer le match avec les infos venue et referee si fournis
           const [matchResult] = await connection.execute(
-            `INSERT INTO matches (home_team_id, away_team_id, match_date, location_id, status) 
-           VALUES (?, ?, ?, ?, 'confirmed')`,
+            `INSERT INTO matches
+             (home_team_id, away_team_id, match_date, location_id, venue_booking_id, has_referee, status)
+             VALUES (?, ?, ?, ?, ?, ?, 'confirmed')`,
             [
               invitation.receiver_team_id,
               invitation.sender_team_id,
               invitation.proposed_date,
               invitation.proposed_location_id,
+              null, // venue_booking_id sera créé séparément si venueId fourni
+              invitation.requires_referee || false,
             ]
           );
+
+          const matchId = matchResult.insertId;
+
+          // Si un arbitre préféré est spécifié, créer l'assignation
+          if (invitation.preferred_referee_id) {
+            await connection.execute(
+              `INSERT INTO match_referee_assignments (match_id, referee_id, role, assigned_by, status)
+               VALUES (?, ?, 'main', ?, 'pending')`,
+              [matchId, invitation.preferred_referee_id, req.user.id]
+            );
+          }
+
+          // Créer automatiquement les participations pour tous les joueurs des deux équipes
+          try {
+            await createParticipationsForMatch(
+              matchId,
+              invitation.receiver_team_id,
+              invitation.sender_team_id
+            );
+          } catch (participationError) {
+            console.error('Error creating participations:', participationError);
+            // Continue même si erreur (non-bloquant)
+          }
 
           // Lier l'invitation au match créé
           await connection.execute(
             "UPDATE match_invitations SET match_id = ? WHERE id = ?",
-            [matchResult.insertId, invitationId]
+            [matchId, invitationId]
           );
         }
 
