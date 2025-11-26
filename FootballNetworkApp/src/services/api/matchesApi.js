@@ -384,6 +384,48 @@ class MatchesApiService {
   // ==================== INVITATIONS ====================
 
   /**
+   * Créer et envoyer une invitation de match directe
+   */
+  async createMatchInvitation(invitationData) {
+    try {
+      const token = await SecureStorage.getToken();
+      if (!token) {
+        return { success: false, error: 'Non authentifié' };
+      }
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), this.timeout);
+
+      const response = await fetch(`${this.baseURL}/matches/invitations`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(invitationData),
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        throw {
+          response: { status: response.status, data: await response.json() },
+        };
+      }
+
+      const data = await response.json();
+
+      return {
+        success: true,
+        data: data.invitation || data,
+      };
+    } catch (error) {
+      return this.handleApiError(error);
+    }
+  }
+
+  /**
    * Envoyer une invitation de match
    */
   async sendInvitation(matchId, teamId, message) {

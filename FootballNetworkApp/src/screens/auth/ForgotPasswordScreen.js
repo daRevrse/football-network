@@ -1,153 +1,80 @@
 // ====== src/screens/auth/ForgotPasswordScreen.js ======
-import React, { useState, useCallback } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
-  ScrollView,
-  KeyboardAvoidingView,
-  Platform,
-  Alert,
+  StyleSheet,
   TouchableOpacity,
   StatusBar,
-  StyleSheet,
+  Platform,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
-import { ModernInput, ModernButton, InfoBox } from '../../components/common';
-import { COLORS, DIMENSIONS, FONTS, SHADOWS } from '../../styles/theme';
+import { ModernInput, ModernButton } from '../../components/common';
+
+const DARK_THEME = {
+  BG: '#0F172A',
+  SURFACE: '#1E293B',
+  TEXT: '#F8FAFC',
+  TEXT_SEC: '#94A3B8',
+  ACCENT: '#22C55E',
+  BORDER: '#334155',
+};
 
 export const ForgotPasswordScreen = ({ navigation }) => {
   const [email, setEmail] = useState('');
-  const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [emailSent, setEmailSent] = useState(false);
 
-  const handleEmailChange = useCallback(
-    value => {
-      setEmail(value);
-      if (error) setError('');
-    },
-    [error],
-  );
-
-  const validateEmail = useCallback(() => {
-    if (!email.trim()) {
-      setError("L'email est requis");
-      return false;
-    }
-    if (!/\S+@\S+\.\S+/.test(email)) {
-      setError("Format d'email invalide");
-      return false;
-    }
-    return true;
-  }, [email]);
-
-  const handleSubmit = useCallback(async () => {
-    if (!validateEmail()) return;
-
-    try {
-      setIsLoading(true);
-
-      // Simulation d'envoi d'email
-      await new Promise(resolve => setTimeout(resolve, 1500));
-
-      setEmailSent(true);
-      Alert.alert(
-        'Email envoyé !',
-        'Un email de réinitialisation a été envoyé à votre adresse. Vérifiez votre boîte de réception.',
-        [
-          {
-            text: 'OK',
-            onPress: () => navigation.navigate('Login'),
-          },
-        ],
-      );
-    } catch (error) {
-      Alert.alert(
-        'Erreur',
-        "Impossible d'envoyer l'email. Veuillez réessayer.",
-      );
-    } finally {
+  const handleSubmit = () => {
+    setIsLoading(true);
+    setTimeout(() => {
       setIsLoading(false);
-    }
-  }, [validateEmail, navigation]);
+      navigation.goBack();
+    }, 1500);
+  };
 
   return (
     <View style={styles.container}>
-      <StatusBar
-        barStyle="dark-content"
-        backgroundColor={COLORS.BACKGROUND_LIGHT}
-      />
+      <StatusBar barStyle="light-content" backgroundColor={DARK_THEME.BG} />
 
-      <KeyboardAvoidingView
-        style={styles.keyboardView}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      <TouchableOpacity
+        onPress={() => navigation.goBack()}
+        style={styles.closeBtn}
       >
-        <ScrollView
-          style={styles.scrollView}
-          contentContainerStyle={styles.scrollContent}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-        >
-          <View style={styles.content}>
-            {/* Header */}
-            <View style={styles.header}>
-              <View style={styles.logoContainer}>
-                <Icon name="key" size={48} color={COLORS.WHITE} />
-              </View>
+        <Icon name="x" size={24} color={DARK_THEME.TEXT} />
+      </TouchableOpacity>
 
-              <Text style={styles.title}>Mot de passe oublié ?</Text>
-              <Text style={styles.subtitle}>
-                Pas de problème ! Entrez votre email et nous vous enverrons un
-                lien pour réinitialiser votre mot de passe.
-              </Text>
-            </View>
+      <View style={styles.content}>
+        <View style={styles.iconContainer}>
+          <Icon name="unlock" size={32} color={DARK_THEME.ACCENT} />
+        </View>
 
-            {/* Form */}
-            <View style={styles.form}>
-              <ModernInput
-                label="Adresse email"
-                value={email}
-                onChangeText={handleEmailChange}
-                placeholder="votre@email.com"
-                keyboardType="email-address"
-                autoCapitalize="none"
-                autoCorrect={false}
-                error={error}
-                leftIconName="mail"
-              />
+        <Text style={styles.title}>Mot de passe oublié ?</Text>
+        <Text style={styles.text}>
+          Entrez votre email pour recevoir les instructions de réinitialisation.
+        </Text>
 
-              <InfoBox
-                type="info"
-                message="Vérifiez vos spams si vous ne recevez pas l'email dans les 5 minutes."
-              />
+        <ModernInput
+          label="Email"
+          value={email}
+          placeholder="email@example.com"
+          onChangeText={setEmail}
+          leftIcon="mail"
+          keyboardType="email-address"
+          autoCapitalize="none"
+          // Dark Styles
+          inputStyle={styles.darkInput}
+          labelStyle={styles.darkLabel}
+          placeholderTextColor={DARK_THEME.TEXT_SEC}
+        />
 
-              <ModernButton
-                title="Envoyer le lien"
-                onPress={handleSubmit}
-                disabled={isLoading}
-                isLoading={isLoading}
-                variant="primary"
-                leftIconName="send"
-              />
-            </View>
-
-            {/* Back to Login */}
-            <View style={styles.footer}>
-              <TouchableOpacity
-                onPress={() => navigation.navigate('Login')}
-                style={styles.backButton}
-              >
-                <Icon
-                  name="arrow-left"
-                  size={DIMENSIONS.ICON_SIZE_SM}
-                  color={COLORS.PRIMARY}
-                />
-                <Text style={styles.backButtonText}>Retour à la connexion</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
+        <ModernButton
+          title="ENVOYER LE LIEN"
+          onPress={handleSubmit}
+          variant="primary"
+          isLoading={isLoading}
+          style={styles.button}
+        />
+      </View>
     </View>
   );
 };
@@ -155,66 +82,61 @@ export const ForgotPasswordScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.BACKGROUND_LIGHT,
+    backgroundColor: DARK_THEME.BG,
+    padding: 24,
   },
-  keyboardView: {
-    flex: 1,
-  },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    flexGrow: 1,
+  closeBtn: {
+    marginTop: Platform.OS === 'ios' ? 60 : 30,
+    alignSelf: 'flex-end',
+    padding: 8,
   },
   content: {
     flex: 1,
-    paddingHorizontal: DIMENSIONS.CONTAINER_PADDING,
     justifyContent: 'center',
+    marginTop: -50,
   },
-  header: {
-    alignItems: 'center',
-    marginBottom: DIMENSIONS.SPACING_XXL,
-  },
-  logoContainer: {
-    width: 100,
-    height: 100,
-    borderRadius: DIMENSIONS.BORDER_RADIUS_FULL,
-    backgroundColor: COLORS.PRIMARY,
+  iconContainer: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: DARK_THEME.SURFACE,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: DIMENSIONS.SPACING_LG,
-    ...SHADOWS.LARGE,
+    marginBottom: 24,
+    borderWidth: 1,
+    borderColor: DARK_THEME.BORDER,
+    alignSelf: 'center',
   },
   title: {
-    fontSize: FONTS.SIZE.XXXL,
-    fontWeight: FONTS.WEIGHT.BOLD,
-    color: COLORS.TEXT_PRIMARY,
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: DARK_THEME.TEXT,
     textAlign: 'center',
-    marginBottom: DIMENSIONS.SPACING_SM,
-    letterSpacing: -0.5,
+    marginBottom: 12,
   },
-  subtitle: {
-    fontSize: FONTS.SIZE.MD,
-    color: COLORS.TEXT_SECONDARY,
+  text: {
+    fontSize: 16,
+    color: DARK_THEME.TEXT_SEC,
     textAlign: 'center',
-    lineHeight: FONTS.SIZE.MD * FONTS.LINE_HEIGHT.RELAXED,
-    paddingHorizontal: DIMENSIONS.SPACING_LG,
+    marginBottom: 40,
+    paddingHorizontal: 20,
   },
-  form: {
-    marginBottom: DIMENSIONS.SPACING_XL,
+  darkInput: {
+    backgroundColor: DARK_THEME.SURFACE,
+    borderColor: DARK_THEME.BORDER,
+    color: DARK_THEME.TEXT,
+    borderWidth: 1,
   },
-  footer: {
-    alignItems: 'center',
+  darkLabel: {
+    color: DARK_THEME.TEXT_SEC,
+    textTransform: 'uppercase',
+    fontSize: 12,
+    letterSpacing: 1,
   },
-  backButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: DIMENSIONS.SPACING_SM,
-  },
-  backButtonText: {
-    fontSize: FONTS.SIZE.MD,
-    fontWeight: FONTS.WEIGHT.SEMIBOLD,
-    color: COLORS.PRIMARY,
-    marginLeft: DIMENSIONS.SPACING_SM,
+  button: {
+    backgroundColor: DARK_THEME.ACCENT,
+    height: 56,
+    marginTop: 24,
+    borderWidth: 0,
   },
 });

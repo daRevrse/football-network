@@ -13,11 +13,11 @@ import {
   MoreVertical,
   Edit,
   Trash2,
-  TrendingUp,
-  Shield,
   Activity,
   CheckCircle,
   Image,
+  Swords, // Icone pour Défier
+  LogIn, // Icone pour Rejoindre
 } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
 import toast from "react-hot-toast";
@@ -34,7 +34,7 @@ const API_BASE_URL =
 const TeamDetails = () => {
   const { teamId } = useParams();
   const navigate = useNavigate();
-  const { user } = useAuth(); // Ajout du hook auth
+  const { user } = useAuth();
 
   const [team, setTeam] = useState(null);
   const [matches, setMatches] = useState([]);
@@ -46,6 +46,8 @@ const TeamDetails = () => {
   const [showEditModal, setShowEditModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showInviteModal, setShowInviteModal] = useState(false);
+
+  const isManager = user?.userType === "manager";
 
   useEffect(() => {
     if (teamId) loadTeamData();
@@ -60,8 +62,6 @@ const TeamDetails = () => {
       ]);
       setTeam(teamRes.data);
       setMatches(matchesRes.data);
-
-      console.log("teamRes.data", teamRes.data);
     } catch (error) {
       toast.error("Erreur chargement équipe");
       navigate("/teams");
@@ -70,7 +70,35 @@ const TeamDetails = () => {
     }
   };
 
+  const handleJoinTeam = async () => {
+    if (isManager) {
+      toast.error("Les managers ne peuvent pas rejoindre d'autres équipes.");
+      return;
+    }
+    if (!window.confirm(`Envoyer une demande pour rejoindre "${team?.name}" ?`))
+      return;
+
+    try {
+      await axios.post(`${API_BASE_URL}/teams/${teamId}/join`);
+      toast.success("Demande envoyée avec succès !");
+    } catch (error) {
+      toast.error(error.response?.data?.error || "Erreur lors de la demande");
+    }
+  };
+
+  const handleChallengeTeam = () => {
+    // Redirection vers la création de match avec l'équipe pré-sélectionnée
+    navigate(`/matches/create?opponentId=${teamId}`);
+  };
+
   const handleLeaveTeam = async () => {
+    if (isManager && team.userRole === "captain") {
+      toast.error(
+        "Le manager ne peut pas quitter son équipe. Vous pouvez supprimer l'équipe si nécessaire."
+      );
+      return;
+    }
+
     if (!window.confirm(`Quitter "${team?.name}" ?`)) return;
     try {
       await axios.delete(`${API_BASE_URL}/teams/${teamId}/leave`);
@@ -149,6 +177,7 @@ const TeamDetails = () => {
             <ArrowLeft className="w-6 h-6" />
           </button>
 
+          {/* Menu Actions pour Membres */}
           {isMember && (
             <div className="absolute top-6 right-6 z-20">
               <button
@@ -224,7 +253,7 @@ const TeamDetails = () => {
                   />
                 ) : (
                   <div className="w-full h-full bg-gray-100 flex items-center justify-center">
-                    <Shield className="w-14 h-14 text-gray-300" />
+                    <Users className="w-14 h-14 text-gray-300" />
                   </div>
                 )}
               </div>
@@ -257,6 +286,29 @@ const TeamDetails = () => {
                 </span>
               </div>
             </div>
+
+            {/* BOUTONS D'ACTION (Non membre) */}
+            {!isMember && (
+              <div className="mb-4 md:mb-2 md:ml-auto">
+                {isManager ? (
+                  <button
+                    onClick={handleChallengeTeam}
+                    className="flex items-center px-6 py-3 bg-orange-600 text-white rounded-xl font-bold hover:bg-orange-500 shadow-lg transition transform hover:-translate-y-0.5"
+                  >
+                    <Swords className="w-5 h-5 mr-2" />
+                    Défier
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleJoinTeam}
+                    className="flex items-center px-6 py-3 bg-green-600 text-white rounded-xl font-bold hover:bg-green-500 shadow-lg transition transform hover:-translate-y-0.5"
+                  >
+                    <LogIn className="w-5 h-5 mr-2" />
+                    Rejoindre
+                  </button>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Onglets */}
@@ -342,7 +394,8 @@ const TeamDetails = () => {
   );
 };
 
-// --- Sous-composants ---
+// ... (Les composants OverviewTab, StatBox, MembersTab, MatchesTab restent identiques)
+// Je les inclus pour que le fichier soit complet
 
 const OverviewTab = ({ team }) => (
   <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -373,7 +426,6 @@ const OverviewTab = ({ team }) => (
           value={team.stats?.matchesLost || 0}
           color="bg-red-50 text-red-600"
         />
-        {/* FIX: Ajout de Number() pour éviter le crash */}
         <StatBox
           label="Rating"
           value={

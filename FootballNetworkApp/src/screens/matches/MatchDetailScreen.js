@@ -1,5 +1,5 @@
-// ====== src/screens/matches/MatchDetailScreen.js - NOUVEAU DESIGN + BACKEND ======
-import React, { useState, useCallback, useEffect } from 'react';
+// ====== src/screens/matches/MatchDetailScreen.js ======
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -7,594 +7,435 @@ import {
   ScrollView,
   TouchableOpacity,
   Alert,
-  Platform,
   StatusBar,
-  RefreshControl,
+  Platform,
   ActivityIndicator,
-  Dimensions,
-  TextInput,
   Modal,
+  TextInput,
+  Image,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import LinearGradient from 'react-native-linear-gradient';
 import { useFocusEffect } from '@react-navigation/native';
-import { DIMENSIONS, FONTS, SHADOWS } from '../../styles/theme';
 import { matchesApi } from '../../services/api';
+import { API_CONFIG } from '../../utils/constants/api';
 
-const { width } = Dimensions.get('window');
-
-// Helpers
-const formatDate = dateString => {
-  const date = new Date(dateString);
-  return date.toLocaleDateString('fr-FR', {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
+const THEME = {
+  BG: '#0F172A',
+  SURFACE: '#1E293B',
+  TEXT: '#F8FAFC',
+  TEXT_SEC: '#94A3B8',
+  ACCENT: '#22C55E',
+  BORDER: '#334155',
 };
 
-const getMatchStatus = match => {
-  if (match.status === 'completed') {
-    return { label: 'Terminé', color: '#6B7280', icon: 'check-circle' };
-  } else if (match.status === 'cancelled') {
-    return { label: 'Annulé', color: '#EF4444', icon: 'x-circle' };
-  } else if (match.status === 'in_progress') {
-    return { label: 'En cours', color: '#22C55E', icon: 'play-circle' };
-  } else {
-    return { label: 'À venir', color: '#3B82F6', icon: 'calendar' };
-  }
-};
-
-// Modal de score
-const ScoreModal = ({ visible, onClose, onSubmit, match }) => {
-  const [team1Score, setTeam1Score] = useState(
-    match?.team1_score?.toString() || '0',
-  );
-  const [team2Score, setTeam2Score] = useState(
-    match?.team2_score?.toString() || '0',
-  );
-  const [submitting, setSubmitting] = useState(false);
-
-  const handleSubmit = async () => {
-    const score1 = parseInt(team1Score);
-    const score2 = parseInt(team2Score);
-
-    if (isNaN(score1) || isNaN(score2) || score1 < 0 || score2 < 0) {
-      Alert.alert('Erreur', 'Scores invalides');
-      return;
-    }
-
-    setSubmitting(true);
-    await onSubmit(score1, score2);
-    setSubmitting(false);
-  };
-
-  return (
-    <Modal visible={visible} animationType="slide" transparent={true}>
-      <View style={styles.modalOverlay}>
-        <View style={styles.scoreModalContent}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Entrer le score</Text>
-            <TouchableOpacity onPress={onClose}>
-              <Icon name="x" size={24} color="#6B7280" />
-            </TouchableOpacity>
-          </View>
-
-          <View style={styles.scoreInputContainer}>
-            <View style={styles.scoreTeamSection}>
-              <Text style={styles.scoreTeamName}>{match?.team1_name}</Text>
-              <TextInput
-                style={styles.scoreInput}
-                value={team1Score}
-                onChangeText={setTeam1Score}
-                keyboardType="number-pad"
-                maxLength={2}
-              />
-            </View>
-
-            <Text style={styles.scoreVS}>-</Text>
-
-            <View style={styles.scoreTeamSection}>
-              <Text style={styles.scoreTeamName}>{match?.team2_name}</Text>
-              <TextInput
-                style={styles.scoreInput}
-                value={team2Score}
-                onChangeText={setTeam2Score}
-                keyboardType="number-pad"
-                maxLength={2}
-              />
-            </View>
-          </View>
-
-          <TouchableOpacity
-            style={styles.scoreSubmitButton}
-            onPress={handleSubmit}
-            disabled={submitting}
-          >
-            <LinearGradient
-              colors={['#22C55E', '#16A34A']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.scoreSubmitGradient}
-            >
-              {submitting ? (
-                <ActivityIndicator color="#FFF" />
-              ) : (
-                <>
-                  <Icon name="check" size={20} color="#FFF" />
-                  <Text style={styles.scoreSubmitText}>Valider le score</Text>
-                </>
-              )}
-            </LinearGradient>
-          </TouchableOpacity>
-        </View>
-      </View>
-    </Modal>
-  );
-};
+const StatRow = ({ label, value, icon }) => (
+  <View style={styles.statRow}>
+    <View style={styles.statLabelRow}>
+      <Icon name={icon} size={16} color={THEME.TEXT_SEC} />
+      <Text style={styles.statLabel}>{label}</Text>
+    </View>
+    <Text style={styles.statValue}>{value}</Text>
+  </View>
+);
 
 export const MatchDetailScreen = ({ route, navigation }) => {
-  const { matchId } = route.params || {};
-  const [refreshing, setRefreshing] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const { matchId } = route.params;
   const [match, setMatch] = useState(null);
-  const [scoreModalVisible, setScoreModalVisible] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [scoreModal, setScoreModal] = useState(false);
+  const [scores, setScores] = useState({ home: '', away: '' });
 
   useFocusEffect(
     useCallback(() => {
-      loadMatchDetails();
+      loadMatch();
     }, [matchId]),
   );
 
-  const loadMatchDetails = async () => {
+  const loadMatch = async () => {
     try {
       setLoading(true);
-      const result = await matchesApi.getMatchById(matchId);
-      console.log('result', result);
-
-      if (result.success) {
-        setMatch(result.data);
-      } else {
-        Alert.alert('Erreur', result.error);
-        navigation.goBack();
-      }
-    } catch (error) {
-      console.error('Load match error:', error);
-      Alert.alert('Erreur', 'Une erreur est survenue');
-      navigation.goBack();
+      const res = await matchesApi.getMatchById(matchId);
+      if (res.success) setMatch(res.data);
+    } catch (e) {
+      Alert.alert('Erreur', 'Chargement impossible');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleRefresh = useCallback(async () => {
-    setRefreshing(true);
-    await loadMatchDetails();
-    setRefreshing(false);
-  }, [matchId]);
-
-  const handleUpdateScore = async (score1, score2) => {
-    try {
-      const result = await matchesApi.updateMatchScore(matchId, score1, score2);
-
-      if (result.success) {
-        Alert.alert('Succès', 'Score mis à jour');
-        setScoreModalVisible(false);
-        loadMatchDetails();
-      } else {
-        Alert.alert('Erreur', result.error);
-      }
-    } catch (error) {
-      Alert.alert('Erreur', 'Une erreur est survenue');
-    }
-  };
-
-  const handleCancelMatch = () => {
-    Alert.alert(
-      'Annuler le match',
-      'Êtes-vous sûr de vouloir annuler ce match ?',
-      [
-        { text: 'Non', style: 'cancel' },
-        {
-          text: 'Oui, annuler',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              const result = await matchesApi.cancelMatch(matchId);
-              if (result.success) {
-                Alert.alert('Match annulé', '', [
-                  { text: 'OK', onPress: () => navigation.goBack() },
-                ]);
-              } else {
-                Alert.alert('Erreur', result.error);
-              }
-            } catch (error) {
-              Alert.alert('Erreur', 'Une erreur est survenue');
-            }
-          },
-        },
-      ],
+  const handleUpdateScore = async () => {
+    const res = await matchesApi.updateMatchScore(
+      matchId,
+      parseInt(scores.home),
+      parseInt(scores.away),
     );
+    if (res.success) {
+      setScoreModal(false);
+      loadMatch();
+    } else Alert.alert('Erreur', res.error);
   };
 
-  if (loading) {
+  if (loading || !match)
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#22C55E" />
-        <Text style={styles.loadingText}>Chargement...</Text>
+      <View style={styles.center}>
+        <ActivityIndicator color={THEME.ACCENT} />
       </View>
     );
-  }
 
-  if (!match) return null;
-
-  const status = getMatchStatus(match);
-  const isOrganizer = match.is_organizer;
-  const canEditScore =
-    isOrganizer && match.status !== 'cancelled' && match.status !== 'completed';
+  const isOwner = match.is_organizer;
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" />
+      <StatusBar barStyle="light-content" backgroundColor={THEME.BG} />
 
-      {/* Header */}
-      <LinearGradient
-        colors={['#22C55E', '#16A34A']}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={styles.header}
-      >
-        <View style={styles.headerTop}>
-          <TouchableOpacity
-            style={styles.headerButton}
-            onPress={() => navigation.goBack()}
-          >
-            <Icon name="arrow-left" size={24} color="#FFF" />
-          </TouchableOpacity>
-          {isOrganizer && (
-            <TouchableOpacity
-              style={styles.headerButton}
-              onPress={() => {
-                Alert.alert(
-                  'Options',
-                  'Choisissez une action',
-                  [
-                    { text: 'Annuler', style: 'cancel' },
-                    canEditScore && {
-                      text: 'Entrer le score',
-                      onPress: () => setScoreModalVisible(true),
-                    },
-                    match.status === 'scheduled' && {
-                      text: 'Annuler le match',
-                      style: 'destructive',
-                      onPress: handleCancelMatch,
-                    },
-                  ].filter(Boolean),
-                );
-              }}
+      {/* HEADER SCOREBOARD */}
+      <View style={styles.scoreboard}>
+        <TouchableOpacity
+          onPress={() => navigation.goBack()}
+          style={styles.backBtn}
+        >
+          <Icon name="arrow-left" size={24} color={THEME.TEXT} />
+        </TouchableOpacity>
+
+        <Text style={styles.leagueText}>{match.type || 'Match Amical'}</Text>
+
+        <View style={styles.teamsContainer}>
+          <View style={styles.teamCol}>
+            <View style={styles.logoBox}>
+              {match.homeTeam.logoUrl ? (
+                <Image
+                  source={{
+                    uri: `${API_CONFIG.BASE_URL.replace('/api', '')}${match.homeTeam.logoUrl}`,
+                  }}
+                  style={styles.logoImage}
+                />
+              ) : (
+                <Text style={styles.logoText}>{match.homeTeam.name[0]}</Text>
+              )}
+            </View>
+            <Text style={styles.teamName} numberOfLines={2}>
+              {match.homeTeam.name}
+            </Text>
+          </View>
+
+          <View style={styles.scoreCol}>
+            <Text style={styles.scoreBig}>
+              {match.score.home ?? '-'} : {match.score.away ?? '-'}
+            </Text>
+            <View style={styles.timeBadge}>
+              <Text style={styles.timeText}>
+                {match.status === 'in_progress'
+                  ? 'EN COURS'
+                  : match.status === 'completed'
+                  ? 'TERMINE'
+                  : 'PREVU'}
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.teamCol}>
+            <View
+              style={[
+                styles.logoBox,
+                { backgroundColor: '#3B82F620', borderColor: '#3B82F650' },
+              ]}
             >
-              <Icon name="more-vertical" size={24} color="#FFF" />
-            </TouchableOpacity>
-          )}
-        </View>
-
-        <View style={styles.headerContent}>
-          <View
-            style={[
-              styles.statusBadgeLarge,
-              { backgroundColor: status.color + '40' },
-            ]}
-          >
-            <Icon name={status.icon} size={16} color="#FFF" />
-            <Text style={styles.statusTextLarge}>{status.label}</Text>
-          </View>
-          <Text style={styles.matchDateLarge}>
-            {formatDate(match.matchDate)}
-          </Text>
-        </View>
-      </LinearGradient>
-
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={handleRefresh}
-            colors={['#22C55E']}
-            tintColor="#22C55E"
-          />
-        }
-      >
-        {/* Score Card */}
-        <View style={styles.scoreCard}>
-          <LinearGradient
-            colors={['#FFFFFF', '#F9FAFB']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 0, y: 1 }}
-            style={styles.scoreCardGradient}
-          >
-            <View style={styles.teamsRow}>
-              {/* Team 1 */}
-              <View style={styles.teamColumn}>
-                <View style={styles.teamIconLarge}>
-                  <LinearGradient
-                    colors={['#22C55E', '#16A34A']}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}
-                    style={styles.teamIconGradient}
-                  >
-                    <Icon name="shield" size={32} color="#FFF" />
-                  </LinearGradient>
-                </View>
-                <Text style={styles.teamNameLarge}>{match.homeTeam.name}</Text>
-                {match.score.home !== null && (
-                  <Text style={styles.scoreLarge}>{match.score.home}</Text>
-                )}
-              </View>
-
-              {/* VS */}
-              <View style={styles.vsContainerLarge}>
-                <Text style={styles.vsTextLarge}>VS</Text>
-              </View>
-
-              {/* Team 2 */}
-              <View style={styles.teamColumn}>
-                <View style={styles.teamIconLarge}>
-                  <LinearGradient
-                    colors={['#3B82F6', '#2563EB']}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}
-                    style={styles.teamIconGradient}
-                  >
-                    <Icon name="shield" size={32} color="#FFF" />
-                  </LinearGradient>
-                </View>
-                <Text style={styles.teamNameLarge}>{match.awayTeam.name}</Text>
-                {match.score.away !== null && (
-                  <Text style={styles.scoreLarge}>{match.score.away}</Text>
-                )}
-              </View>
-            </View>
-
-            {canEditScore && (
-              <TouchableOpacity
-                style={styles.editScoreButton}
-                onPress={() => setScoreModalVisible(true)}
-              >
-                <Icon name="edit-2" size={16} color="#22C55E" />
-                <Text style={styles.editScoreText}>
-                  {match.team1_score !== null
-                    ? 'Modifier le score'
-                    : 'Entrer le score'}
+              {match.awayTeam.logoUrl ? (
+                <Image
+                  source={{
+                    uri: `${API_CONFIG.BASE_URL.replace('/api', '')}${match.awayTeam.logoUrl}`,
+                  }}
+                  style={styles.logoImage}
+                />
+              ) : (
+                <Text style={[styles.logoText, { color: '#3B82F6' }]}>
+                  {match.awayTeam.name[0]}
                 </Text>
-              </TouchableOpacity>
-            )}
-          </LinearGradient>
-        </View>
-
-        {/* Informations */}
-        <View style={styles.infoCard}>
-          <Text style={styles.infoCardTitle}>Informations</Text>
-
-          <View style={styles.infoRow}>
-            <Icon name="map-pin" size={18} color="#6B7280" />
-            <Text style={styles.infoLabel}>Lieu</Text>
-            <Text style={styles.infoValue}>{match.location?.name || '-'}</Text>
-          </View>
-
-          <View style={styles.infoRow}>
-            <Icon name="calendar" size={18} color="#6B7280" />
-            <Text style={styles.infoLabel}>Date</Text>
-            <Text style={styles.infoValue}>
-              {new Date(match.matchDate).toLocaleDateString('fr-FR')}
-            </Text>
-          </View>
-
-          <View style={styles.infoRow}>
-            <Icon name="clock" size={18} color="#6B7280" />
-            <Text style={styles.infoLabel}>Heure</Text>
-            <Text style={styles.infoValue}>
-              {new Date(match.matchDate).toLocaleTimeString('fr-FR', {
-                hour: '2-digit',
-                minute: '2-digit',
-              })}
-            </Text>
-          </View>
-
-          {match.type && (
-            <View style={styles.descriptionSection}>
-              <Icon name="file-text" size={18} color="#6B7280" />
-              <View style={styles.descriptionContent}>
-                <Text style={styles.infoLabel}>Description</Text>
-                <Text style={styles.descriptionText}>{match.type}</Text>
-              </View>
+              )}
             </View>
-          )}
+            <Text style={styles.teamName} numberOfLines={2}>
+              {match.awayTeam.name}
+            </Text>
+          </View>
         </View>
+      </View>
+
+      <ScrollView contentContainerStyle={styles.content}>
+        {/* ACTIONS */}
+        {isOwner && (
+          <View style={styles.actionsRow}>
+            <TouchableOpacity
+              style={styles.actionBtn}
+              onPress={() => setScoreModal(true)}
+            >
+              <Icon name="edit-2" size={20} color={THEME.ACCENT} />
+              <Text style={styles.actionText}>Score</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.actionBtn}>
+              <Icon name="share-2" size={20} color={THEME.TEXT} />
+              <Text style={[styles.actionText, { color: THEME.TEXT }]}>
+                Partager
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* INFO CARD */}
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Détails du match</Text>
+          <StatRow
+            icon="calendar"
+            label="Date"
+            value={new Date(match.matchDate).toLocaleDateString()}
+          />
+          <StatRow
+            icon="clock"
+            label="Heure"
+            value={new Date(match.matchDate).toLocaleTimeString([], {
+              hour: '2-digit',
+              minute: '2-digit',
+            })}
+          />
+          <StatRow
+            icon="map-pin"
+            label="Lieu"
+            value={match.location?.name || 'Non défini'}
+          />
+          <StatRow
+            icon="user"
+            label="Arbitre"
+            value={match.refereeContact || 'Non assigné'}
+          />
+        </View>
+
+        {/* DESCRIPTION */}
+        {match.notes && (
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>Notes</Text>
+            <Text style={styles.notesText}>{match.notes}</Text>
+          </View>
+        )}
       </ScrollView>
 
-      {/* Score Modal */}
-      <ScoreModal
-        visible={scoreModalVisible}
-        onClose={() => setScoreModalVisible(false)}
-        onSubmit={handleUpdateScore}
-        match={match}
-      />
+      {/* MODAL SCORE */}
+      <Modal visible={scoreModal} transparent animationType="fade">
+        <View style={styles.modalBg}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Mettre à jour le score</Text>
+            <View style={styles.inputsRow}>
+              <TextInput
+                style={styles.scoreInput}
+                keyboardType="number-pad"
+                placeholder="0"
+                placeholderTextColor={THEME.TEXT_SEC}
+                onChangeText={t => setScores(p => ({ ...p, home: t }))}
+              />
+              <Text style={styles.dash}>-</Text>
+              <TextInput
+                style={styles.scoreInput}
+                keyboardType="number-pad"
+                placeholder="0"
+                placeholderTextColor={THEME.TEXT_SEC}
+                onChangeText={t => setScores(p => ({ ...p, away: t }))}
+              />
+            </View>
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                onPress={() => setScoreModal(false)}
+                style={styles.cancelBtn}
+              >
+                <Text style={styles.cancelText}>Annuler</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={handleUpdateScore}
+                style={styles.saveBtn}
+              >
+                <Text style={styles.saveText}>Valider</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
 
-// Styles compacts pour MatchDetailScreen
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F8FAFC' },
-  loadingContainer: {
+  container: { flex: 1, backgroundColor: THEME.BG },
+  center: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#F8FAFC',
+    backgroundColor: THEME.BG,
   },
-  loadingText: { marginTop: 12, fontSize: 14, color: '#6B7280' },
-  header: {
-    paddingTop: Platform.OS === 'ios' ? 60 : 20,
+
+  // SCOREBOARD HEADER
+  scoreboard: {
+    backgroundColor: THEME.SURFACE,
     paddingBottom: 24,
-    paddingHorizontal: 20,
-    ...SHADOWS.LARGE,
+    paddingTop: Platform.OS === 'ios' ? 60 : 30,
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
+    borderBottomWidth: 1,
+    borderBottomColor: THEME.BORDER,
   },
-  headerTop: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  backBtn: {
+    position: 'absolute',
+    top: Platform.OS === 'ios' ? 60 : 20,
+    left: 20,
+    zIndex: 10,
+  },
+  leagueText: {
+    textAlign: 'center',
+    color: THEME.TEXT_SEC,
+    fontSize: 12,
+    fontWeight: 'bold',
+    letterSpacing: 1,
     marginBottom: 20,
   },
-  headerButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  headerContent: { alignItems: 'center' },
-  statusBadgeLarge: {
+
+  teamsContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    gap: 6,
-    marginBottom: 12,
-  },
-  statusTextLarge: { fontSize: 14, fontWeight: '600', color: '#FFF' },
-  matchDateLarge: { fontSize: 16, color: 'rgba(255,255,255,0.95)' },
-  scrollView: { flex: 1 },
-  scrollContent: { padding: 20 },
-  scoreCard: {
-    borderRadius: 20,
-    overflow: 'hidden',
-    marginBottom: 16,
-    ...SHADOWS.LARGE,
-  },
-  scoreCardGradient: { padding: 24 },
-  teamsRow: { flexDirection: 'row', alignItems: 'center' },
-  teamColumn: { flex: 1, alignItems: 'center' },
-  teamIconLarge: { marginBottom: 12 },
-  teamIconGradient: {
-    width: 80,
-    height: 80,
-    borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  teamNameLarge: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#1F2937',
-    textAlign: 'center',
-    marginBottom: 8,
-  },
-  scoreLarge: { fontSize: 32, fontWeight: '700', color: '#1F2937' },
-  vsContainerLarge: { paddingHorizontal: 20 },
-  vsTextLarge: { fontSize: 16, fontWeight: '700', color: '#9CA3AF' },
-  editScoreButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 20,
-    padding: 12,
-    backgroundColor: '#F0FDF4',
-    borderRadius: 12,
-    gap: 8,
-  },
-  editScoreText: { fontSize: 14, fontWeight: '600', color: '#22C55E' },
-  infoCard: {
-    backgroundColor: '#FFF',
-    borderRadius: 16,
-    padding: 20,
-    ...SHADOWS.MEDIUM,
-  },
-  infoCardTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#1F2937',
-    marginBottom: 16,
-  },
-  infoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 12,
-    gap: 12,
-  },
-  infoLabel: { flex: 1, fontSize: 14, color: '#6B7280' },
-  infoValue: { fontSize: 14, fontWeight: '600', color: '#1F2937' },
-  descriptionSection: {
-    flexDirection: 'row',
-    paddingTop: 12,
-    gap: 12,
-  },
-  descriptionContent: { flex: 1 },
-  descriptionText: {
-    fontSize: 14,
-    color: '#1F2937',
-    lineHeight: 20,
-    marginTop: 4,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: 20,
   },
-  scoreModalContent: {
-    backgroundColor: '#FFF',
-    borderRadius: 20,
-    padding: 24,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  teamCol: { alignItems: 'center', width: '30%' },
+  scoreCol: { alignItems: 'center', width: '40%' },
+
+  logoBox: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: 'rgba(34, 197, 94, 0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(34, 197, 94, 0.3)',
+    justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 24,
+    marginBottom: 8,
+    overflow: 'hidden',
   },
-  modalTitle: { fontSize: 20, fontWeight: '700', color: '#1F2937' },
-  scoreInputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 24,
+  logoImage: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
   },
-  scoreTeamSection: { flex: 1, alignItems: 'center' },
-  scoreTeamName: {
+  logoText: { fontSize: 24, fontWeight: 'bold', color: THEME.ACCENT },
+  teamName: {
+    color: THEME.TEXT,
     fontSize: 14,
     fontWeight: '600',
-    color: '#6B7280',
-    marginBottom: 12,
     textAlign: 'center',
   },
-  scoreInput: {
-    width: 80,
-    height: 80,
-    backgroundColor: '#F3F4F6',
-    borderRadius: 16,
-    fontSize: 32,
-    fontWeight: '700',
-    color: '#1F2937',
-    textAlign: 'center',
+
+  scoreBig: {
+    fontSize: 36,
+    fontWeight: 'bold',
+    color: THEME.TEXT,
+    marginBottom: 8,
   },
-  scoreVS: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#9CA3AF',
-    paddingHorizontal: 20,
+  timeBadge: {
+    backgroundColor: '#000',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
   },
-  scoreSubmitButton: { borderRadius: 12, overflow: 'hidden' },
-  scoreSubmitGradient: {
+  timeText: { color: THEME.ACCENT, fontSize: 10, fontWeight: 'bold' },
+
+  content: { padding: 20 },
+
+  // ACTIONS
+  actionsRow: { flexDirection: 'row', gap: 12, marginBottom: 24 },
+  actionBtn: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 14,
+    backgroundColor: THEME.SURFACE,
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: THEME.BORDER,
     gap: 8,
   },
-  scoreSubmitText: { fontSize: 16, fontWeight: '600', color: '#FFF' },
+  actionText: { color: THEME.ACCENT, fontWeight: '600' },
+
+  // CARD
+  card: {
+    backgroundColor: THEME.SURFACE,
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: THEME.BORDER,
+  },
+  cardTitle: {
+    color: THEME.TEXT,
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginBottom: 16,
+  },
+  statRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  statLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  statLabel: { color: THEME.TEXT_SEC, fontSize: 14 },
+  statValue: { color: THEME.TEXT, fontSize: 14, fontWeight: '600' },
+  notesText: { color: THEME.TEXT_SEC, lineHeight: 20 },
+
+  // MODAL
+  modalBg: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.8)',
+    justifyContent: 'center',
+    padding: 24,
+  },
+  modalContent: {
+    backgroundColor: THEME.SURFACE,
+    borderRadius: 24,
+    padding: 24,
+    borderWidth: 1,
+    borderColor: THEME.BORDER,
+  },
+  modalTitle: {
+    color: THEME.TEXT,
+    fontSize: 18,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginBottom: 24,
+  },
+  inputsRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 16,
+    marginBottom: 24,
+  },
+  scoreInput: {
+    backgroundColor: THEME.BG,
+    width: 60,
+    height: 60,
+    borderRadius: 12,
+    color: THEME.TEXT,
+    fontSize: 24,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    borderWidth: 1,
+    borderColor: THEME.BORDER,
+  },
+  dash: { color: THEME.TEXT_SEC, fontSize: 24 },
+  modalActions: { flexDirection: 'row', gap: 12 },
+  cancelBtn: { flex: 1, padding: 12, alignItems: 'center' },
+  cancelText: { color: THEME.TEXT_SEC },
+  saveBtn: {
+    flex: 1,
+    backgroundColor: THEME.ACCENT,
+    padding: 12,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  saveText: { color: '#000', fontWeight: 'bold' },
 });

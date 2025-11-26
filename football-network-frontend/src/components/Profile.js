@@ -12,11 +12,8 @@ import {
   Edit3,
   X,
   Camera,
-  Trash2,
   Award,
-  Users as UsersIcon,
   TrendingUp,
-  Shield,
   Activity,
   Briefcase,
   Layers,
@@ -58,7 +55,8 @@ const Profile = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
-  const [activeTab, setActiveTab] = useState("infos"); // 'infos', 'stats', 'teams'
+  const [activeTab, setActiveTab] = useState("infos"); // 'infos', 'stats'
+
   const [stats, setStats] = useState({
     teamsCount: 0,
     matchesCount: 0,
@@ -105,6 +103,12 @@ const Profile = () => {
       setLoading(true);
       const response = await axios.get(`${API_BASE_URL}/users/profile`);
       const profile = response.data;
+
+      // Sécurisation : on s'assure d'avoir le userType
+      if (!profile.userType && user?.userType) {
+        profile.userType = user.userType;
+      }
+
       setProfileData(profile);
       reset({
         firstName: profile.firstName || "",
@@ -138,6 +142,13 @@ const Profile = () => {
       const cleanData = Object.fromEntries(
         Object.entries(data).filter(([_, v]) => v !== "" && v !== null)
       );
+
+      // Si c'est un manager, on retire les champs liés au joueur pour ne pas polluer la DB
+      if (profileData?.userType === "manager") {
+        delete cleanData.position;
+        delete cleanData.skillLevel;
+      }
+
       await axios.put(`${API_BASE_URL}/users/profile`, cleanData);
       toast.success("Profil mis à jour !");
       setIsEditing(false);
@@ -225,6 +236,8 @@ const Profile = () => {
       </div>
     );
 
+  const isManager = profileData?.userType === "manager";
+
   return (
     <div className="max-w-5xl mx-auto pb-12">
       {/* --- Header Section --- */}
@@ -304,14 +317,21 @@ const Profile = () => {
                 <div>
                   <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
                     {profileData?.firstName} {profileData?.lastName}
-                    {profileData?.position && (
-                      <span className="px-2 py-1 bg-green-100 text-green-700 text-xs rounded-full font-medium uppercase border border-green-200">
-                        {
-                          positions.find(
-                            (p) => p.value === profileData.position
-                          )?.label
-                        }
+                    {/* Badge Rôle Dynamique */}
+                    {isManager ? (
+                      <span className="px-2 py-1 bg-purple-100 text-purple-700 text-xs rounded-full font-medium uppercase border border-purple-200 flex items-center gap-1">
+                        <Briefcase className="w-3 h-3" /> Manager
                       </span>
+                    ) : (
+                      profileData?.position && (
+                        <span className="px-2 py-1 bg-green-100 text-green-700 text-xs rounded-full font-medium uppercase border border-green-200">
+                          {
+                            positions.find(
+                              (p) => p.value === profileData.position
+                            )?.label
+                          }
+                        </span>
+                      )
                     )}
                   </h1>
                   <p className="text-gray-500 flex items-center gap-2 mt-1">
@@ -370,7 +390,9 @@ const Profile = () => {
             </h3>
             <p className="text-gray-600 text-sm leading-relaxed whitespace-pre-line">
               {profileData?.bio ||
-                "Aucune biographie renseignée. Dites-en plus sur votre style de jeu !"}
+                (isManager
+                  ? "Décrivez votre vision et votre expérience de manager..."
+                  : "Aucune biographie renseignée. Dites-en plus sur votre style de jeu !")}
             </p>
           </div>
 
@@ -392,14 +414,18 @@ const Profile = () => {
                 </div>
                 <div className="text-xs text-gray-500 uppercase">Équipes</div>
               </div>
-              <div className="bg-gray-50 p-3 rounded-lg text-center col-span-2">
-                <div className="text-2xl font-bold text-green-600">
-                  {stats.winRate}%
+
+              {/* Taux de victoire : On peut le masquer pour un manager si pas pertinent individuellement */}
+              {!isManager && (
+                <div className="bg-gray-50 p-3 rounded-lg text-center col-span-2">
+                  <div className="text-2xl font-bold text-green-600">
+                    {stats.winRate}%
+                  </div>
+                  <div className="text-xs text-gray-500 uppercase">
+                    Taux de victoire
+                  </div>
                 </div>
-                <div className="text-xs text-gray-500 uppercase">
-                  Taux de victoire
-                </div>
-              </div>
+              )}
             </div>
           </div>
         </div>
@@ -470,36 +496,43 @@ const Profile = () => {
                         className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-green-500 outline-none"
                       />
                     </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Position
-                      </label>
-                      <select
-                        {...register("position")}
-                        className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-green-500 outline-none bg-white"
-                      >
-                        {positions.map((p) => (
-                          <option key={p.value} value={p.value}>
-                            {p.label}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Niveau
-                      </label>
-                      <select
-                        {...register("skillLevel")}
-                        className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-green-500 outline-none bg-white"
-                      >
-                        {skillLevels.map((s) => (
-                          <option key={s.value} value={s.value}>
-                            {s.label}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
+
+                    {/* Champs spécifiques JOUEUR uniquement */}
+                    {!isManager && (
+                      <>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Position
+                          </label>
+                          <select
+                            {...register("position")}
+                            className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-green-500 outline-none bg-white"
+                          >
+                            {positions.map((p) => (
+                              <option key={p.value} value={p.value}>
+                                {p.label}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Niveau
+                          </label>
+                          <select
+                            {...register("skillLevel")}
+                            className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-green-500 outline-none bg-white"
+                          >
+                            {skillLevels.map((s) => (
+                              <option key={s.value} value={s.value}>
+                                {s.label}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      </>
+                    )}
+
                     <div className="md:col-span-2">
                       <label className="block text-sm font-medium text-gray-700 mb-1">
                         Biographie
@@ -563,23 +596,30 @@ const Profile = () => {
                         : null
                     }
                   />
-                  <InfoRow
-                    icon={Award}
-                    label="Niveau"
-                    value={
-                      skillLevels.find(
-                        (s) => s.value === profileData?.skillLevel
-                      )?.label
-                    }
-                  />
-                  <InfoRow
-                    icon={Layers}
-                    label="Position"
-                    value={
-                      positions.find((p) => p.value === profileData?.position)
-                        ?.label
-                    }
-                  />
+
+                  {/* Informations Joueur Uniquement */}
+                  {!isManager && (
+                    <>
+                      <InfoRow
+                        icon={Award}
+                        label="Niveau"
+                        value={
+                          skillLevels.find(
+                            (s) => s.value === profileData?.skillLevel
+                          )?.label
+                        }
+                      />
+                      <InfoRow
+                        icon={Layers}
+                        label="Position"
+                        value={
+                          positions.find(
+                            (p) => p.value === profileData?.position
+                          )?.label
+                        }
+                      />
+                    </>
+                  )}
                 </div>
               </div>
             )

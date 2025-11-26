@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { yupResolver } from "@hookform/resolvers/yup";
@@ -13,10 +13,14 @@ import {
   MapPin,
   Trophy,
   Loader2,
+  Briefcase, // Nouvel icône pour Manager
+  Shield, // Nouvel icône pour Équipe
 } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
 
+// Schéma de validation conditionnel
 const schema = yup.object({
+  userType: yup.string().oneOf(["player", "manager"]).required(),
   email: yup.string().email("Email invalide").required("Email requis"),
   password: yup
     .string()
@@ -32,10 +36,27 @@ const schema = yup.object({
     .required("Prénom requis"),
   lastName: yup.string().min(2, "Minimum 2 caractères").required("Nom requis"),
   phone: yup.string().optional(),
-  birthDate: yup.date().optional(),
-  position: yup.string().optional(),
-  skillLevel: yup.string().optional(),
-  locationCity: yup.string().optional(),
+
+  // Validation conditionnelle pour Manager
+  teamName: yup.string().when("userType", {
+    is: "manager",
+    then: (schema) =>
+      schema.min(3, "3 caractères minimum").required("Nom de l'équipe requis"),
+    otherwise: (schema) => schema.optional(),
+  }),
+
+  // Validation conditionnelle pour Joueur (optionnels dans votre code d'origine, mais logique adaptée ici)
+  position: yup.string().when("userType", {
+    is: "player",
+    then: (schema) => schema.optional(), // Ou .required("Position requise") selon votre besoin
+    otherwise: (schema) => schema.nullable(),
+  }),
+  skillLevel: yup.string().when("userType", {
+    is: "player",
+    then: (schema) => schema.optional(),
+    otherwise: (schema) => schema.nullable(),
+  }),
+  locationCity: yup.string().required("Ville requise"), // Requis pour tous
 });
 
 const Signup = () => {
@@ -45,24 +66,51 @@ const Signup = () => {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
+  // État local pour gérer l'affichage UI, synchronisé avec react-hook-form
+  const [userType, setUserType] = useState("player");
+
   const {
     register,
     handleSubmit,
+    setValue,
     formState: { errors },
+    clearErrors,
   } = useForm({
     resolver: yupResolver(schema),
+    defaultValues: {
+      userType: "player",
+      position: "",
+      skillLevel: "",
+    },
   });
+
+  // Fonction pour changer de type
+  const handleTypeChange = (type) => {
+    setUserType(type);
+    setValue("userType", type);
+    clearErrors(); // Nettoyer les erreurs potentielles lors du changement
+  };
 
   const onSubmit = async (data) => {
     setIsLoading(true);
-    const result = await signup(data);
+
+    // Nettoyage des données avant envoi
+    const payload = { ...data };
+    if (payload.userType === "manager") {
+      delete payload.position;
+      delete payload.skillLevel;
+    } else {
+      delete payload.teamName;
+    }
+
+    const result = await signup(payload);
     if (result.success) {
       navigate("/dashboard");
     }
     setIsLoading(false);
   };
 
-  // Composant Input réutilisable pour garder le code propre
+  // Composant Input réutilisable
   const InputField = ({
     icon: Icon,
     name,
@@ -113,12 +161,53 @@ const Signup = () => {
             Rejoignez le terrain
           </h1>
           <p className="text-gray-300">
-            Créez votre profil et connectez-vous avec des milliers de joueurs.
+            Créez votre profil et connectez-vous avec des milliers de
+            passionnés.
           </p>
         </div>
 
         <div className="bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl shadow-2xl p-8">
+          {/* SÉLECTEUR DE RÔLE */}
+          <div className="grid grid-cols-2 gap-4 mb-8">
+            <button
+              type="button"
+              onClick={() => handleTypeChange("player")}
+              className={`p-4 rounded-xl border-2 transition-all flex flex-col items-center justify-center gap-2 ${
+                userType === "player"
+                  ? "bg-green-600/20 border-green-500 text-white"
+                  : "bg-black/20 border-transparent text-gray-400 hover:bg-black/40"
+              }`}
+            >
+              <User
+                className={`w-8 h-8 ${
+                  userType === "player" ? "text-green-400" : "text-gray-500"
+                }`}
+              />
+              <span className="font-bold">Je suis Joueur</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handleTypeChange("manager")}
+              className={`p-4 rounded-xl border-2 transition-all flex flex-col items-center justify-center gap-2 ${
+                userType === "manager"
+                  ? "bg-green-600/20 border-green-500 text-white"
+                  : "bg-black/20 border-transparent text-gray-400 hover:bg-black/40"
+              }`}
+            >
+              <Briefcase
+                className={`w-8 h-8 ${
+                  userType === "manager" ? "text-green-400" : "text-gray-500"
+                }`}
+              />
+              <span className="font-bold">Je suis Manager</span>
+            </button>
+          </div>
+
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+            {/* Input caché pour le userType (nécessaire pour react-hook-form) */}
+            <input type="hidden" {...register("userType")} />
+
             {/* Section 1: Identité */}
             <div>
               <h3 className="text-green-400 font-semibold text-sm uppercase tracking-wider mb-4 flex items-center">
@@ -149,7 +238,7 @@ const Signup = () => {
                 name="email"
                 type="email"
                 label="Email *"
-                placeholder="joueur@exemple.com"
+                placeholder="email@exemple.com"
                 error={errors.email}
               />
               <InputField
@@ -231,64 +320,103 @@ const Signup = () => {
               </div>
             </div>
 
-            {/* Section 4: Profil Joueur */}
+            {/* Section 4: CONDITIONNELLE */}
             <div className="pt-2">
               <h3 className="text-green-400 font-semibold text-sm uppercase tracking-wider mb-4 flex items-center">
-                <Trophy className="w-4 h-4 mr-2" /> Profil Joueur
+                {userType === "manager" ? (
+                  <>
+                    <Shield className="w-4 h-4 mr-2" /> Votre Équipe
+                  </>
+                ) : (
+                  <>
+                    <Trophy className="w-4 h-4 mr-2" /> Profil Joueur
+                  </>
+                )}
               </h3>
+
               <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-1.5">
-                    Position
-                  </label>
-                  <select
-                    {...register("position")}
-                    className="w-full py-3 px-4 bg-black/20 border border-white/10 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-green-500"
-                  >
-                    <option value="" className="bg-gray-800">
-                      Choisir...
-                    </option>
-                    <option value="goalkeeper" className="bg-gray-800">
-                      Gardien
-                    </option>
-                    <option value="defender" className="bg-gray-800">
-                      Défenseur
-                    </option>
-                    <option value="midfielder" className="bg-gray-800">
-                      Milieu
-                    </option>
-                    <option value="forward" className="bg-gray-800">
-                      Attaquant
-                    </option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-1.5">
-                    Niveau
-                  </label>
-                  <select
-                    {...register("skillLevel")}
-                    className="w-full py-3 px-4 bg-black/20 border border-white/10 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-green-500"
-                  >
-                    <option value="" className="bg-gray-800">
-                      Choisir...
-                    </option>
-                    <option value="amateur" className="bg-gray-800">
-                      Amateur
-                    </option>
-                    <option value="intermediate" className="bg-gray-800">
-                      Intermédiaire
-                    </option>
-                    <option value="advanced" className="bg-gray-800">
-                      Avancé
-                    </option>
-                  </select>
-                </div>
+                {/* Champs spécifiques MANAGER */}
+                {userType === "manager" && (
+                  <div className="md:col-span-2">
+                    <InputField
+                      icon={Shield}
+                      name="teamName"
+                      label="Nom de l'équipe *"
+                      placeholder="FC Paris..."
+                      error={errors.teamName}
+                    />
+                    <p className="text-xs text-gray-400 mt-2 ml-1">
+                      * Vous serez automatiquement désigné capitaine.
+                    </p>
+                  </div>
+                )}
+
+                {/* Champs spécifiques JOUEUR */}
+                {userType === "player" && (
+                  <>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-300 mb-1.5">
+                        Position
+                      </label>
+                      <select
+                        {...register("position")}
+                        className="w-full py-3 px-4 bg-black/20 border border-white/10 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-green-500"
+                      >
+                        <option value="" className="bg-gray-800">
+                          Choisir...
+                        </option>
+                        <option value="goalkeeper" className="bg-gray-800">
+                          Gardien
+                        </option>
+                        <option value="defender" className="bg-gray-800">
+                          Défenseur
+                        </option>
+                        <option value="midfielder" className="bg-gray-800">
+                          Milieu
+                        </option>
+                        <option value="forward" className="bg-gray-800">
+                          Attaquant
+                        </option>
+                        <option value="any" className="bg-gray-800">
+                          Polyvalent
+                        </option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-300 mb-1.5">
+                        Niveau
+                      </label>
+                      <select
+                        {...register("skillLevel")}
+                        className="w-full py-3 px-4 bg-black/20 border border-white/10 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-green-500"
+                      >
+                        <option value="" className="bg-gray-800">
+                          Choisir...
+                        </option>
+                        <option value="beginner" className="bg-gray-800">
+                          Débutant
+                        </option>
+                        <option value="amateur" className="bg-gray-800">
+                          Amateur
+                        </option>
+                        <option value="intermediate" className="bg-gray-800">
+                          Intermédiaire
+                        </option>
+                        <option value="advanced" className="bg-gray-800">
+                          Avancé
+                        </option>
+                      </select>
+                    </div>
+                  </>
+                )}
+
+                {/* Champ commun : Ville */}
                 <InputField
                   icon={MapPin}
                   name="locationCity"
-                  label="Ville"
+                  label="Ville *"
                   placeholder="Paris"
+                  error={errors.locationCity}
                 />
               </div>
             </div>
@@ -303,8 +431,10 @@ const Signup = () => {
                   <Loader2 className="w-5 h-5 animate-spin mr-2" />
                   Création du compte...
                 </>
+              ) : userType === "manager" ? (
+                "Créer mon équipe"
               ) : (
-                "S'inscrire et commencer"
+                "S'inscrire et jouer"
               )}
             </button>
           </form>

@@ -1,5 +1,5 @@
-// ====== src/screens/matches/CreateMatchScreen.js - NOUVEAU DESIGN + BACKEND ======
-import React, { useState, useCallback, useEffect, useRef } from 'react';
+// ====== src/screens/matches/CreateMatchScreen.js ======
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -8,160 +8,164 @@ import {
   ScrollView,
   TouchableOpacity,
   Alert,
-  Platform,
-  StatusBar,
   KeyboardAvoidingView,
+  Platform,
   ActivityIndicator,
   Modal,
   Animated,
+  FlatList,
+  TouchableWithoutFeedback,
+  Keyboard,
+  StatusBar,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
-import LinearGradient from 'react-native-linear-gradient';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { DIMENSIONS, FONTS, SHADOWS } from '../../styles/theme';
+import LinearGradient from 'react-native-linear-gradient';
 import { matchesApi, teamsApi } from '../../services/api';
+import { DIMENSIONS, SHADOWS } from '../../styles/theme';
 
-const HEADER_MAX_HEIGHT = 250;
-const HEADER_MIN_HEIGHT = Platform.OS === 'ios' ? 100 : 80;
-const HEADER_SCROLL_DISTANCE = HEADER_MAX_HEIGHT - HEADER_MIN_HEIGHT;
+// Thème Premium Night
+const THEME = {
+  BG: '#0F172A', // Slate 900
+  SURFACE: '#1E293B', // Slate 800
+  INPUT_BG: '#334155', // Slate 700
+  TEXT: '#F8FAFC', // Slate 50
+  TEXT_SEC: '#94A3B8', // Slate 400
+  ACCENT: '#22C55E', // Green 500
+  BORDER: '#334155', // Slate 700
+  PRIMARY: '#3B82F6', // Blue 500
+};
 
-// Composant ModernInput (réutilisable)
+// Composant Input Stylisé Dark (Modifié pour supporter les suggestions)
 const ModernInput = ({
   label,
   value,
   onChangeText,
   placeholder,
-  error,
   icon,
   multiline,
-  keyboardType,
-  maxLength,
-  editable = true,
+  readonly,
   onPress,
-  ...props
-}) => {
-  const InputComponent = onPress ? TouchableOpacity : View;
-
-  return (
-    <View style={styles.inputContainer}>
-      {label && (
-        <View style={styles.inputLabelContainer}>
-          <Text style={styles.inputLabel}>{label}</Text>
-          {maxLength && (
-            <Text style={styles.inputCounter}>
-              {value?.length || 0}/{maxLength}
-            </Text>
-          )}
+  onFocus,
+  renderRight,
+}) => (
+  <View style={styles.inputGroup}>
+    <Text style={styles.label}>{label}</Text>
+    <TouchableOpacity
+      style={[
+        styles.inputContainer,
+        multiline && { height: 100, alignItems: 'flex-start' },
+        readonly && { opacity: 0.9 },
+      ]}
+      onPress={onPress}
+      activeOpacity={onPress ? 0.7 : 1}
+    >
+      <Icon
+        name={icon}
+        size={20}
+        color={THEME.ACCENT}
+        style={{ marginRight: 12 }}
+      />
+      {onPress ? (
+        <View style={{ flex: 1 }}>
+          <Text style={[styles.inputText, !value && { color: THEME.TEXT_SEC }]}>
+            {value || placeholder}
+          </Text>
         </View>
-      )}
-      <InputComponent
-        style={[
-          styles.inputWrapper,
-          error && styles.inputWrapperError,
-          multiline && styles.inputWrapperMultiline,
-          !editable && styles.inputWrapperDisabled,
-        ]}
-        onPress={onPress}
-        disabled={!onPress}
-      >
-        {icon && (
-          <Icon
-            name={icon}
-            size={20}
-            color={error ? '#EF4444' : '#9CA3AF'}
-            style={styles.inputIcon}
-          />
-        )}
+      ) : (
         <TextInput
+          style={[styles.inputText, multiline && { paddingTop: 0 }]}
           value={value}
           onChangeText={onChangeText}
           placeholder={placeholder}
-          placeholderTextColor="#9CA3AF"
+          placeholderTextColor={THEME.TEXT_SEC}
           multiline={multiline}
-          keyboardType={keyboardType}
-          maxLength={maxLength}
-          editable={editable && !onPress}
-          style={[
-            styles.input,
-            icon && styles.inputWithIcon,
-            multiline && styles.inputMultiline,
-          ]}
-          {...props}
+          editable={!readonly}
+          textAlignVertical={multiline ? 'top' : 'center'}
+          onFocus={onFocus}
         />
-        {onPress && <Icon name="chevron-down" size={20} color="#9CA3AF" />}
-      </InputComponent>
-      {error && (
-        <View style={styles.errorContainer}>
-          <Icon name="alert-circle" size={14} color="#EF4444" />
-          <Text style={styles.errorText}>{error}</Text>
-        </View>
       )}
-    </View>
-  );
-};
-
-// Composant SectionCard
-const SectionCard = ({ title, description, icon, iconBg, children }) => (
-  <View style={styles.sectionCard}>
-    <View style={styles.sectionHeader}>
-      <View style={[styles.sectionIcon, { backgroundColor: iconBg }]}>
-        <Icon name={icon} size={22} color="#FFF" />
-      </View>
-      <View style={styles.sectionTitleContainer}>
-        <Text style={styles.sectionTitle}>{title}</Text>
-        {description && (
-          <Text style={styles.sectionDescription}>{description}</Text>
-        )}
-      </View>
-    </View>
-    <View style={styles.sectionContent}>{children}</View>
+      {renderRight && renderRight()}
+      {onPress && !renderRight && (
+        <Icon name="chevron-down" size={20} color={THEME.TEXT_SEC} />
+      )}
+    </TouchableOpacity>
   </View>
 );
 
-// Modal de sélection d'équipe
+// Modal de sélection d'équipe (Pour VOTRE équipe)
 const TeamSelectorModal = ({
   visible,
   onClose,
   teams,
   onSelect,
-  selectedTeam,
+  selectedTeamId,
 }) => (
-  <Modal visible={visible} animationType="slide" transparent={true}>
+  <Modal
+    visible={visible}
+    animationType="slide"
+    transparent={true}
+    onRequestClose={onClose}
+  >
     <View style={styles.modalOverlay}>
       <View style={styles.modalContent}>
         <View style={styles.modalHeader}>
-          <Text style={styles.modalTitle}>Sélectionnez une équipe</Text>
-          <TouchableOpacity onPress={onClose} style={styles.modalClose}>
-            <Icon name="x" size={24} color="#6B7280" />
+          <Text style={styles.modalTitle}>Choisir votre équipe</Text>
+          <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
+            <Icon name="x" size={24} color={THEME.TEXT} />
           </TouchableOpacity>
         </View>
-        <ScrollView style={styles.modalBody}>
-          {teams.map(team => (
-            <TouchableOpacity
-              key={team.id}
-              style={[
-                styles.teamOption,
-                selectedTeam?.id === team.id && styles.teamOptionSelected,
-              ]}
-              onPress={() => {
-                onSelect(team);
-                onClose();
-              }}
-            >
-              <View style={styles.teamOptionIcon}>
-                <Icon name="shield" size={24} color="#22C55E" />
-              </View>
-              <View style={styles.teamOptionInfo}>
-                <Text style={styles.teamOptionName}>{team.name}</Text>
-                <Text style={styles.teamOptionMeta}>
-                  {team.member_count} membres
-                </Text>
-              </View>
-              {selectedTeam?.id === team.id && (
-                <Icon name="check" size={20} color="#22C55E" />
-              )}
-            </TouchableOpacity>
-          ))}
+
+        <ScrollView
+          style={styles.modalList}
+          contentContainerStyle={{ paddingBottom: 20 }}
+        >
+          {teams.map(team => {
+            const isSelected = selectedTeamId === team.id;
+            return (
+              <TouchableOpacity
+                key={team.id}
+                style={[
+                  styles.teamOption,
+                  isSelected && styles.teamOptionSelected,
+                ]}
+                onPress={() => {
+                  onSelect(team);
+                  onClose();
+                }}
+              >
+                <View
+                  style={[
+                    styles.teamIcon,
+                    isSelected && { backgroundColor: THEME.ACCENT },
+                  ]}
+                >
+                  <Icon
+                    name="shield"
+                    size={20}
+                    color={isSelected ? '#FFF' : THEME.ACCENT}
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text
+                    style={[
+                      styles.teamOptionName,
+                      isSelected && { color: THEME.ACCENT },
+                    ]}
+                  >
+                    {team.name}
+                  </Text>
+                  <Text style={styles.teamOptionMeta}>
+                    {team.member_count || 0} membres •{' '}
+                    {team.location_city || 'Ville non définie'}
+                  </Text>
+                </View>
+                {isSelected && (
+                  <Icon name="check" size={20} color={THEME.ACCENT} />
+                )}
+              </TouchableOpacity>
+            );
+          })}
         </ScrollView>
       </View>
     </View>
@@ -169,214 +173,202 @@ const TeamSelectorModal = ({
 );
 
 export const CreateMatchScreen = ({ navigation }) => {
-  const [isLoading, setIsLoading] = useState(false);
-  const [loadingTeams, setLoadingTeams] = useState(true);
-  const [myTeams, setMyTeams] = useState([]);
+  // États du formulaire
+  const [form, setForm] = useState({
+    team1: null,
+    opponent: '',
+    opponentTeam: null, // Équipe sélectionnée depuis les suggestions
+    location: '',
+    notes: '',
+  });
+  const [date, setDate] = useState(new Date());
+
+  // États pour la recherche d'adversaire
+  const [suggestions, setSuggestions] = useState([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [searchingOpponent, setSearchingOpponent] = useState(false);
+  const searchTimeout = useRef(null);
+
+  // États UI
   const [showTeamModal, setShowTeamModal] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [loadingTeams, setLoadingTeams] = useState(true);
+  const [myTeams, setMyTeams] = useState([]);
 
-  const [formData, setFormData] = useState({
-    team1: null, // Mon équipe
-    opponentName: '',
-    scheduledDate: new Date(),
-    location: '',
-    description: '',
-  });
-  const [errors, setErrors] = useState({});
-
+  // Animation Header
   const scrollY = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    loadMyTeams();
-  }, []);
-
-  const loadMyTeams = async () => {
-    try {
-      setLoadingTeams(true);
-      const result = await teamsApi.getMyTeams();
-
-      if (result.success) {
-        // Filtrer seulement les équipes où je suis capitaine
-        const captainTeams = result.data.filter(
-          t => t.role === 'owner' || t.role === 'captain',
-        );
-        setMyTeams(captainTeams);
-
-        // Pré-sélectionner la première équipe
-        if (captainTeams.length > 0) {
-          setFormData(prev => ({ ...prev, team1: captainTeams[0] }));
-        }
-      }
-    } catch (error) {
-      console.error('Load teams error:', error);
-    } finally {
-      setLoadingTeams(false);
-    }
-  };
-
-  const updateFormData = (field, value) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
-    if (errors[field]) {
-      setErrors(prev => ({ ...prev, [field]: null }));
-    }
-  };
-
-  const validateForm = () => {
-    const newErrors = {};
-
-    if (!formData.team1) {
-      newErrors.team1 = 'Sélectionnez votre équipe';
-    }
-
-    if (!formData.opponentName.trim()) {
-      newErrors.opponentName = "Nom de l'adversaire requis";
-    } else if (formData.opponentName.trim().length < 3) {
-      newErrors.opponentName = 'Minimum 3 caractères';
-    }
-
-    if (!formData.location.trim()) {
-      newErrors.location = 'Lieu requis';
-    }
-
-    // Vérifier que la date est dans le futur
-    if (formData.scheduledDate < new Date()) {
-      newErrors.scheduledDate = 'La date doit être dans le futur';
-    }
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
-
-  const handleDateChange = (event, selectedDate) => {
-    setShowDatePicker(false);
-    if (selectedDate) {
-      const newDate = new Date(formData.scheduledDate);
-      newDate.setFullYear(selectedDate.getFullYear());
-      newDate.setMonth(selectedDate.getMonth());
-      newDate.setDate(selectedDate.getDate());
-      updateFormData('scheduledDate', newDate);
-    }
-  };
-
-  const handleTimeChange = (event, selectedTime) => {
-    setShowTimePicker(false);
-    if (selectedTime) {
-      const newDate = new Date(formData.scheduledDate);
-      newDate.setHours(selectedTime.getHours());
-      newDate.setMinutes(selectedTime.getMinutes());
-      updateFormData('scheduledDate', newDate);
-    }
-  };
-
-  const handleSubmit = async () => {
-    if (!validateForm()) {
-      Alert.alert('Erreur', 'Veuillez corriger les erreurs du formulaire');
-      return;
-    }
-
-    try {
-      setIsLoading(true);
-
-      const matchData = {
-        team1_id: formData.team1.id,
-        opponent_name: formData.opponentName.trim(),
-        scheduled_at: formData.scheduledDate.toISOString(),
-        location: formData.location.trim(),
-        description: formData.description.trim() || undefined,
-      };
-
-      const result = await matchesApi.createMatch(matchData);
-
-      if (result.success) {
-        Alert.alert('Succès', 'Le match a été créé avec succès !', [
-          {
-            text: 'Voir le match',
-            onPress: () => {
-              navigation.navigate('MatchDetail', {
-                matchId: result.data.id,
-              });
-            },
-          },
-        ]);
-      } else {
-        Alert.alert('Erreur', result.error || 'Impossible de créer le match');
-      }
-    } catch (error) {
-      console.error('Create match error:', error);
-      Alert.alert('Erreur', 'Une erreur est survenue');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // Animations du header
   const headerHeight = scrollY.interpolate({
-    inputRange: [0, HEADER_SCROLL_DISTANCE],
-    outputRange: [HEADER_MAX_HEIGHT, HEADER_MIN_HEIGHT],
+    inputRange: [0, 100],
+    outputRange: [200, 100],
     extrapolate: 'clamp',
   });
-
-  const headerContentOpacity = scrollY.interpolate({
-    inputRange: [0, HEADER_SCROLL_DISTANCE / 2],
+  const headerOpacity = scrollY.interpolate({
+    inputRange: [0, 60],
     outputRange: [1, 0],
     extrapolate: 'clamp',
   });
 
-  const headerContentTranslateY = scrollY.interpolate({
-    inputRange: [0, HEADER_SCROLL_DISTANCE],
-    outputRange: [0, -20],
-    extrapolate: 'clamp',
-  });
+  // Chargement des équipes du capitaine
+  useEffect(() => {
+    const loadTeams = async () => {
+      try {
+        setLoadingTeams(true);
+        const res = await teamsApi.getMyTeams();
+        if (res.success) {
+          const captainTeams = res.data.filter(
+            t => t.role === 'owner' || t.role === 'captain',
+          );
+          setMyTeams(captainTeams);
+          if (captainTeams.length > 0) {
+            setForm(f => ({ ...f, team1: captainTeams[0] }));
+          }
+        }
+      } catch (e) {
+        console.error(e);
+      } finally {
+        setLoadingTeams(false);
+      }
+    };
+    loadTeams();
+  }, []);
 
-  const headerIconScale = scrollY.interpolate({
-    inputRange: [0, HEADER_SCROLL_DISTANCE],
-    outputRange: [1, 0.6],
-    extrapolate: 'clamp',
-  });
+  // Gestion de la recherche d'adversaire
+  const handleOpponentChange = text => {
+    setForm(prev => ({
+      ...prev,
+      opponent: text,
+      // Réinitialiser l'équipe sélectionnée si on modifie le texte
+      opponentTeam: null,
+    }));
 
-  const headerTitleScale = scrollY.interpolate({
-    inputRange: [0, HEADER_SCROLL_DISTANCE],
-    outputRange: [1, 0.9],
-    extrapolate: 'clamp',
-  });
+    if (searchTimeout.current) clearTimeout(searchTimeout.current);
 
-  const headerTitleTranslateY = scrollY.interpolate({
-    inputRange: [0, HEADER_SCROLL_DISTANCE],
-    outputRange: [0, -140],
-    extrapolate: 'clamp',
-  });
+    if (text.length > 2) {
+      setSearchingOpponent(true);
+      setShowSuggestions(true);
+      searchTimeout.current = setTimeout(async () => {
+        try {
+          const res = await teamsApi.searchTeams({ search: text, limit: 5 });
+          if (res.success) {
+            // Filtrer pour ne pas proposer sa propre équipe
+            const filtered = res.data.filter(t => t.id !== form.team1?.id);
+            setSuggestions(filtered);
+          }
+        } catch (error) {
+          console.error(error);
+        } finally {
+          setSearchingOpponent(false);
+        }
+      }, 500);
+    } else {
+      setSuggestions([]);
+      setShowSuggestions(false);
+      setSearchingOpponent(false);
+    }
+  };
+
+  const selectOpponent = team => {
+    setForm(prev => ({
+      ...prev,
+      opponent: team.name,
+      opponentTeam: team, // Stocker l'équipe complète
+    }));
+    setShowSuggestions(false);
+    setSuggestions([]);
+    Keyboard.dismiss();
+  };
+
+  const handleCreate = async () => {
+    if (!form.team1)
+      return Alert.alert('Erreur', 'Veuillez sélectionner votre équipe');
+
+    if (!form.opponentTeam) {
+      return Alert.alert(
+        'Erreur',
+        'Veuillez sélectionner une équipe adverse dans les suggestions',
+      );
+    }
+
+    if (!form.location)
+      return Alert.alert('Erreur', 'Veuillez indiquer le lieu du match');
+
+    setLoading(true);
+    try {
+      // Créer une invitation de match
+      const res = await matchesApi.createMatchInvitation({
+        senderTeamId: form.team1.id,
+        receiverTeamId: form.opponentTeam.id,
+        proposedDate: date.toISOString(),
+        proposedLocationId: null, // Vous pouvez implémenter la sélection de lieu plus tard
+        message: form.notes || `Match proposé au ${form.location}`,
+      });
+
+      if (res.success) {
+        Alert.alert(
+          'Invitation envoyée !',
+          `L'équipe ${form.opponentTeam.name} a reçu votre invitation de match.`,
+          [
+            {
+              text: 'OK',
+              onPress: () => navigation.goBack(),
+            },
+          ],
+        );
+      } else {
+        Alert.alert('Erreur', res.error || 'Impossible d\'envoyer l\'invitation');
+      }
+    } catch (e) {
+      console.error('Erreur création match:', e);
+      Alert.alert('Erreur', 'Problème technique lors de la création');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const onDateChange = (event, selectedDate) => {
+    setShowDatePicker(false);
+    if (selectedDate) {
+      const newDate = new Date(date);
+      newDate.setFullYear(selectedDate.getFullYear());
+      newDate.setMonth(selectedDate.getMonth());
+      newDate.setDate(selectedDate.getDate());
+      setDate(newDate);
+    }
+  };
+
+  const onTimeChange = (event, selectedDate) => {
+    setShowTimePicker(false);
+    if (selectedDate) {
+      const newDate = new Date(date);
+      newDate.setHours(selectedDate.getHours());
+      newDate.setMinutes(selectedDate.getMinutes());
+      setDate(newDate);
+    }
+  };
 
   if (loadingTeams) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#22C55E" />
-        <Text style={styles.loadingText}>Chargement...</Text>
+      <View style={[styles.container, styles.center]}>
+        <ActivityIndicator size="large" color={THEME.ACCENT} />
       </View>
     );
   }
 
   if (myTeams.length === 0) {
     return (
-      <View style={styles.emptyContainer}>
-        <Icon name="users" size={64} color="#D1D5DB" />
-        <Text style={styles.emptyTitle}>Aucune équipe</Text>
-        <Text style={styles.emptyDescription}>
-          Vous devez être capitaine d'une équipe pour créer un match
+      <View style={[styles.container, styles.center, { padding: 40 }]}>
+        <Icon name="shield-off" size={64} color={THEME.TEXT_SEC} />
+        <Text style={styles.emptyTitle}>Aucune équipe trouvée</Text>
+        <Text style={styles.emptyText}>
+          Vous devez être capitaine d'une équipe pour organiser un match.
         </Text>
         <TouchableOpacity
-          style={styles.emptyButton}
-          onPress={() => navigation.navigate('Teams')}
+          style={styles.createTeamBtn}
+          onPress={() => navigation.navigate('Teams', { screen: 'CreateTeam' })}
         >
-          <LinearGradient
-            colors={['#22C55E', '#16A34A']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.emptyButtonGradient}
-          >
-            <Icon name="plus" size={20} color="#FFF" />
-            <Text style={styles.emptyButtonText}>Créer une équipe</Text>
-          </LinearGradient>
+          <Text style={styles.createTeamText}>Créer une équipe</Text>
         </TouchableOpacity>
       </View>
     );
@@ -384,545 +376,433 @@ export const CreateMatchScreen = ({ navigation }) => {
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" />
+      <StatusBar barStyle="light-content" backgroundColor={THEME.BG} />
 
-      {/* Header animé */}
-      <Animated.View
-        style={[
-          styles.header,
-          {
-            height: headerHeight,
-          },
-        ]}
-      >
+      {/* Animated Header */}
+      <Animated.View style={[styles.header, { height: headerHeight }]}>
         <LinearGradient
-          colors={['#22C55E', '#16A34A']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.headerGradient}
-        >
+          colors={[THEME.ACCENT, '#166534']}
+          style={StyleSheet.absoluteFill}
+        />
+
+        <View style={styles.headerTop}>
           <TouchableOpacity
-            style={styles.backButton}
-            onPress={() => navigation.navigate('Matches')}
+            onPress={() => navigation.goBack()}
+            style={styles.backBtn}
           >
             <Icon name="x" size={24} color="#FFF" />
           </TouchableOpacity>
+          <Text style={styles.headerTitleSmall}>Nouveau Match</Text>
+          <View style={{ width: 24 }} />
+        </View>
 
-          <Animated.View
-            style={[
-              styles.headerContent,
-              {
-                // opacity: headerContentOpacity,
-                transform: [{ translateY: headerContentTranslateY }],
-              },
-            ]}
-          >
-            <Animated.View
-              style={[
-                styles.headerIconContainer,
-                {
-                  transform: [{ scale: headerIconScale }],
-                  opacity: headerContentOpacity,
-                },
-              ]}
-            >
-              <Icon name="calendar" size={32} color="#FFF" />
-            </Animated.View>
-            <Animated.Text
-              style={[
-                styles.headerTitle,
-                {
-                  transform: [
-                    {
-                      scale: headerTitleScale,
-                    },
-                    {
-                      translateY: headerTitleTranslateY,
-                    },
-                  ],
-                },
-              ]}
-            >
-              Nouveau match
-            </Animated.Text>
-
-            <Animated.Text
-              style={[styles.headerSubtitle, { opacity: headerContentOpacity }]}
-            >
-              Organisez votre prochain match
-            </Animated.Text>
-          </Animated.View>
-        </LinearGradient>
+        <Animated.View
+          style={[styles.headerContent, { opacity: headerOpacity }]}
+        >
+          <View style={styles.iconCircle}>
+            <Icon name="calendar" size={32} color={THEME.ACCENT} />
+          </View>
+          <Text style={styles.headerTitleBig}>Organiser un match</Text>
+          <Text style={styles.headerSubtitle}>Défiez une autre équipe</Text>
+        </Animated.View>
       </Animated.View>
 
       <KeyboardAvoidingView
-        style={styles.keyboardView}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={{ flex: 1 }}
       >
-        <Animated.ScrollView
-          style={styles.scrollView}
-          contentContainerStyle={[
-            styles.scrollContent,
-            { paddingTop: HEADER_MAX_HEIGHT + 24 },
-          ]}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-          scrollEventThrottle={16}
+        <ScrollView
+          contentContainerStyle={styles.content}
           onScroll={Animated.event(
             [{ nativeEvent: { contentOffset: { y: scrollY } } }],
             { useNativeDriver: false },
           )}
+          scrollEventThrottle={16}
+          keyboardShouldPersistTaps="handled"
         >
-          {/* Section Équipes */}
-          <SectionCard
-            title="Équipes"
-            description="Qui joue ?"
-            icon="users"
-            iconBg="#22C55E"
-          >
+          {/* Sélection de l'équipe Domicile */}
+          <ModernInput
+            label="Votre Équipe (Domicile)"
+            value={form.team1?.name}
+            icon="shield"
+            placeholder="Sélectionner..."
+            onPress={() => setShowTeamModal(true)}
+          />
+
+          {/* Adversaire avec Suggestions */}
+          <View style={{ zIndex: 10 }}>
             <ModernInput
-              label="Votre équipe"
-              value={formData.team1?.name || ''}
-              placeholder="Sélectionnez votre équipe"
-              error={errors.team1}
-              icon="shield"
-              editable={false}
-              onPress={() => setShowTeamModal(true)}
+              label="Adversaire (Extérieur)"
+              value={form.opponent}
+              onChangeText={handleOpponentChange}
+              placeholder="Rechercher une équipe adverse"
+              icon="users"
+              renderRight={() =>
+                searchingOpponent ? (
+                  <ActivityIndicator size="small" color={THEME.ACCENT} />
+                ) : form.opponentTeam ? (
+                  <Icon name="check-circle" size={20} color={THEME.ACCENT} />
+                ) : null
+              }
+              onFocus={() => {
+                if (form.opponent.length > 2 && suggestions.length > 0)
+                  setShowSuggestions(true);
+              }}
             />
 
-            <ModernInput
-              label="Équipe adverse"
-              value={formData.opponentName}
-              onChangeText={text => updateFormData('opponentName', text)}
-              placeholder="Nom de l'équipe adverse"
-              error={errors.opponentName}
-              icon="shield"
-              maxLength={100}
-            />
-          </SectionCard>
+            {/* Équipe sélectionnée */}
+            {form.opponentTeam && !showSuggestions && (
+              <View style={styles.selectedTeamBadge}>
+                <Icon name="check-circle" size={16} color={THEME.ACCENT} />
+                <Text style={styles.selectedTeamText}>
+                  {form.opponentTeam.name} sélectionnée
+                </Text>
+                <TouchableOpacity
+                  onPress={() => {
+                    setForm(prev => ({ ...prev, opponent: '', opponentTeam: null }));
+                    setSuggestions([]);
+                  }}
+                  style={styles.clearSelection}
+                >
+                  <Icon name="x" size={16} color={THEME.TEXT_SEC} />
+                </TouchableOpacity>
+              </View>
+            )}
 
-          {/* Section Date et Heure */}
-          <SectionCard
-            title="Date et Heure"
-            description="Quand se joue le match ?"
-            icon="calendar"
-            iconBg="#3B82F6"
-          >
-            <ModernInput
-              label="Date"
-              value={formData.scheduledDate.toLocaleDateString('fr-FR', {
-                weekday: 'long',
-                day: 'numeric',
-                month: 'long',
-                year: 'numeric',
-              })}
-              placeholder="Sélectionnez la date"
-              error={errors.scheduledDate}
-              icon="calendar"
-              editable={false}
-              onPress={() => setShowDatePicker(true)}
-            />
+            {/* Liste des suggestions */}
+            {showSuggestions && suggestions.length > 0 && (
+              <View style={styles.suggestionsContainer}>
+                {suggestions.map(team => (
+                  <TouchableOpacity
+                    key={team.id}
+                    style={styles.suggestionItem}
+                    onPress={() => selectOpponent(team)}
+                  >
+                    <View style={styles.suggestionIcon}>
+                      <Icon name="shield" size={14} color={THEME.TEXT_SEC} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.suggestionName}>{team.name}</Text>
+                      <Text style={styles.suggestionDetails}>
+                        {team.locationCity || team.location_city || 'Ville inconnue'} •{' '}
+                        {team.currentPlayers || team.member_count || 0} membres
+                      </Text>
+                    </View>
+                    <Icon name="chevron-right" size={16} color={THEME.TEXT_SEC} />
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+          </View>
 
-            <ModernInput
-              label="Heure"
-              value={formData.scheduledDate.toLocaleTimeString('fr-FR', {
-                hour: '2-digit',
-                minute: '2-digit',
-              })}
-              placeholder="Sélectionnez l'heure"
-              icon="clock"
-              editable={false}
-              onPress={() => setShowTimePicker(true)}
-            />
-          </SectionCard>
+          {/* Date et Heure */}
+          <View style={styles.row}>
+            <View style={{ flex: 1, marginRight: 8 }}>
+              <ModernInput
+                label="Date"
+                value={date.toLocaleDateString()}
+                onPress={() => setShowDatePicker(true)}
+                icon="calendar"
+              />
+            </View>
+            <View style={{ flex: 1, marginLeft: 8 }}>
+              <ModernInput
+                label="Heure"
+                value={date.toLocaleTimeString([], {
+                  hour: '2-digit',
+                  minute: '2-digit',
+                })}
+                onPress={() => setShowTimePicker(true)}
+                icon="clock"
+              />
+            </View>
+          </View>
 
-          {/* Section Lieu */}
-          <SectionCard
-            title="Lieu"
-            description="Où se joue le match ?"
+          {/* Lieu */}
+          <ModernInput
+            label="Lieu du match"
+            value={form.location}
+            onChangeText={t => setForm({ ...form, location: t })}
+            placeholder="Stade, Adresse, Ville..."
             icon="map-pin"
-            iconBg="#F59E0B"
-          >
-            <ModernInput
-              label="Adresse ou nom du terrain"
-              value={formData.location}
-              onChangeText={text => updateFormData('location', text)}
-              placeholder="Ex: Stade Municipal, 123 Rue..."
-              error={errors.location}
-              icon="map-pin"
-              maxLength={200}
-            />
-          </SectionCard>
+          />
 
-          {/* Section Notes */}
-          <SectionCard
-            title="Notes"
-            description="Informations complémentaires"
-            icon="file-text"
-            iconBg="#8B5CF6"
-          >
-            <ModernInput
-              label="Description (optionnel)"
-              value={formData.description}
-              onChangeText={text => updateFormData('description', text)}
-              placeholder="Précisions sur le match, équipement nécessaire..."
-              icon="align-left"
-              multiline
-              maxLength={500}
-            />
-          </SectionCard>
-        </Animated.ScrollView>
+          {/* Notes */}
+          <ModernInput
+            label="Notes / Informations"
+            value={form.notes}
+            onChangeText={t => setForm({ ...form, notes: t })}
+            placeholder="Type de terrain, format (5v5, 11v11)..."
+            icon="align-left"
+            multiline
+          />
 
-        {/* Footer avec bouton */}
+          <View style={{ height: 100 }} />
+        </ScrollView>
+
+        {/* Footer Actions */}
         <View style={styles.footer}>
           <TouchableOpacity
-            style={styles.submitButton}
-            onPress={handleSubmit}
-            disabled={isLoading}
-            activeOpacity={0.8}
+            style={styles.submitBtn}
+            onPress={handleCreate}
+            disabled={loading}
           >
-            <LinearGradient
-              colors={['#22C55E', '#16A34A']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.submitGradient}
-            >
-              {isLoading ? (
-                <ActivityIndicator color="#FFF" />
-              ) : (
-                <>
-                  <Icon name="check" size={22} color="#FFF" />
-                  <Text style={styles.submitText}>Créer le match</Text>
-                </>
-              )}
-            </LinearGradient>
+            {loading ? (
+              <ActivityIndicator color="#000" />
+            ) : (
+              <Text style={styles.btnText}>CONFIRMER LE MATCH</Text>
+            )}
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
 
-      {/* Modals */}
+      {/* Modals Date/Time */}
+      {showDatePicker && (
+        <DateTimePicker
+          value={date}
+          mode="date"
+          display="default"
+          onChange={onDateChange}
+          minimumDate={new Date()}
+        />
+      )}
+      {showTimePicker && (
+        <DateTimePicker
+          value={date}
+          mode="time"
+          display="default"
+          onChange={onTimeChange}
+        />
+      )}
+
+      {/* Modal Sélection Équipe */}
       <TeamSelectorModal
         visible={showTeamModal}
         onClose={() => setShowTeamModal(false)}
         teams={myTeams}
-        selectedTeam={formData.team1}
-        onSelect={team => updateFormData('team1', team)}
+        selectedTeamId={form.team1?.id}
+        onSelect={team => setForm(p => ({ ...p, team1: team }))}
       />
-
-      {showDatePicker && (
-        <DateTimePicker
-          value={formData.scheduledDate}
-          mode="date"
-          display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-          onChange={handleDateChange}
-          minimumDate={new Date()}
-        />
-      )}
-
-      {showTimePicker && (
-        <DateTimePicker
-          value={formData.scheduledDate}
-          mode="time"
-          display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-          onChange={handleTimeChange}
-        />
-      )}
     </View>
   );
 };
 
-// Styles (similaires à CreateTeamScreen)
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F8FAFC',
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#F8FAFC',
-  },
-  loadingText: {
-    marginTop: 12,
-    fontSize: 14,
-    color: '#6B7280',
-  },
-  emptyContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#F8FAFC',
-    padding: 32,
-  },
-  emptyTitle: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: '#1F2937',
-    marginTop: 16,
-    marginBottom: 8,
-  },
-  emptyDescription: {
-    fontSize: 14,
-    color: '#6B7280',
-    textAlign: 'center',
-    marginBottom: 24,
-  },
-  emptyButton: {
-    borderRadius: 12,
-    overflow: 'hidden',
-  },
-  emptyButtonGradient: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 14,
-    paddingHorizontal: 24,
-    gap: 8,
-  },
-  emptyButtonText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#FFF',
-  },
+  container: { flex: 1, backgroundColor: THEME.BG },
+  center: { justifyContent: 'center', alignItems: 'center' },
+
+  // Header Animated
   header: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    zIndex: 10,
     overflow: 'hidden',
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
   },
-  headerGradient: {
-    flex: 1,
-    paddingTop: Platform.OS === 'ios' ? 60 : 30,
-    paddingHorizontal: DIMENSIONS.CONTAINER_PADDING,
-    paddingBottom: DIMENSIONS.SPACING_XL,
-  },
-  backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: DIMENSIONS.SPACING_LG,
-  },
-  headerContent: {
-    alignItems: 'center',
-  },
-  headerIconContainer: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: DIMENSIONS.SPACING_MD,
-  },
-  headerTitle: {
-    fontSize: FONTS.SIZE.XXL,
-    fontWeight: FONTS.WEIGHT.BOLD,
-    color: '#FFFFFF',
-    marginBottom: DIMENSIONS.SPACING_XS,
-  },
-  headerSubtitle: {
-    fontSize: FONTS.SIZE.MD,
-    color: 'rgba(255, 255, 255, 0.9)',
-  },
-  keyboardView: {
-    flex: 1,
-  },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    padding: DIMENSIONS.CONTAINER_PADDING,
-    paddingBottom: DIMENSIONS.SPACING_XXL,
-  },
-  sectionCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: DIMENSIONS.BORDER_RADIUS_LG,
-    padding: DIMENSIONS.SPACING_LG,
-    marginBottom: DIMENSIONS.SPACING_LG,
-    ...SHADOWS.MEDIUM,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginBottom: DIMENSIONS.SPACING_LG,
-  },
-  sectionIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: DIMENSIONS.SPACING_MD,
-  },
-  sectionTitleContainer: {
-    flex: 1,
-  },
-  sectionTitle: {
-    fontSize: FONTS.SIZE.LG,
-    fontWeight: FONTS.WEIGHT.BOLD,
-    color: '#1F2937',
-    marginBottom: DIMENSIONS.SPACING_XXS,
-  },
-  sectionDescription: {
-    fontSize: FONTS.SIZE.SM,
-    color: '#6B7280',
-  },
-  sectionContent: {
-    gap: DIMENSIONS.SPACING_MD,
-  },
-  inputContainer: {
-    gap: DIMENSIONS.SPACING_XS,
-  },
-  inputLabelContainer: {
+  headerTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingTop: Platform.OS === 'ios' ? 60 : 30,
   },
-  inputLabel: {
-    fontSize: FONTS.SIZE.SM,
-    fontWeight: FONTS.WEIGHT.SEMIBOLD,
-    color: '#374151',
+  headerContent: { alignItems: 'center', marginTop: 10 },
+  headerTitleSmall: { color: '#FFF', fontSize: 16, fontWeight: 'bold' },
+  headerTitleBig: {
+    color: '#FFF',
+    fontSize: 24,
+    fontWeight: 'bold',
+    marginTop: 10,
   },
-  inputCounter: {
-    fontSize: FONTS.SIZE.XS,
-    color: '#9CA3AF',
-  },
-  inputWrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F9FAFB',
-    borderRadius: DIMENSIONS.BORDER_RADIUS_MD,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    paddingHorizontal: DIMENSIONS.SPACING_MD,
-  },
-  inputWrapperError: {
-    borderColor: '#EF4444',
-    backgroundColor: '#FEF2F2',
-  },
-  inputWrapperDisabled: {
-    backgroundColor: '#F3F4F6',
-  },
-  inputWrapperMultiline: {
-    alignItems: 'flex-start',
-  },
-  inputIcon: {
-    marginRight: DIMENSIONS.SPACING_SM,
-  },
-  input: {
-    flex: 1,
-    paddingVertical: DIMENSIONS.SPACING_MD,
-    fontSize: FONTS.SIZE.MD,
-    color: '#1F2937',
-  },
-  inputWithIcon: {
-    paddingLeft: 0,
-  },
-  inputMultiline: {
-    minHeight: 100,
-    textAlignVertical: 'top',
-  },
-  errorContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: DIMENSIONS.SPACING_XS,
-  },
-  errorText: {
-    fontSize: FONTS.SIZE.SM,
-    color: '#EF4444',
-  },
-  footer: {
-    padding: DIMENSIONS.CONTAINER_PADDING,
-    backgroundColor: '#FFFFFF',
-    borderTopWidth: 1,
-    borderTopColor: '#E5E7EB',
-    ...SHADOWS.MEDIUM,
-  },
-  submitButton: {
-    borderRadius: DIMENSIONS.BORDER_RADIUS_MD,
-    overflow: 'hidden',
-  },
-  submitGradient: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  headerSubtitle: { color: 'rgba(255,255,255,0.8)', fontSize: 14 },
+  iconCircle: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#FFF',
     justifyContent: 'center',
-    paddingVertical: DIMENSIONS.SPACING_MD,
-    gap: DIMENSIONS.SPACING_SM,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
   },
-  submitText: {
-    fontSize: FONTS.SIZE.LG,
-    fontWeight: FONTS.WEIGHT.BOLD,
-    color: '#FFFFFF',
+
+  content: { padding: 24, paddingTop: 30 },
+  row: { flexDirection: 'row' },
+
+  // Inputs
+  inputGroup: { marginBottom: 20 },
+  label: {
+    color: THEME.TEXT_SEC,
+    fontSize: 12,
+    marginBottom: 8,
+    textTransform: 'uppercase',
+    fontWeight: '600',
+    letterSpacing: 0.5,
   },
+  inputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: THEME.SURFACE,
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: THEME.BORDER,
+  },
+  inputText: { flex: 1, color: THEME.TEXT, fontSize: 16, padding: 0 },
+
+  // Suggestions Dropdown
+  suggestionsContainer: {
+    position: 'absolute',
+    top: 80,
+    left: 0,
+    right: 0,
+    backgroundColor: THEME.SURFACE,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: THEME.BORDER,
+    zIndex: 1000,
+    elevation: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    maxHeight: 200,
+  },
+  suggestionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.05)',
+  },
+  suggestionIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  suggestionName: { color: THEME.TEXT, fontSize: 14, fontWeight: 'bold' },
+  suggestionDetails: { color: THEME.TEXT_SEC, fontSize: 12 },
+
+  // Selected Team Badge
+  selectedTeamBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(34, 197, 94, 0.1)',
+    borderWidth: 1,
+    borderColor: THEME.ACCENT,
+    borderRadius: 8,
+    padding: 10,
+    marginTop: 8,
+    gap: 8,
+  },
+  selectedTeamText: {
+    flex: 1,
+    color: THEME.ACCENT,
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  clearSelection: {
+    padding: 4,
+  },
+
+  // Footer
+  footer: {
+    padding: 24,
+    borderTopWidth: 1,
+    borderTopColor: THEME.BORDER,
+    backgroundColor: THEME.BG,
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+  },
+  submitBtn: {
+    backgroundColor: THEME.ACCENT,
+    height: 56,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: THEME.ACCENT,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+  },
+  btnText: { color: '#000', fontWeight: 'bold', fontSize: 16 },
+
+  // Empty State
+  emptyTitle: {
+    color: THEME.TEXT,
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginTop: 16,
+  },
+  emptyText: {
+    color: THEME.TEXT_SEC,
+    textAlign: 'center',
+    marginTop: 8,
+    marginBottom: 24,
+  },
+  createTeamBtn: {
+    backgroundColor: THEME.PRIMARY,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 24,
+  },
+  createTeamText: { color: '#FFF', fontWeight: 'bold' },
+
+  // Modal Styles
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(0,0,0,0.7)',
     justifyContent: 'flex-end',
   },
   modalContent: {
-    backgroundColor: '#FFF',
+    backgroundColor: THEME.BG,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     maxHeight: '70%',
-    paddingBottom: Platform.OS === 'ios' ? 34 : 20,
+    padding: 24,
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    marginBottom: 20,
   },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#1F2937',
-  },
-  modalClose: {
-    padding: 4,
-  },
-  modalBody: {
-    padding: 20,
-  },
+  modalTitle: { color: THEME.TEXT, fontSize: 18, fontWeight: 'bold' },
+  modalList: { width: '100%' },
+
   teamOption: {
     flexDirection: 'row',
     alignItems: 'center',
     padding: 16,
-    backgroundColor: '#F9FAFB',
-    borderRadius: 12,
     marginBottom: 12,
+    backgroundColor: THEME.SURFACE,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: THEME.BORDER,
   },
   teamOptionSelected: {
-    backgroundColor: '#F0FDF4',
-    borderWidth: 2,
-    borderColor: '#22C55E',
+    borderColor: THEME.ACCENT,
+    backgroundColor: 'rgba(34, 197, 94, 0.1)',
   },
-  teamOptionIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: '#22C55E20',
+  teamIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.1)',
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 12,
+    marginRight: 16,
   },
-  teamOptionInfo: {
-    flex: 1,
-  },
-  teamOptionName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1F2937',
-    marginBottom: 2,
-  },
-  teamOptionMeta: {
-    fontSize: 13,
-    color: '#6B7280',
-  },
+  teamOptionName: { color: THEME.TEXT, fontSize: 16, fontWeight: 'bold' },
+  teamOptionMeta: { color: THEME.TEXT_SEC, fontSize: 12 },
 });

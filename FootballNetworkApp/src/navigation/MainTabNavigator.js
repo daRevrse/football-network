@@ -2,37 +2,45 @@
 import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { useSelector } from 'react-redux';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, Platform } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import { DashboardScreen } from '../screens/dashboard';
 import { TeamsStackNavigator } from './TeamsStackNavigator';
 import { MatchesStackNavigator } from './MatchesStackNavigator';
 import { SearchStackNavigator } from './SearchStackNavigator';
 import { ProfileStackNavigator } from './ProfileStackNavigator';
-import { useTheme } from '../hooks/useTheme';
-import { DIMENSIONS, FONTS, SHADOWS } from '../styles/theme';
-import FeedScreen from './../screens/feed/FeedScreen';
+import FeedScreen from '../screens/feed/FeedScreen';
 
 const Tab = createBottomTabNavigator();
 
-// Icône de Tab Bar avec badge
+// Thème Dark "Premium"
+const THEME = {
+  BG: '#0F172A',
+  SURFACE: '#1E293B', // Couleur de la TabBar
+  ACCENT: '#22C55E', // Vert Néon
+  INACTIVE: '#64748B', // Gris ardoise
+  BADGE: '#EF4444', // Rouge notification
+  TEXT: '#F8FAFC',
+};
+
+// Icône de Tab Bar personnalisée
 const TabBarIcon = ({ focused, iconName, badgeCount }) => {
-  const { colors: COLORS } = useTheme('auto');
-  const color = focused ? COLORS.PRIMARY : COLORS.TEXT_MUTED;
+  const color = focused ? THEME.ACCENT : THEME.INACTIVE;
 
   return (
-    <View style={styles.tabIconContainer}>
+    <View style={styles.iconContainer}>
+      {/* Effet de lueur subtile quand actif */}
       <View
         style={[
-          styles.tabIconWrapper,
-          focused && { backgroundColor: COLORS.PRIMARY_ULTRA_LIGHT },
+          styles.iconWrapper,
+          focused && { backgroundColor: 'rgba(34, 197, 94, 0.1)' },
         ]}
       >
         <Icon name={iconName} size={24} color={color} />
       </View>
 
       {badgeCount > 0 && (
-        <View style={[styles.badge, { backgroundColor: COLORS.ERROR }]}>
+        <View style={styles.badge}>
           <Text style={styles.badgeText}>
             {badgeCount > 9 ? '9+' : badgeCount}
           </Text>
@@ -43,21 +51,13 @@ const TabBarIcon = ({ focused, iconName, badgeCount }) => {
 };
 
 export const MainTabNavigator = () => {
-  const { colors: COLORS, isDark } = useTheme('auto');
-
-  // Sélecteurs sécurisés avec valeurs par défaut
-  const notificationsState = useSelector(state => {
-    if (!state || !state.notifications) return { unreadCount: 0 };
-    return state.notifications;
-  });
-
-  const matchesState = useSelector(state => {
-    if (!state || !state.matches) return { invitations: [] };
-    return state.matches;
-  });
-
-  const { unreadCount } = notificationsState;
-  const { invitations } = matchesState;
+  // Sélecteurs Redux pour les badges
+  const { unreadCount } = useSelector(
+    state => state.notifications || { unreadCount: 0 },
+  );
+  const { invitations } = useSelector(
+    state => state.matches || { invitations: [] },
+  );
   const pendingInvitations = invitations.filter(
     inv => inv.status === 'pending',
   ).length;
@@ -65,22 +65,36 @@ export const MainTabNavigator = () => {
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
+        headerShown: false,
+        tabBarShowLabel: false, // On cache les labels pour un look plus épuré
+        tabBarStyle: styles.tabBar,
         tabBarIcon: ({ focused }) => {
           let iconName;
           let badgeCount = 0;
 
-          if (route.name === 'Dashboard') {
-            iconName = 'home';
-          } else if (route.name === 'Teams') {
-            iconName = 'users';
-          } else if (route.name === 'Search') {
-            iconName = 'search';
-          } else if (route.name === 'Matches') {
-            iconName = 'calendar';
-            badgeCount = pendingInvitations;
-          } else if (route.name === 'Profile') {
-            iconName = 'user';
-            badgeCount = unreadCount;
+          switch (route.name) {
+            case 'Dashboard':
+              iconName = 'home';
+              break;
+            case 'Feed':
+              iconName = 'activity';
+              break;
+            case 'Teams':
+              iconName = 'shield';
+              break;
+            case 'Search':
+              iconName = 'search';
+              break;
+            case 'Matches':
+              iconName = 'calendar';
+              badgeCount = pendingInvitations;
+              break;
+            case 'Profile':
+              iconName = 'user';
+              badgeCount = unreadCount;
+              break;
+            default:
+              iconName = 'circle';
           }
 
           return (
@@ -91,134 +105,63 @@ export const MainTabNavigator = () => {
             />
           );
         },
-        tabBarActiveTintColor: COLORS.PRIMARY,
-        tabBarInactiveTintColor: COLORS.TEXT_MUTED,
-        tabBarStyle: {
-          backgroundColor: COLORS.WHITE,
-          borderTopColor: COLORS.BORDER,
-          borderTopWidth: 1,
-          height: 70,
-          paddingBottom: 10,
-          paddingTop: 10,
-          ...SHADOWS.MEDIUM,
-        },
-        tabBarLabelStyle: {
-          fontSize: FONTS.SIZE.XS,
-          fontWeight: FONTS.WEIGHT.MEDIUM,
-          marginTop: 4,
-        },
-        headerShown: false,
       })}
     >
-      <Tab.Screen
-        name="Dashboard"
-        component={DashboardScreen}
-        options={{ title: 'Accueil' }}
-      />
-      <Tab.Screen
-        name="Teams"
-        component={TeamsStackNavigator}
-        options={{ title: 'Équipes' }}
-      />
-      <Tab.Screen
-        name="Search"
-        component={SearchStackNavigator}
-        options={{ title: 'Recherche' }}
-      />
-      <Tab.Screen
-        name="Matches"
-        component={MatchesStackNavigator}
-        options={{ title: 'Matchs' }}
-      />
-      <Tab.Screen
-        name="Profile"
-        component={ProfileStackNavigator}
-        options={{ title: 'Profil' }}
-      />
-      <Tab.Screen
-        name="Feed"
-        component={FeedScreen}
-        options={{
-          tabBarLabel: 'Feed',
-          tabBarIcon: ({ color, size }) => (
-            <Icon name="activity" size={size} color={color} />
-          ),
-        }}
-      />
+      <Tab.Screen name="Dashboard" component={DashboardScreen} />
+      <Tab.Screen name="Feed" component={FeedScreen} />
+      <Tab.Screen name="Teams" component={TeamsStackNavigator} />
+      <Tab.Screen name="Matches" component={MatchesStackNavigator} />
+      <Tab.Screen name="Search" component={SearchStackNavigator} />
+      <Tab.Screen name="Profile" component={ProfileStackNavigator} />
     </Tab.Navigator>
   );
 };
 
 const styles = StyleSheet.create({
-  // Tab Icon Styles
-  tabIconContainer: {
-    position: 'relative',
+  tabBar: {
+    backgroundColor: THEME.SURFACE,
+    borderTopWidth: 0, // Pas de bordure pour un look "flottant" ou intégré
+    elevation: 0,
+    height: Platform.OS === 'ios' ? 85 : 65,
+    paddingTop: 10,
+    paddingBottom: Platform.OS === 'ios' ? 25 : 10,
+    // Ombre subtile vers le haut pour détacher du fond
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+  },
+  iconContainer: {
     alignItems: 'center',
     justifyContent: 'center',
+    width: 50,
+    height: 50,
   },
-  tabIconWrapper: {
-    width: 48,
-    height: 32,
-    borderRadius: DIMENSIONS.BORDER_RADIUS_LG,
+  iconWrapper: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
   },
   badge: {
     position: 'absolute',
-    right: -2,
-    top: -6,
-    borderRadius: 10,
-    minWidth: 20,
-    height: 20,
-    justifyContent: 'center',
+    top: 0,
+    right: 0,
+    backgroundColor: THEME.BADGE,
+    borderRadius: 8,
+    minWidth: 16,
+    height: 16,
     alignItems: 'center',
+    justifyContent: 'center',
     borderWidth: 2,
-    borderColor: '#FFFFFF',
+    borderColor: THEME.SURFACE, // Bordure couleur fond pour "découper" le badge
   },
   badgeText: {
-    color: '#FFFFFF',
-    fontSize: FONTS.SIZE.XXS,
-    fontWeight: FONTS.WEIGHT.BOLD,
-  },
-
-  // Coming Soon Styles
-  comingSoonContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: DIMENSIONS.CONTAINER_PADDING * 2,
-  },
-  comingSoonIconContainer: {
-    width: 140,
-    height: 140,
-    borderRadius: 70,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: DIMENSIONS.SPACING_XL,
-    ...SHADOWS.LARGE,
-  },
-  comingSoonTitle: {
-    fontSize: FONTS.SIZE.XXL,
-    fontWeight: FONTS.WEIGHT.BOLD,
-    marginBottom: DIMENSIONS.SPACING_MD,
+    color: '#FFF',
+    fontSize: 10,
+    fontWeight: 'bold',
     textAlign: 'center',
-  },
-  comingSoonDescription: {
-    fontSize: FONTS.SIZE.MD,
-    textAlign: 'center',
-    lineHeight: FONTS.SIZE.MD * FONTS.LINE_HEIGHT.RELAXED,
-    marginBottom: DIMENSIONS.SPACING_XL,
-  },
-  comingSoonBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: DIMENSIONS.SPACING_MD,
-    paddingVertical: DIMENSIONS.SPACING_SM,
-    borderRadius: DIMENSIONS.BORDER_RADIUS_FULL,
-    gap: DIMENSIONS.SPACING_XS,
-  },
-  comingSoonBadgeText: {
-    fontSize: FONTS.SIZE.SM,
-    fontWeight: FONTS.WEIGHT.SEMIBOLD,
+    paddingHorizontal: 2,
   },
 });

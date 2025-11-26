@@ -1,4 +1,4 @@
-// ====== src/screens/profile/ProfileScreen.js - NOUVEAU DESIGN ======
+// ====== src/screens/profile/ProfileScreen.js ======
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import {
   View,
@@ -17,107 +17,58 @@ import {
 import { useSelector, useDispatch } from 'react-redux';
 import Icon from 'react-native-vector-icons/Feather';
 import LinearGradient from 'react-native-linear-gradient';
-import { useTheme } from '../../hooks/useTheme';
-import { DIMENSIONS, FONTS, SHADOWS } from '../../styles/theme';
 import { UserApi } from '../../services/api';
 import { useAuthImproved } from '../../utils/hooks/useAuthImproved';
+import { SHADOWS } from '../../styles/theme';
+import { logout } from '../../store/slices/authSlice';
+import { API_CONFIG } from '../../utils/constants';
 
 const { width } = Dimensions.get('window');
-const HEADER_HEIGHT = 320;
+const HEADER_HEIGHT = 340;
 
-// Composant StatCard moderne
-const StatCard = ({ icon, value, label, gradient, COLORS }) => (
-  <View style={styles.statCard}>
-    <LinearGradient
-      colors={gradient}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
-      style={styles.statGradient}
-    >
-      <View style={styles.statIconContainer}>
-        <Icon name={icon} size={22} color="#FFF" />
-      </View>
-      <Text style={styles.statValue}>{value}</Text>
-      <Text style={styles.statLabel}>{label}</Text>
-    </LinearGradient>
+// Thème Dark
+const THEME = {
+  BG: '#0F172A',
+  SURFACE: '#1E293B',
+  SURFACE_LIGHT: '#334155',
+  TEXT: '#F8FAFC',
+  TEXT_SEC: '#94A3B8',
+  ACCENT: '#22C55E',
+  BORDER: '#334155',
+  DANGER: '#EF4444',
+};
+
+// StatCard "Neon Block"
+const StatCard = ({ icon, value, label, color }) => (
+  <View style={[styles.statCard, { borderColor: color }]}>
+    <View style={[styles.statIconBox, { backgroundColor: `${color}15` }]}>
+      <Icon name={icon} size={20} color={color} />
+    </View>
+    <Text style={styles.statValue}>{value}</Text>
+    <Text style={styles.statLabel}>{label}</Text>
   </View>
 );
 
-// Composant TeamCard moderne
-const TeamCard = ({ team, onPress, COLORS }) => (
-  <TouchableOpacity
-    style={[styles.teamCard, { backgroundColor: COLORS.WHITE }]}
-    onPress={onPress}
-    activeOpacity={0.7}
-  >
-    <LinearGradient
-      colors={['#22C55E15', '#22C55E05']}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
-      style={styles.teamGradientBg}
-    >
-      <View style={styles.teamIconContainer}>
-        <Icon name="shield" size={28} color="#22C55E" />
-      </View>
-      <View style={styles.teamInfo}>
-        <Text style={[styles.teamName, { color: COLORS.TEXT_PRIMARY }]}>
-          {team.name}
-        </Text>
-        <View style={styles.teamMeta}>
-          <View style={styles.teamMetaItem}>
-            <Icon name="users" size={14} color={COLORS.TEXT_MUTED} />
-            <Text
-              style={[styles.teamMetaText, { color: COLORS.TEXT_SECONDARY }]}
-            >
-              {team.members} membres
-            </Text>
-          </View>
-          {team.role && (
-            <View style={styles.roleBadge}>
-              <Icon
-                name={team.role === 'owner' ? 'crown' : 'award'}
-                size={12}
-                color="#F59E0B"
-              />
-              <Text style={styles.roleText}>
-                {team.role === 'owner' ? 'Capitaine' : 'Membre'}
-              </Text>
-            </View>
-          )}
-        </View>
-      </View>
-      <Icon name="chevron-right" size={24} color={COLORS.TEXT_MUTED} />
-    </LinearGradient>
-  </TouchableOpacity>
-);
-
-// Composant QuickAction
-const QuickAction = ({ icon, label, onPress, gradient }) => (
+// QuickAction "Dark Button"
+const QuickAction = ({ icon, label, onPress, color = THEME.ACCENT }) => (
   <TouchableOpacity
     style={styles.quickAction}
     onPress={onPress}
     activeOpacity={0.7}
   >
-    <LinearGradient
-      colors={gradient}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
-      style={styles.quickActionGradient}
-    >
-      <Icon name={icon} size={20} color="#FFF" />
-    </LinearGradient>
+    <View style={[styles.quickActionIcon, { borderColor: color }]}>
+      <Icon name={icon} size={20} color={color} />
+    </View>
     <Text style={styles.quickActionLabel}>{label}</Text>
   </TouchableOpacity>
 );
 
 export const ProfileScreen = ({ navigation }) => {
-  const { colors: COLORS } = useTheme('auto');
   const { logoutUser } = useAuthImproved();
   const dispatch = useDispatch();
   const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState(null);
-  const [teams, setTeams] = useState([]);
   const [stats, setStats] = useState({
     totalMatches: 0,
     wins: 0,
@@ -135,14 +86,13 @@ export const ProfileScreen = ({ navigation }) => {
     try {
       setLoading(true);
       const profileResult = await UserApi.getProfile();
-      if (profileResult.success) {
-        setUser(profileResult.data);
-      }
+      if (profileResult.success) setUser(profileResult.data);
 
       const statsResult = await UserApi.getStats();
-      if (statsResult.success) {
-        setStats(statsResult.data);
-      }
+      if (statsResult.success) setStats(statsResult.data);
+
+      console.log('profileResult', profileResult);
+      console.log('statsResult', statsResult);
     } catch (error) {
       console.error('Error loading profile:', error);
     } finally {
@@ -156,224 +106,182 @@ export const ProfileScreen = ({ navigation }) => {
     setRefreshing(false);
   }, []);
 
+  // Animations
+  const headerTranslateY = scrollY.interpolate({
+    inputRange: [0, HEADER_HEIGHT],
+    outputRange: [0, -HEADER_HEIGHT / 2],
+    extrapolate: 'clamp',
+  });
+
   const headerOpacity = scrollY.interpolate({
     inputRange: [0, HEADER_HEIGHT - 100],
     outputRange: [1, 0],
     extrapolate: 'clamp',
   });
 
-  const headerScale = scrollY.interpolate({
-    inputRange: [-100, 0],
-    outputRange: [1.2, 1],
-    extrapolate: 'clamp',
-  });
-
-  const getPositionLabel = position => {
-    const positions = {
-      goalkeeper: 'Gardien',
-      defender: 'Défenseur',
-      midfielder: 'Milieu',
-      forward: 'Attaquant',
-      any: 'Polyvalent',
-    };
-    return positions[position] || position;
-  };
-
-  const getSkillLevelLabel = level => {
-    const levels = {
-      beginner: 'Débutant',
-      amateur: 'Amateur',
-      intermediate: 'Intermédiaire',
-      advanced: 'Avancé',
-      semi_pro: 'Semi-pro',
-    };
-    return levels[level] || level;
-  };
-
-  if (loading && !user) {
-    return (
-      <View style={[styles.container, styles.centerContent]}>
-        <Text style={styles.loadingText}>Chargement...</Text>
-      </View>
-    );
-  }
-
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" />
+      <StatusBar barStyle="light-content" backgroundColor={THEME.BG} />
 
-      {/* Header avec Gradient */}
+      {/* HEADER */}
       <Animated.View
         style={[
-          styles.header,
+          styles.headerContainer,
           {
+            transform: [{ translateY: headerTranslateY }],
             opacity: headerOpacity,
-            transform: [{ scale: headerScale }],
           },
         ]}
       >
         <LinearGradient
-          colors={['#22C55E', '#16A34A', '#15803D']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
+          colors={['#14532d', '#0F172A']}
           style={styles.headerGradient}
         >
-          <View style={styles.headerTop}>
+          <View style={styles.topRow}>
             <TouchableOpacity
-              style={styles.headerIconButton}
+              style={styles.iconBtn}
               onPress={() => navigation.navigate('Settings')}
             >
-              <Icon name="settings" size={22} color="#FFF" />
+              <Icon name="settings" size={22} color={THEME.TEXT} />
             </TouchableOpacity>
             <TouchableOpacity
-              style={styles.headerIconButton}
+              style={styles.iconBtn}
               onPress={() => navigation.navigate('Notifications')}
             >
-              <Icon name="bell" size={22} color="#FFF" />
-              <View style={styles.notificationBadge}>
-                <Text style={styles.notificationBadgeText}>3</Text>
-              </View>
+              <Icon name="bell" size={22} color={THEME.TEXT} />
+              <View style={styles.badge} />
             </TouchableOpacity>
           </View>
 
-          <View style={styles.avatarContainer}>
-            {user?.profilePicture || user?.avatar ? (
-              <Image
-                source={{ uri: user.profilePicture || user.avatar }}
-                style={styles.avatar}
-              />
-            ) : (
-              <View style={styles.avatarPlaceholder}>
-                <Icon name="user" size={48} color="#FFF" />
-              </View>
-            )}
-            <TouchableOpacity
-              style={styles.editAvatarButton}
-              onPress={() => navigation.navigate('EditProfile')}
-            >
-              <Icon name="camera" size={16} color="#FFF" />
-            </TouchableOpacity>
-          </View>
-
-          <Text style={styles.userName}>
-            {user?.firstName} {user?.lastName}
-          </Text>
-          <Text style={styles.userEmail}>{user?.email}</Text>
-
-          {user?.position && (
-            <View style={styles.badgesContainer}>
-              <View style={styles.badge}>
-                <Icon name="target" size={12} color="#FFF" />
-                <Text style={styles.badgeText}>
-                  {getPositionLabel(user.position)}
-                </Text>
-              </View>
-              {user?.skillLevel && (
-                <View style={styles.badge}>
-                  <Icon name="award" size={12} color="#FFF" />
-                  <Text style={styles.badgeText}>
-                    {getSkillLevelLabel(user.skillLevel)}
+          <View style={styles.profileInfo}>
+            <View style={styles.avatarContainer}>
+              {user?.profilePictureUrl ? (
+                <Image
+                  source={{
+                    uri:
+                      API_CONFIG.BASE_URL.replace('/api', '') +
+                      user.profilePictureUrl,
+                  }}
+                  style={styles.avatar}
+                />
+              ) : (
+                <View style={styles.avatarPlaceholder}>
+                  <Text style={styles.avatarInitials}>
+                    {user?.firstName?.[0]}
+                    {user?.lastName?.[0]}
                   </Text>
                 </View>
               )}
+              <TouchableOpacity
+                style={styles.editBadge}
+                onPress={() => navigation.navigate('EditProfile')}
+              >
+                <Icon name="edit-2" size={14} color="#FFF" />
+              </TouchableOpacity>
             </View>
-          )}
+
+            <Text style={styles.name}>
+              {user?.firstName} {user?.lastName}
+            </Text>
+            <Text style={styles.position}>
+              {user?.position?.toUpperCase()} • {user?.locationCity}
+            </Text>
+
+            <View style={styles.tagsRow}>
+              <View style={styles.tag}>
+                <Text style={styles.tagText}>
+                  {user?.skillLevel || 'Niveau ?'}
+                </Text>
+              </View>
+            </View>
+          </View>
         </LinearGradient>
       </Animated.View>
 
-      {/* Contenu scrollable */}
+      {/* CONTENT */}
       <Animated.ScrollView
-        style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
-        scrollEventThrottle={16}
         onScroll={Animated.event(
           [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-          { useNativeDriver: false },
+          { useNativeDriver: true },
         )}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            tintColor="#22C55E"
+            tintColor={THEME.ACCENT}
           />
         }
       >
-        {/* Statistiques */}
-        <View style={styles.statsSection}>
+        {/* Stats Grid */}
+        <View style={styles.statsGrid}>
           <StatCard
-            icon="target"
-            value={stats.totalMatches}
+            icon="activity"
+            value={stats.matchesCount}
             label="Matchs"
-            gradient={['#8B5CF6', '#7C3AED']}
-            COLORS={COLORS}
+            color="#3B82F6"
           />
           <StatCard
             icon="trophy"
-            value={stats.wins}
+            value={stats.winsCount}
             label="Victoires"
-            gradient={['#22C55E', '#16A34A']}
-            COLORS={COLORS}
+            color={THEME.ACCENT}
+          />
+          <StatCard
+            icon="shield"
+            value={stats.teamsCount}
+            label="Equipes"
+            color="#F59E0B"
           />
           <StatCard
             icon="zap"
-            value={stats.goals}
-            label="Buts"
-            gradient={['#F59E0B', '#D97706']}
-            COLORS={COLORS}
-          />
-          <StatCard
-            icon="award"
-            value={stats.assists}
-            label="Passes D."
-            gradient={['#3B82F6', '#2563EB']}
-            COLORS={COLORS}
+            value={stats.winRate}
+            label="Winrate %"
+            color="#8B5CF6"
           />
         </View>
 
-        {/* Actions rapides */}
-        <View style={styles.quickActionsSection}>
+        {/* Menu Rapide */}
+        <Text style={styles.sectionTitle}>Menu Principal</Text>
+        <View style={styles.menuGrid}>
           <QuickAction
-            icon="edit-3"
+            icon="user"
             label="Modifier"
             onPress={() => navigation.navigate('EditProfile')}
-            gradient={['#22C55E', '#16A34A']}
+            color="#3B82F6"
           />
           <QuickAction
             icon="shield"
             label="Confidentialité"
             onPress={() => navigation.navigate('Privacy')}
-            gradient={['#3B82F6', '#2563EB']}
+            color="#8B5CF6"
           />
           <QuickAction
             icon="help-circle"
-            label="Aide"
+            label="Support"
             onPress={() => navigation.navigate('Help')}
-            gradient={['#F59E0B', '#D97706']}
+            color="#F59E0B"
           />
           <QuickAction
-            icon="log-out"
+            icon="power"
             label="Déconnexion"
-            onPress={() => {
-              Alert.alert(
-                'Déconnexion',
-                'Voulez-vous vraiment vous déconnecter ?',
-                [
-                  { text: 'Annuler', style: 'cancel' },
-                  {
-                    text: 'Déconnexion',
-                    style: 'destructive',
-                    // onPress: () => navigation.navigate('Auth'),
-                    onPress: async () => await logoutUser(),
-                  },
-                ],
-              );
-            }}
-            gradient={['#EF4444', '#DC2626']}
+            color={THEME.DANGER}
+            onPress={() =>
+              Alert.alert('Déconnexion', 'Quitter ?', [
+                { text: 'Non', style: 'cancel' },
+                {
+                  text: 'Oui',
+                  style: 'destructive',
+                  onPress: () => dispatch(logout()),
+                },
+              ])
+            }
           />
         </View>
 
-        <View style={{ height: 40 }} />
+        {/* Espace pour le scroll */}
+        <View style={{ height: 100 }} />
       </Animated.ScrollView>
     </View>
   );
@@ -382,294 +290,176 @@ export const ProfileScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
+    backgroundColor: THEME.BG,
   },
-  centerContent: {
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingText: {
-    fontSize: 16,
-    color: '#6B7280',
-  },
-  header: {
-    height: HEADER_HEIGHT,
+  headerContainer: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
+    height: HEADER_HEIGHT,
     zIndex: 10,
   },
   headerGradient: {
     flex: 1,
-    paddingTop: Platform.OS === 'ios' ? 50 : 30,
+    paddingTop: Platform.OS === 'ios' ? 60 : 30,
     paddingHorizontal: 20,
-    paddingBottom: 20,
-    alignItems: 'center',
+    borderBottomLeftRadius: 30,
+    borderBottomRightRadius: 30,
   },
-  headerTop: {
-    width: '100%',
+  topRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 20,
   },
-  headerIconButton: {
+  iconBtn: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    backgroundColor: 'rgba(0,0,0,0.2)',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  notificationBadge: {
+  badge: {
     position: 'absolute',
-    top: -2,
-    right: -2,
-    backgroundColor: '#EF4444',
-    borderRadius: 10,
-    width: 18,
-    height: 18,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#22C55E',
+    top: 10,
+    right: 10,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: THEME.DANGER,
   },
-  notificationBadgeText: {
-    color: '#FFF',
-    fontSize: 10,
-    fontWeight: '700',
+  profileInfo: {
+    alignItems: 'center',
+    marginTop: 20,
   },
   avatarContainer: {
+    marginBottom: 16,
     position: 'relative',
-    marginBottom: 12,
   },
   avatar: {
     width: 100,
     height: 100,
     borderRadius: 50,
-    borderWidth: 4,
-    borderColor: 'rgba(255,255,255,0.3)',
+    borderWidth: 3,
+    borderColor: THEME.ACCENT,
   },
   avatarPlaceholder: {
     width: 100,
     height: 100,
     borderRadius: 50,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 4,
-    borderColor: 'rgba(255,255,255,0.3)',
-  },
-  editAvatarButton: {
-    position: 'absolute',
-    bottom: 0,
-    right: 0,
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: '#F59E0B',
+    backgroundColor: THEME.SURFACE,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 3,
-    borderColor: '#22C55E',
+    borderColor: THEME.ACCENT,
   },
-  userName: {
+  avatarInitials: {
+    fontSize: 32,
+    fontWeight: 'bold',
+    color: THEME.ACCENT,
+  },
+  editBadge: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    backgroundColor: '#3B82F6',
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: THEME.BG,
+  },
+  name: {
     fontSize: 24,
-    fontWeight: '700',
-    color: '#FFF',
-    marginBottom: 4,
+    fontWeight: 'bold',
+    color: THEME.TEXT,
   },
-  userEmail: {
+  position: {
     fontSize: 14,
-    color: 'rgba(255,255,255,0.8)',
-    marginBottom: 12,
+    color: THEME.TEXT_SEC,
+    marginTop: 4,
   },
-  badgesContainer: {
+  tagsRow: {
     flexDirection: 'row',
+    marginTop: 12,
     gap: 8,
   },
-  badge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.25)',
+  tag: {
+    backgroundColor: 'rgba(34, 197, 94, 0.1)',
     paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-    gap: 6,
+    paddingVertical: 4,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(34, 197, 94, 0.3)',
   },
-  badgeText: {
+  tagText: {
+    color: THEME.ACCENT,
     fontSize: 12,
-    color: '#FFF',
     fontWeight: '600',
   },
-  scrollView: {
-    flex: 1,
-    marginTop: HEADER_HEIGHT,
-  },
   scrollContent: {
-    paddingTop: 40,
+    paddingTop: HEADER_HEIGHT + 20,
+    paddingHorizontal: 20,
   },
-  statsSection: {
+  statsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    paddingHorizontal: 16,
     gap: 12,
-    marginBottom: 20,
+    marginBottom: 32,
   },
   statCard: {
-    width: (width - 44) / 2,
-    height: 120,
+    width: (width - 52) / 2,
+    backgroundColor: THEME.SURFACE,
     borderRadius: 16,
-    overflow: 'hidden',
-    ...SHADOWS.MEDIUM,
-  },
-  statGradient: {
-    flex: 1,
     padding: 16,
+    borderWidth: 1,
     alignItems: 'center',
-    justifyContent: 'center',
   },
-  statIconContainer: {
+  statIconBox: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
     marginBottom: 8,
   },
   statValue: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: '#FFF',
-    marginBottom: 2,
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: THEME.TEXT,
   },
   statLabel: {
     fontSize: 12,
-    color: 'rgba(255,255,255,0.9)',
-    fontWeight: '500',
-  },
-  quickActionsSection: {
-    flexDirection: 'row',
-    paddingHorizontal: 16,
-    gap: 12,
-    marginBottom: 24,
-  },
-  quickAction: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  quickActionGradient: {
-    width: 56,
-    height: 56,
-    borderRadius: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 8,
-    ...SHADOWS.SMALL,
-  },
-  quickActionLabel: {
-    fontSize: 11,
-    color: '#6B7280',
-    fontWeight: '600',
-  },
-  section: {
-    paddingHorizontal: 16,
-    marginBottom: 24,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
+    color: THEME.TEXT_SEC,
   },
   sectionTitle: {
-    fontSize: 20,
-    fontWeight: '700',
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: THEME.TEXT,
+    marginBottom: 16,
   },
-  seeAllText: {
-    fontSize: 14,
-    color: '#22C55E',
-    fontWeight: '600',
-  },
-  teamCard: {
-    borderRadius: 16,
-    marginBottom: 12,
-    overflow: 'hidden',
-    ...SHADOWS.SMALL,
-  },
-  teamGradientBg: {
+  menuGrid: {
     flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
+    justifyContent: 'space-between',
   },
-  teamIconContainer: {
+  quickAction: {
+    alignItems: 'center',
+    width: (width - 60) / 4,
+  },
+  quickActionIcon: {
     width: 56,
     height: 56,
-    borderRadius: 16,
-    backgroundColor: '#22C55E15',
+    borderRadius: 20,
+    backgroundColor: THEME.SURFACE,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 16,
+    borderWidth: 1,
+    marginBottom: 8,
   },
-  teamInfo: {
-    flex: 1,
-  },
-  teamName: {
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 6,
-  },
-  teamMeta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  teamMetaItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  teamMetaText: {
-    fontSize: 13,
-  },
-  roleBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FEF3C7',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 12,
-    gap: 4,
-  },
-  roleText: {
-    fontSize: 11,
-    color: '#F59E0B',
-    fontWeight: '600',
-  },
-  emptyState: {
-    borderRadius: 16,
-    overflow: 'hidden',
-  },
-  emptyStateGradient: {
-    alignItems: 'center',
-    paddingVertical: 48,
-    paddingHorizontal: 24,
-  },
-  emptyStateText: {
-    fontSize: 15,
-    textAlign: 'center',
-    marginTop: 16,
-    marginBottom: 20,
-  },
-  emptyStateButton: {
-    borderRadius: 12,
-    overflow: 'hidden',
-  },
-  emptyStateButtonGradient: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    gap: 8,
-  },
-  emptyStateButtonText: {
-    color: '#FFF',
-    fontSize: 14,
-    fontWeight: '600',
+  quickActionLabel: {
+    fontSize: 12,
+    color: THEME.TEXT_SEC,
   },
 });

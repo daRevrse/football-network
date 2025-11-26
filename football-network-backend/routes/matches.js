@@ -3,6 +3,8 @@ const { body, validationResult } = require("express-validator");
 const db = require("../config/database");
 const { authenticateToken } = require("../middleware/auth");
 const NotificationService = require("../services/NotificationService");
+const { validateTeamPlayerCount, logTeamValidation } = require("../utils/teamValidation");
+const { createParticipationsForMatch } = require("../utils/matchParticipation");
 
 const router = express.Router();
 
@@ -11,12 +13,15 @@ router.post(
   "/invitations",
   [
     authenticateToken,
-    body("senderTeamId").isInt().withMessage("Sender team ID is required"), // AJOUTÉ
+    body("senderTeamId").isInt().withMessage("Sender team ID is required"),
     body("receiverTeamId").isInt().withMessage("Receiver team ID is required"),
     body("proposedDate").isISO8601().withMessage("Valid date is required"),
     body("proposedLocationId")
       .optional({ nullable: true, checkFalsy: true })
       .isInt(),
+    body("venueId").optional({ nullable: true, checkFalsy: true }).isInt(),
+    body("requiresReferee").optional().isBoolean(),
+    body("preferredRefereeId").optional({ nullable: true, checkFalsy: true }).isInt(),
     body("message")
       .optional({ nullable: true, checkFalsy: true })
       .isLength({ max: 500 }),
@@ -33,8 +38,11 @@ router.post(
         receiverTeamId,
         proposedDate,
         proposedLocationId,
+        venueId,
+        requiresReferee,
+        preferredRefereeId,
         message,
-      } = req.body; // MODIFIÉ
+      } = req.body;
 
       // Vérifier que l'utilisateur est capitaine de l'équipe spécifiée (MODIFIÉ)
       const [senderTeamCheck] = await db.execute(
@@ -45,8 +53,30 @@ router.post(
       if (senderTeamCheck.length === 0) {
         return res
           .status(403)
-          .json({ error: "You are not the captain of this team" }); // MODIFIÉ
+          .json({ error: "You are not the captain of this team" });
       }
+
+      // Vérifier que l'équipe a minimum 6 joueurs
+      const senderValidation = await validateTeamPlayerCount(senderTeamId, 6);
+      if (!senderValidation.isValid) {
+        return res.status(400).json({
+          error: "Insufficient players",
+          message: senderValidation.message,
+          playersCount: senderValidation.playersCount,
+          minimumRequired: 6
+        });
+      }
+
+      // Enregistrer la validation (l'invitationId sera mis à jour après création)
+      const validationLogId = await logTeamValidation({
+        teamId: senderTeamId,
+        invitationId: null,
+        validationType: 'send_invitation',
+        playersCount: senderValidation.playersCount,
+        minimumRequired: 6,
+        isValid: true,
+        validatedBy: req.user.id
+      });
 
       // Vérifier que l'équipe receveuse existe
       const [receiverTeams] = await db.execute(
@@ -91,14 +121,18 @@ router.post(
 
       // Créer l'invitation
       const [result] = await db.execute(
-        `INSERT INTO match_invitations 
-       (sender_team_id, receiver_team_id, proposed_date, proposed_location_id, message, expires_at) 
-       VALUES (?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO match_invitations
+       (sender_team_id, receiver_team_id, proposed_date, proposed_location_id,
+        venue_id, requires_referee, preferred_referee_id, message, expires_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
-          senderTeamId, // MODIFIÉ - utilise senderTeamId du formulaire
+          senderTeamId,
           receiverTeamId,
           proposedDate,
           proposedLocationId || null,
+          venueId || null,
+          requiresReferee || false,
+          preferredRefereeId || null,
           message || null,
           expiresAt,
         ]
@@ -330,6 +364,30 @@ router.patch(
         return res.status(400).json({ error: "Invitation has expired" });
       }
 
+      // Vérifier que l'équipe receveuse a minimum 6 joueurs (si acceptation)
+      if (response === 'accepted') {
+        const receiverValidation = await validateTeamPlayerCount(invitation.receiver_team_id, 6);
+        if (!receiverValidation.isValid) {
+          return res.status(400).json({
+            error: "Insufficient players",
+            message: receiverValidation.message,
+            playersCount: receiverValidation.playersCount,
+            minimumRequired: 6
+          });
+        }
+
+        // Enregistrer la validation
+        await logTeamValidation({
+          teamId: invitation.receiver_team_id,
+          invitationId: invitationId,
+          validationType: 'accept_invitation',
+          playersCount: receiverValidation.playersCount,
+          minimumRequired: 6,
+          isValid: true,
+          validatedBy: req.user.id
+        });
+      }
+
       const connection = await db.getConnection();
       await connection.beginTransaction();
 
@@ -342,21 +400,48 @@ router.patch(
 
         // Si acceptée, créer le match
         if (response === "accepted") {
+          // Créer le match avec les infos venue et referee si fournis
           const [matchResult] = await connection.execute(
-            `INSERT INTO matches (home_team_id, away_team_id, match_date, location_id, status) 
-           VALUES (?, ?, ?, ?, 'confirmed')`,
+            `INSERT INTO matches
+             (home_team_id, away_team_id, match_date, location_id, venue_booking_id, has_referee, status)
+             VALUES (?, ?, ?, ?, ?, ?, 'confirmed')`,
             [
               invitation.receiver_team_id,
               invitation.sender_team_id,
               invitation.proposed_date,
               invitation.proposed_location_id,
+              null, // venue_booking_id sera créé séparément si venueId fourni
+              invitation.requires_referee || false,
             ]
           );
+
+          const matchId = matchResult.insertId;
+
+          // Si un arbitre préféré est spécifié, créer l'assignation
+          if (invitation.preferred_referee_id) {
+            await connection.execute(
+              `INSERT INTO match_referee_assignments (match_id, referee_id, role, assigned_by, status)
+               VALUES (?, ?, 'main', ?, 'pending')`,
+              [matchId, invitation.preferred_referee_id, req.user.id]
+            );
+          }
+
+          // Créer automatiquement les participations pour tous les joueurs des deux équipes
+          try {
+            await createParticipationsForMatch(
+              matchId,
+              invitation.receiver_team_id,
+              invitation.sender_team_id
+            );
+          } catch (participationError) {
+            console.error('Error creating participations:', participationError);
+            // Continue même si erreur (non-bloquant)
+          }
 
           // Lier l'invitation au match créé
           await connection.execute(
             "UPDATE match_invitations SET match_id = ? WHERE id = ?",
-            [matchResult.insertId, invitationId]
+            [matchId, invitationId]
           );
         }
 
@@ -523,20 +608,26 @@ router.get("/my-matches", authenticateToken, async (req, res) => {
         ht.id AS home_team_id,
         ht.name AS home_team_name,
         ht.skill_level AS home_skill_level,
+        ht.logo_id AS home_team_logo_id,
+        home_logo.stored_filename AS home_team_logo_filename,
         at.id AS away_team_id,
         at.name AS away_team_name,
         at.skill_level AS away_skill_level,
+        at.logo_id AS away_team_logo_id,
+        away_logo.stored_filename AS away_team_logo_filename,
         l.id AS location_id,
         l.name AS location_name,
         l.address AS location_address,
-        CASE 
-          WHEN ht.captain_id = ? THEN true 
-          WHEN at.captain_id = ? THEN true 
-          ELSE false 
+        CASE
+          WHEN ht.captain_id = ? THEN true
+          WHEN at.captain_id = ? THEN true
+          ELSE false
         END AS is_organizer
       FROM matches m
       JOIN teams ht ON m.home_team_id = ht.id
+      LEFT JOIN uploads home_logo ON ht.logo_id = home_logo.id AND home_logo.is_active = true
       LEFT JOIN teams at ON m.away_team_id = at.id
+      LEFT JOIN uploads away_logo ON at.logo_id = away_logo.id AND away_logo.is_active = true
       LEFT JOIN locations l ON m.location_id = l.id
       WHERE (m.home_team_id IN (${placeholders}) OR m.away_team_id IN (${placeholders}))
     `;
@@ -563,12 +654,18 @@ router.get("/my-matches", authenticateToken, async (req, res) => {
         id: m.home_team_id,
         name: m.home_team_name,
         skillLevel: m.home_skill_level,
+        logoUrl: m.home_team_logo_filename
+          ? `/uploads/teams/${m.home_team_logo_filename}`
+          : null,
       },
       awayTeam: m.away_team_id
         ? {
             id: m.away_team_id,
             name: m.away_team_name,
             skillLevel: m.away_skill_level,
+            logoUrl: m.away_team_logo_filename
+              ? `/uploads/teams/${m.away_team_logo_filename}`
+              : null,
           }
         : null,
       location: m.location_id
@@ -601,15 +698,21 @@ router.get("/:id", authenticateToken, async (req, res) => {
       `SELECT m.id, m.match_date, m.duration_minutes, m.match_type, m.status,
               m.home_score, m.away_score, m.referee_contact, m.notes, m.created_at,
               ht.id as home_team_id, ht.name as home_team_name, ht.skill_level as home_skill_level,
+              ht.logo_id as home_team_logo_id,
+              home_logo.stored_filename as home_team_logo_filename,
               at.id as away_team_id, at.name as away_team_name, at.skill_level as away_skill_level,
+              at.logo_id as away_team_logo_id,
+              away_logo.stored_filename as away_team_logo_filename,
               l.id as location_id, l.name as location_name, l.address as location_address,
               l.city, l.field_type, l.price_per_hour, l.amenities,
               hc.first_name as home_captain_first_name, hc.last_name as home_captain_last_name, hc.id as home_captain_id,
               ac.first_name as away_captain_first_name, ac.last_name as away_captain_last_name, ac.id as away_captain_id
        FROM matches m
        JOIN teams ht ON m.home_team_id = ht.id
+       LEFT JOIN uploads home_logo ON ht.logo_id = home_logo.id AND home_logo.is_active = true
        JOIN users hc ON ht.captain_id = hc.id
        LEFT JOIN teams at ON m.away_team_id = at.id
+       LEFT JOIN uploads away_logo ON at.logo_id = away_logo.id AND away_logo.is_active = true
        LEFT JOIN users ac ON at.captain_id = ac.id
        LEFT JOIN locations l ON m.location_id = l.id
        WHERE m.id = ?`,
@@ -664,6 +767,9 @@ router.get("/:id", authenticateToken, async (req, res) => {
         id: match.home_team_id,
         name: match.home_team_name,
         skillLevel: match.home_skill_level,
+        logoUrl: match.home_team_logo_filename
+          ? `/uploads/teams/${match.home_team_logo_filename}`
+          : null,
         captain: {
           id: match.home_captain_id,
           firstName: match.home_captain_first_name,
@@ -675,6 +781,9 @@ router.get("/:id", authenticateToken, async (req, res) => {
             id: match.away_team_id,
             name: match.away_team_name,
             skillLevel: match.away_skill_level,
+            logoUrl: match.away_team_logo_filename
+              ? `/uploads/teams/${match.away_team_logo_filename}`
+              : null,
             captain: {
               id: match.away_captain_id,
               firstName: match.away_captain_first_name,

@@ -1,5 +1,5 @@
-// ====== src/screens/matches/MatchesScreen.js - NOUVEAU DESIGN + BACKEND ======
-import React, { useState, useCallback, useEffect, useRef } from 'react';
+// ====== src/screens/matches/MatchesScreen.js ======
+import React, { useState, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -10,244 +10,210 @@ import {
   Platform,
   StatusBar,
   RefreshControl,
-  Dimensions,
   ActivityIndicator,
-  Animated,
+  Image,
 } from 'react-native';
-import { useSelector } from 'react-redux';
 import Icon from 'react-native-vector-icons/Feather';
-import LinearGradient from 'react-native-linear-gradient';
 import { useFocusEffect } from '@react-navigation/native';
-import { DIMENSIONS, FONTS, SHADOWS } from '../../styles/theme';
+import LinearGradient from 'react-native-linear-gradient';
 import { matchesApi } from '../../services/api';
+import { API_CONFIG } from '../../utils/constants';
 
-const { width } = Dimensions.get('window');
-const HEADER_MAX_HEIGHT = 280;
-const HEADER_MIN_HEIGHT = Platform.OS === 'ios' ? 110 : 140;
-const HEADER_SCROLL_DISTANCE = HEADER_MAX_HEIGHT - HEADER_MIN_HEIGHT;
+// Thème Premium Night
+const THEME = {
+  BG: '#0F172A', // Slate 900
+  SURFACE: '#1E293B', // Slate 800
+  TEXT: '#F8FAFC', // Slate 50
+  TEXT_SEC: '#94A3B8', // Slate 400
+  ACCENT: '#22C55E', // Green 500
+  BORDER: '#334155', // Slate 700
+  LIVE: '#EF4444', // Red 500 (En cours)
+  WIN: '#F59E0B', // Amber 500 (Vainqueur)
+};
 
-// Helper pour formater les dates
+// Helper Date
 const formatDate = dateString => {
   const date = new Date(dateString);
   const today = new Date();
-  const tomorrow = new Date(today);
-  tomorrow.setDate(tomorrow.getDate() + 1);
+  const isToday = date.toDateString() === today.toDateString();
 
-  if (date.toDateString() === today.toDateString()) {
-    return `Aujourd'hui à ${date.toLocaleTimeString('fr-FR', {
+  if (isToday) {
+    return `Aujourd'hui • ${date.toLocaleTimeString('fr-FR', {
       hour: '2-digit',
       minute: '2-digit',
     })}`;
-  } else if (date.toDateString() === tomorrow.toDateString()) {
-    return `Demain à ${date.toLocaleTimeString('fr-FR', {
-      hour: '2-digit',
-      minute: '2-digit',
-    })}`;
-  } else {
-    return date.toLocaleDateString('fr-FR', {
-      day: 'numeric',
-      month: 'short',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
+  }
+  return date.toLocaleDateString('fr-FR', {
+    day: 'numeric',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+};
+
+// Helper Status
+const getStatusInfo = status => {
+  switch (status) {
+    case 'in_progress':
+      return { label: 'EN DIRECT', color: THEME.LIVE, icon: 'activity' };
+    case 'completed':
+      return { label: 'TERMINÉ', color: THEME.TEXT_SEC, icon: 'check' };
+    case 'cancelled':
+      return { label: 'ANNULÉ', color: '#EF4444', icon: 'x' };
+    case 'confirmed':
+      return { label: 'CONFIRMÉ', color: THEME.ACCENT, icon: 'check-circle' };
+    default:
+      return { label: 'À VENIR', color: '#3B82F6', icon: 'calendar' };
   }
 };
 
-// Helper pour statut du match
-const getMatchStatus = match => {
-  const now = new Date();
-  const matchDate = new Date(match.matchDate);
-
-  if (match.status === 'completed') {
-    return { label: 'Terminé', color: '#6B7280', icon: 'check-circle' };
-  } else if (match.status === 'cancelled') {
-    return { label: 'Annulé', color: '#EF4444', icon: 'x-circle' };
-  } else if (match.status === 'in_progress') {
-    return { label: 'En cours', color: '#22C55E', icon: 'play-circle' };
-  } else if (matchDate < now) {
-    return { label: 'Passé', color: '#9CA3AF', icon: 'clock' };
-  } else {
-    return { label: 'À venir', color: '#3B82F6', icon: 'calendar' };
+// Composant Avatar d'Équipe (Image ou Initiale)
+const TeamAvatar = ({ name, logoUrl, size = 48 }) => {
+  if (logoUrl) {
+    return (
+      <Image
+        source={{ uri: API_CONFIG.BASE_URL.replace('/api', '') + logoUrl }}
+        style={{
+          width: size,
+          height: size,
+          borderRadius: size / 3,
+          backgroundColor: '#FFF',
+        }}
+        resizeMode="cover"
+      />
+    );
   }
-};
-
-// Composant MatchCard
-const MatchCard = ({ match, onPress }) => {
-  const status = getMatchStatus(match);
 
   return (
-    <TouchableOpacity
-      style={styles.matchCard}
-      onPress={onPress}
-      activeOpacity={0.7}
+    <LinearGradient
+      colors={[THEME.ACCENT, '#166534']}
+      style={{
+        width: size,
+        height: size,
+        borderRadius: size / 3,
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.1)',
+      }}
     >
+      <Text style={{ fontSize: size * 0.4, fontWeight: 'bold', color: '#FFF' }}>
+        {name ? name.charAt(0).toUpperCase() : '?'}
+      </Text>
+    </LinearGradient>
+  );
+};
+
+const MatchCard = ({ match, onPress }) => {
+  const statusInfo = getStatusInfo(match.status);
+  const isScoreVisible =
+    match.status === 'completed' || match.status === 'in_progress';
+
+  return (
+    <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.7}>
       <LinearGradient
-        colors={['#FFFFFF', '#F9FAFB']}
+        colors={[THEME.SURFACE, '#162032']}
         start={{ x: 0, y: 0 }}
-        end={{ x: 0, y: 1 }}
-        style={styles.matchCardGradient}
+        end={{ x: 1, y: 1 }}
+        style={styles.cardGradient}
       >
-        {/* Header avec statut */}
-        <View style={styles.matchHeader}>
-          <View
-            style={[
-              styles.statusBadge,
-              { backgroundColor: status.color + '20' },
-            ]}
-          >
-            <Icon name={status.icon} size={12} color={status.color} />
-            <Text style={[styles.statusText, { color: status.color }]}>
-              {status.label}
+        {/* Header Carte */}
+        <View style={styles.cardHeader}>
+          <View style={[styles.statusBadge, { borderColor: statusInfo.color }]}>
+            <View
+              style={[styles.statusDot, { backgroundColor: statusInfo.color }]}
+            />
+            <Text style={[styles.statusText, { color: statusInfo.color }]}>
+              {statusInfo.label}
             </Text>
           </View>
-          <Text style={styles.matchDate}>{formatDate(match.matchDate)}</Text>
+          <Text style={styles.dateText}>{formatDate(match.matchDate)}</Text>
         </View>
 
-        {/* Équipes */}
-        <View style={styles.teamsContainer}>
-          {/* Équipe 1 */}
-          <View style={styles.teamSection}>
-            <View style={styles.teamIconContainer}>
-              <LinearGradient
-                colors={['#22C55E', '#16A34A']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.teamIcon}
-              >
-                <Icon name="shield" size={24} color="#FFF" />
-              </LinearGradient>
-            </View>
+        {/* Teams Row */}
+        <View style={styles.teamsRow}>
+          {/* Home Team */}
+          <View style={styles.teamSide}>
+            <TeamAvatar
+              name={match.homeTeam.name}
+              logoUrl={match.homeTeam.logoUrl}
+            />
             <Text style={styles.teamName} numberOfLines={1}>
               {match.homeTeam.name}
             </Text>
-            {match.score.home !== null && (
-              <View style={styles.scoreContainer}>
-                <Text style={styles.scoreText}>{match.score.home}</Text>
-              </View>
+          </View>
+
+          {/* Score / VS */}
+          <View
+            style={[styles.scoreBox, isScoreVisible && styles.scoreBoxActive]}
+          >
+            {isScoreVisible ? (
+              <Text style={styles.scoreText}>
+                {match.score.home} - {match.score.away}
+              </Text>
+            ) : (
+              <Text style={styles.vsText}>VS</Text>
             )}
           </View>
 
-          {/* VS */}
-          <View style={styles.vsContainer}>
-            <Text style={styles.vsText}>VS</Text>
-          </View>
-
-          {/* Équipe 2 */}
-          <View style={styles.teamSection}>
-            <View style={styles.teamIconContainer}>
-              <LinearGradient
-                colors={['#3B82F6', '#2563EB']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.teamIcon}
-              >
-                <Icon name="shield" size={24} color="#FFF" />
-              </LinearGradient>
-            </View>
-            <Text style={styles.teamName} numberOfLines={1}>
-              {match.awayTeam.name}
-            </Text>
-            {match.score.away !== null && (
-              <View style={styles.scoreContainer}>
-                <Text style={styles.scoreText}>{match.score.away}</Text>
-              </View>
+          {/* Away Team */}
+          <View style={styles.teamSide}>
+            {match.awayTeam ? (
+              <>
+                <TeamAvatar
+                  name={match.awayTeam.name}
+                  logoUrl={match.awayTeam.logoUrl}
+                />
+                <Text style={styles.teamName} numberOfLines={1}>
+                  {match.awayTeam.name}
+                </Text>
+              </>
+            ) : (
+              <>
+                <View
+                  style={[
+                    styles.avatarPlaceholder,
+                    { width: 48, height: 48, borderRadius: 16 },
+                  ]}
+                >
+                  <Icon name="help-circle" size={24} color={THEME.TEXT_SEC} />
+                </View>
+                <Text style={[styles.teamName, { color: THEME.TEXT_SEC }]}>
+                  En attente
+                </Text>
+              </>
             )}
           </View>
         </View>
 
-        {/* Footer avec lieu */}
-        {match.location && (
-          <View style={styles.matchFooter}>
-            <Icon name="map-pin" size={14} color="#6B7280" />
-            <Text style={styles.locationText}>
-              {match.location.name || 'Lieu à confirmer'}
+        {/* Location Footer */}
+        <View style={styles.cardFooter}>
+          <View style={styles.locationContainer}>
+            <Icon name="map-pin" size={12} color={THEME.TEXT_SEC} />
+            <Text style={styles.locationText} numberOfLines={1}>
+              {match.location?.name ||
+                match.location?.address ||
+                'Lieu à définir'}
             </Text>
           </View>
-        )}
-
-        {/* Flèche */}
-        <Icon
-          name="chevron-right"
-          size={24}
-          color="#CBD5E1"
-          style={styles.chevron}
-        />
+          {match.isOrganizer && (
+            <View style={styles.organizerBadge}>
+              <Icon name="star" size={10} color="#000" />
+              <Text style={styles.organizerText}>ORGANISATEUR</Text>
+            </View>
+          )}
+        </View>
       </LinearGradient>
     </TouchableOpacity>
   );
 };
 
-// Composant QuickStat
-const QuickStat = ({ icon, value, label, gradient }) => (
-  <View style={styles.quickStat}>
-    <LinearGradient
-      colors={gradient}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
-      style={styles.quickStatGradient}
-    >
-      <Icon name={icon} size={20} color="#FFF" />
-      <Text style={styles.quickStatValue}>{value}</Text>
-      <Text style={styles.quickStatLabel}>{label}</Text>
-    </LinearGradient>
-  </View>
-);
-
-// Composant EmptyState
-const EmptyState = ({ activeTab, onCreateMatch }) => (
-  <View style={styles.emptyState}>
-    <LinearGradient
-      colors={['#22C55E20', '#22C55E10']}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 0, y: 1 }}
-      style={styles.emptyStateGradient}
-    >
-      <View style={styles.emptyIconContainer}>
-        <Icon name="calendar" size={48} color="#22C55E" />
-      </View>
-      <Text style={styles.emptyTitle}>
-        {activeTab === 'upcoming' ? 'Aucun match à venir' : 'Aucun match'}
-      </Text>
-      <Text style={styles.emptyDescription}>
-        {activeTab === 'upcoming'
-          ? 'Créez un nouveau match ou attendez une invitation'
-          : 'Pas de matchs dans cette catégorie'}
-      </Text>
-      {activeTab === 'upcoming' && (
-        <TouchableOpacity
-          style={styles.emptyButton}
-          onPress={onCreateMatch}
-          activeOpacity={0.8}
-        >
-          <LinearGradient
-            colors={['#22C55E', '#16A34A']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.emptyButtonGradient}
-          >
-            <Icon name="plus" size={20} color="#FFF" />
-            <Text style={styles.emptyButtonText}>Créer un match</Text>
-          </LinearGradient>
-        </TouchableOpacity>
-      )}
-    </LinearGradient>
-  </View>
-);
-
 export const MatchesScreen = ({ navigation }) => {
   const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [matches, setMatches] = useState([]);
-  const [activeTab, setActiveTab] = useState('upcoming'); // upcoming, past, all
-  const [stats, setStats] = useState({
-    totalMatches: 0,
-    upcomingMatches: 0,
-    completedMatches: 0,
-  });
+  const [filter, setFilter] = useState('upcoming'); // upcoming, past
 
-  const scrollY = useRef(new Animated.Value(0)).current;
-
-  // Charger les matchs au focus
   useFocusEffect(
     useCallback(() => {
       loadMatches();
@@ -258,626 +224,277 @@ export const MatchesScreen = ({ navigation }) => {
     try {
       setLoading(true);
       const result = await matchesApi.getMyMatches();
-
-      console.log('result', result);
-
-      if (result.success) {
-        setMatches(result.data);
-
-        // Calculer les stats
-        const now = new Date();
-        const upcoming = result.data.filter(
-          m =>
-            new Date(m.matchDate) > now &&
-            // m.status !== 'cancelled' &&
-            // m.status !== 'completed',
-            m.status === 'confirmed',
-        ).length;
-        const completed = result.data.filter(
-          m => m.status === 'completed',
-        ).length;
-
-        setStats({
-          totalMatches: result.data.length,
-          upcomingMatches: upcoming,
-          completedMatches: completed,
-        });
-      } else {
-        Alert.alert(
-          'Erreur',
-          result.error || 'Impossible de charger les matchs',
-        );
-      }
-    } catch (error) {
-      console.error('Load matches error:', error);
-      Alert.alert('Erreur', 'Une erreur est survenue');
+      console.log('Matches loaded:', result); // Debug pour vérifier les logos
+      if (result.success) setMatches(result.data || result.matches || []);
+    } catch (e) {
+      console.error(e);
+      Alert.alert('Erreur', 'Chargement impossible');
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleRefresh = useCallback(async () => {
-    setRefreshing(true);
-    await loadMatches();
-    setRefreshing(false);
-  }, []);
-
-  const handleMatchPress = match => {
-    navigation.navigate('MatchDetail', {
-      matchId: match.id,
-    });
-  };
-
-  const handleCreateMatch = () => {
-    navigation.navigate('CreateMatch');
   };
 
   const handleInvitations = () => {
     navigation.navigate('Invitations');
   };
 
-  // Animations du header
-  const headerHeight = scrollY.interpolate({
-    inputRange: [0, HEADER_SCROLL_DISTANCE],
-    outputRange: [HEADER_MAX_HEIGHT, HEADER_MIN_HEIGHT],
-    extrapolate: 'clamp',
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await loadMatches();
+    setRefreshing(false);
+  };
+
+  const filteredMatches = matches.filter(m => {
+    const isPast =
+      new Date(m.matchDate) < new Date() ||
+      m.status === 'completed' ||
+      m.status === 'cancelled';
+    return filter === 'past' ? isPast : !isPast;
   });
-
-  const headerContentOpacity = scrollY.interpolate({
-    inputRange: [0, HEADER_SCROLL_DISTANCE / 2],
-    outputRange: [1, 0],
-    extrapolate: 'clamp',
-  });
-
-  const headerContentTranslateY = scrollY.interpolate({
-    inputRange: [0, HEADER_SCROLL_DISTANCE],
-    outputRange: [0, -30],
-    extrapolate: 'clamp',
-  });
-
-  const headerTitleScale = scrollY.interpolate({
-    inputRange: [0, HEADER_SCROLL_DISTANCE],
-    outputRange: [1, 0.8],
-    extrapolate: 'clamp',
-  });
-
-  const headerTitleTranslateY = scrollY.interpolate({
-    inputRange: [0, HEADER_SCROLL_DISTANCE],
-    outputRange: [0, 0],
-    extrapolate: 'clamp',
-  });
-
-  // Filtrer les matchs selon l'onglet actif
-  const filteredMatches = matches.filter(match => {
-    const now = new Date();
-    const matchDate = new Date(match.matchDate);
-
-    if (activeTab === 'upcoming') {
-      return (
-        matchDate > now &&
-        // match.status !== 'cancelled' &&
-        // match.status !== 'completed'
-        match.status === 'confirmed'
-      );
-    } else if (activeTab === 'past') {
-      return matchDate < now || match.status === 'completed';
-    }
-    return true; // all
-  });
-
-  if (loading) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#22C55E" />
-        <Text style={styles.loadingText}>Chargement...</Text>
-      </View>
-    );
-  }
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" />
+      <StatusBar barStyle="light-content" backgroundColor={THEME.BG} />
 
-      {/* Header avec gradient */}
-      <Animated.View
-        style={[
-          styles.header,
-          {
-            height: headerHeight,
-          },
-        ]}
-      >
-        <LinearGradient
-          colors={['#22C55E', '#16A34A', '#15803D']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.headerGradient}
+      {/* Header */}
+      <View style={styles.header}>
+        <Text style={styles.title}>Mes Matchs</Text>
+        <TouchableOpacity
+          style={styles.createBtn}
+          onPress={() => navigation.navigate('CreateMatch')}
         >
-          <View style={styles.headerTop}>
-            <Animated.View
-              style={[
-                styles.headerTitleContainer,
-                {
-                  transform: [
-                    { translateY: headerTitleTranslateY },
-                    { scale: headerTitleScale },
-                  ],
-                },
-              ]}
-            >
-              <Text style={styles.headerTitle}>Mes Matchs</Text>
-              <Animated.Text
-                style={[
-                  styles.headerSubtitle,
-                  { opacity: headerContentOpacity },
-                ]}
-              >
-                {matches.length} {matches.length > 1 ? 'matchs' : 'match'}
-              </Animated.Text>
-            </Animated.View>
-            <TouchableOpacity
-              style={styles.invitationButton}
-              onPress={handleInvitations}
-            >
-              <Icon name="mail" size={20} color="#FFF" />
-              {/* Badge notification (si invitations en attente) */}
-              <View style={styles.notificationBadge}>
-                <Text style={styles.notificationBadgeText}>2</Text>
-              </View>
-            </TouchableOpacity>
-          </View>
+          <Icon name="plus" size={24} color="#000" />
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.invitationButton} // ou styles.iconBtn selon la version
+          onPress={handleInvitations}
+        >
+          <Icon name="mail" size={20} color="#FFF" />
+          {/* Badge de notification optionnel */}
+        </TouchableOpacity>
+      </View>
 
-          {/* Quick Stats */}
-          <Animated.View
+      {/* Tabs */}
+      <View style={styles.tabs}>
+        <TouchableOpacity
+          style={[styles.tab, filter === 'upcoming' && styles.tabActive]}
+          onPress={() => setFilter('upcoming')}
+        >
+          <Text
             style={[
-              styles.quickStatsContainer,
-              {
-                opacity: headerContentOpacity,
-                transform: [{ translateY: headerContentTranslateY }],
-              },
+              styles.tabText,
+              filter === 'upcoming' && styles.tabTextActive,
             ]}
           >
-            <QuickStat
-              icon="calendar"
-              value={stats.totalMatches}
-              label="Total"
-              gradient={['rgba(255,255,255,0.25)', 'rgba(255,255,255,0.15)']}
-            />
-            <QuickStat
-              icon="clock"
-              value={stats.upcomingMatches}
-              label="À venir"
-              gradient={['rgba(255,255,255,0.25)', 'rgba(255,255,255,0.15)']}
-            />
-            <QuickStat
-              icon="check-circle"
-              value={stats.completedMatches}
-              label="Joués"
-              gradient={['rgba(255,255,255,0.25)', 'rgba(255,255,255,0.15)']}
-            />
-          </Animated.View>
-        </LinearGradient>
-        {/* Tabs */}
-        <View style={styles.tabsContainer}>
-          <TouchableOpacity
-            style={[styles.tab, activeTab === 'upcoming' && styles.tabActive]}
-            onPress={() => setActiveTab('upcoming')}
+            À venir
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.tab, filter === 'past' && styles.tabActive]}
+          onPress={() => setFilter('past')}
+        >
+          <Text
+            style={[styles.tabText, filter === 'past' && styles.tabTextActive]}
           >
-            {activeTab === 'upcoming' ? (
-              <LinearGradient
-                colors={['#22C55E', '#16A34A']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.tabGradient}
-              >
-                <Icon name="clock" size={16} color="#FFF" />
-                <Text style={styles.tabTextActive}>À venir</Text>
-              </LinearGradient>
-            ) : (
-              <View style={styles.tabContent}>
-                <Icon name="clock" size={16} color="#6B7280" />
-                <Text style={styles.tabText}>À venir</Text>
-              </View>
-            )}
-          </TouchableOpacity>
+            Historique
+          </Text>
+        </TouchableOpacity>
+      </View>
 
-          <TouchableOpacity
-            style={[styles.tab, activeTab === 'past' && styles.tabActive]}
-            onPress={() => setActiveTab('past')}
-          >
-            {activeTab === 'past' ? (
-              <LinearGradient
-                colors={['#22C55E', '#16A34A']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.tabGradient}
-              >
-                <Icon name="check-circle" size={16} color="#FFF" />
-                <Text style={styles.tabTextActive}>Passés</Text>
-              </LinearGradient>
-            ) : (
-              <View style={styles.tabContent}>
-                <Icon name="check-circle" size={16} color="#6B7280" />
-                <Text style={styles.tabText}>Passés</Text>
-              </View>
-            )}
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.tab, activeTab === 'all' && styles.tabActive]}
-            onPress={() => setActiveTab('all')}
-          >
-            {activeTab === 'all' ? (
-              <LinearGradient
-                colors={['#22C55E', '#16A34A']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.tabGradient}
-              >
-                <Icon name="list" size={16} color="#FFF" />
-                <Text style={styles.tabTextActive}>Tous</Text>
-              </LinearGradient>
-            ) : (
-              <View style={styles.tabContent}>
-                <Icon name="list" size={16} color="#6B7280" />
-                <Text style={styles.tabText}>Tous</Text>
-              </View>
-            )}
-          </TouchableOpacity>
-        </View>
-      </Animated.View>
-
-      {/* Liste des matchs */}
-      <Animated.ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={[
-          styles.scrollContent,
-          { paddingTop: HEADER_MAX_HEIGHT + 24 },
-        ]}
-        showsVerticalScrollIndicator={false}
-        scrollEventThrottle={16}
-        onScroll={Animated.event(
-          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-          { useNativeDriver: false },
-        )}
+      <ScrollView
+        contentContainerStyle={styles.content}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
-            onRefresh={handleRefresh}
-            colors={['#22C55E']}
-            tintColor="#22C55E"
-            progressViewOffset={HEADER_MAX_HEIGHT}
+            onRefresh={onRefresh}
+            tintColor={THEME.ACCENT}
           />
         }
       >
-        {filteredMatches.length === 0 ? (
-          <EmptyState activeTab={activeTab} onCreateMatch={handleCreateMatch} />
+        {filteredMatches.length === 0 && !loading ? (
+          <View style={styles.emptyState}>
+            <Icon name="calendar" size={48} color={THEME.TEXT_SEC} />
+            <Text style={styles.emptyText}>
+              Aucun match {filter === 'upcoming' ? 'prévu' : 'trouvé'}
+            </Text>
+            {filter === 'upcoming' && (
+              <TouchableOpacity
+                onPress={() => navigation.navigate('CreateMatch')}
+              >
+                <Text style={styles.linkText}>Organiser un match</Text>
+              </TouchableOpacity>
+            )}
+          </View>
         ) : (
           filteredMatches.map(match => (
             <MatchCard
               key={match.id}
               match={match}
-              onPress={() => handleMatchPress(match)}
+              onPress={() =>
+                navigation.navigate('MatchDetail', { matchId: match.id })
+              }
             />
           ))
         )}
-      </Animated.ScrollView>
-
-      {/* Bouton FAB Créer */}
-      <TouchableOpacity
-        style={styles.fabButton}
-        onPress={handleCreateMatch}
-        activeOpacity={0.8}
-      >
-        <LinearGradient
-          colors={['#22C55E', '#16A34A']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.fabGradient}
-        >
-          <Icon name="plus" size={28} color="#FFF" />
-        </LinearGradient>
-      </TouchableOpacity>
+        <View style={{ height: 80 }} />
+      </ScrollView>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F8FAFC',
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#F8FAFC',
-  },
-  loadingText: {
-    marginTop: 12,
-    fontSize: 14,
-    color: '#6B7280',
-  },
+  container: { flex: 1, backgroundColor: THEME.BG },
   header: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    zIndex: 10,
-    overflow: 'hidden',
-  },
-  headerGradient: {
-    flex: 1,
-    paddingTop: Platform.OS === 'ios' ? 60 : 30,
-    paddingHorizontal: 20,
-    paddingBottom: 20,
-  },
-  headerTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 24,
+    alignItems: 'center',
+    paddingTop: Platform.OS === 'ios' ? 60 : 30,
+    paddingHorizontal: 24,
+    paddingBottom: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: THEME.BORDER,
   },
-  headerTitleContainer: {
-    flex: 1,
-  },
-  headerTitle: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: '#FFF',
-    marginBottom: 4,
-  },
-  headerSubtitle: {
-    fontSize: 14,
-    color: 'rgba(255,255,255,0.9)',
-  },
-  invitationButton: {
+  title: { fontSize: 28, fontWeight: '900', color: THEME.TEXT },
+  createBtn: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    backgroundColor: THEME.ACCENT,
     justifyContent: 'center',
     alignItems: 'center',
-    position: 'relative',
+    shadowColor: THEME.ACCENT,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
   },
-  notificationBadge: {
-    position: 'absolute',
-    top: -2,
-    right: -2,
-    backgroundColor: '#EF4444',
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#22C55E',
-  },
-  notificationBadgeText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#FFF',
-  },
-  quickStatsContainer: {
+  tabs: {
     flexDirection: 'row',
+    paddingHorizontal: 24,
+    marginBottom: 16,
     gap: 12,
-  },
-  quickStat: {
-    flex: 1,
-    borderRadius: 12,
-    overflow: 'hidden',
-  },
-  quickStatGradient: {
-    padding: 12,
-    alignItems: 'center',
-  },
-  quickStatValue: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#FFF',
-    marginTop: 4,
-  },
-  quickStatLabel: {
-    fontSize: 11,
-    color: 'rgba(255,255,255,0.9)',
-    marginTop: 2,
-  },
-  tabsContainer: {
-    flexDirection: 'row',
-    backgroundColor: '#FFF',
-    padding: 8,
-    gap: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
+    marginTop: 16,
   },
   tab: {
-    flex: 1,
-    borderRadius: 10,
-    overflow: 'hidden',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: THEME.BORDER,
+    backgroundColor: THEME.SURFACE,
   },
   tabActive: {
-    ...SHADOWS.SMALL,
+    backgroundColor: THEME.ACCENT,
+    borderColor: THEME.ACCENT,
   },
-  tabGradient: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 10,
-    gap: 6,
-  },
-  tabContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 10,
-    gap: 6,
-    backgroundColor: '#F3F4F6',
-  },
-  tabText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#6B7280',
-  },
-  tabTextActive: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#FFF',
-  },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    padding: 20,
-  },
-  matchCard: {
-    borderRadius: 16,
+  tabText: { color: THEME.TEXT_SEC, fontWeight: '600', fontSize: 13 },
+  tabTextActive: { color: '#000' },
+  content: { paddingHorizontal: 24 },
+
+  // CARD
+  card: {
     marginBottom: 16,
+    borderRadius: 16,
     overflow: 'hidden',
-    ...SHADOWS.MEDIUM,
+    borderWidth: 1,
+    borderColor: THEME.BORDER,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
   },
-  matchCardGradient: {
-    padding: 16,
-  },
-  matchHeader: {
+  cardGradient: { padding: 16 },
+  cardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 20,
   },
   statusBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 10,
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 8,
     paddingVertical: 4,
-    borderRadius: 12,
-    gap: 4,
+    gap: 6,
   },
-  statusText: {
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  matchDate: {
-    fontSize: 13,
-    color: '#6B7280',
-    fontWeight: '500',
-  },
-  teamsContainer: {
+  statusDot: { width: 6, height: 6, borderRadius: 3 },
+  statusText: { fontSize: 10, fontWeight: 'bold' },
+  dateText: { color: THEME.TEXT_SEC, fontSize: 12, fontWeight: '500' },
+
+  teamsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
+    justifyContent: 'space-between',
   },
-  teamSection: {
-    flex: 1,
-    alignItems: 'center',
+  teamSide: { flex: 1, alignItems: 'center', gap: 8 },
+  teamName: {
+    color: THEME.TEXT,
+    fontSize: 13,
+    fontWeight: '600',
+    textAlign: 'center',
+    maxWidth: '90%',
   },
-  teamIconContainer: {
-    marginBottom: 8,
-  },
-  teamIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 12,
+
+  scoreBox: {
+    minWidth: 60,
+    height: 40,
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  teamName: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#1F2937',
-    textAlign: 'center',
-    marginBottom: 4,
-  },
-  scoreContainer: {
-    backgroundColor: '#F3F4F6',
+    backgroundColor: '#0F172A',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: THEME.BORDER,
     paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 8,
   },
-  scoreText: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#1F2937',
+  scoreBoxActive: {
+    borderColor: THEME.ACCENT,
+    backgroundColor: 'rgba(34, 197, 94, 0.1)',
   },
-  vsContainer: {
-    paddingHorizontal: 16,
+  scoreText: { color: THEME.TEXT, fontSize: 18, fontWeight: 'bold' },
+  vsText: { color: THEME.TEXT_SEC, fontSize: 14, fontWeight: 'bold' },
+
+  cardFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 20,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.05)',
   },
-  vsText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#9CA3AF',
-  },
-  matchFooter: {
+  locationContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
+    flex: 1,
   },
-  locationText: {
-    fontSize: 13,
-    color: '#6B7280',
-  },
-  chevron: {
-    position: 'absolute',
-    right: 16,
-    top: '50%',
-    marginTop: -12,
-  },
-  emptyState: {
-    paddingVertical: 60,
-  },
-  emptyStateGradient: {
-    padding: 32,
-    borderRadius: 24,
-    alignItems: 'center',
-  },
-  emptyIconContainer: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
-    backgroundColor: 'rgba(34, 197, 94, 0.1)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  emptyTitle: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: '#1F2937',
-    marginBottom: 8,
-  },
-  emptyDescription: {
-    fontSize: 14,
-    color: '#6B7280',
-    textAlign: 'center',
-    marginBottom: 24,
-  },
-  emptyButton: {
-    borderRadius: 12,
-    overflow: 'hidden',
-  },
-  emptyButtonGradient: {
+  locationText: { color: THEME.TEXT_SEC, fontSize: 12, flex: 1 },
+
+  organizerBadge: {
+    backgroundColor: THEME.CAPTAIN,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 14,
-    paddingHorizontal: 24,
-    gap: 8,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    gap: 4,
   },
-  emptyButtonText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#FFF',
-  },
-  fabButton: {
-    position: 'absolute',
-    right: 20,
-    bottom: 20,
-    borderRadius: 28,
-    overflow: 'hidden',
-    ...SHADOWS.LARGE,
-  },
-  fabGradient: {
-    width: 56,
-    height: 56,
+  organizerText: { color: '#000', fontSize: 9, fontWeight: 'bold' },
+
+  avatarPlaceholder: {
+    backgroundColor: THEME.SURFACE_LIGHT,
     justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: THEME.BORDER,
+  },
+
+  emptyState: { alignItems: 'center', marginTop: 60, gap: 12 },
+  emptyText: { color: THEME.TEXT_SEC, fontSize: 16 },
+  linkText: {
+    color: THEME.ACCENT,
+    fontWeight: 'bold',
+    textDecorationLine: 'underline',
   },
 });

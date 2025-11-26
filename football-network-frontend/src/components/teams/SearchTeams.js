@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { Search, Filter, MapPin, Globe, SlidersHorizontal } from "lucide-react";
+import { Search, Filter, Globe, SlidersHorizontal } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
 import toast from "react-hot-toast";
 import axios from "axios";
@@ -17,6 +17,8 @@ const SearchTeams = () => {
   const [showFilters, setShowFilters] = useState(false);
   const [totalResults, setTotalResults] = useState(0);
   const [hasSearched, setHasSearched] = useState(false);
+
+  const isManager = user?.userType === "manager";
 
   // États des filtres
   const [filters, setFilters] = useState({
@@ -120,6 +122,12 @@ const SearchTeams = () => {
   };
 
   const handleJoinTeam = async (teamId, teamName) => {
+    // Blocage Manager
+    if (isManager) {
+      toast.error("Les managers ne peuvent pas rejoindre d'autres équipes.");
+      return;
+    }
+
     if (!window.confirm(`Rejoindre "${teamName}" ?`)) return;
     try {
       await axios.post(`${API_BASE_URL}/teams/${teamId}/join`);
@@ -147,11 +155,14 @@ const SearchTeams = () => {
             <Globe className="w-8 h-8 text-blue-300" />
           </div>
           <h1 className="text-3xl md:text-4xl font-bold text-white mb-4">
-            Trouvez votre prochaine équipe
+            {isManager
+              ? "Trouvez des adversaires"
+              : "Trouvez votre prochaine équipe"}
           </h1>
           <p className="text-indigo-200 text-lg mb-8">
-            Rejoignez une communauté de passionnés et participez aux meilleurs
-            matchs de votre région.
+            {isManager
+              ? "Recherchez d'autres clubs pour organiser des matchs amicaux ou de compétition."
+              : "Rejoignez une communauté de passionnés et participez aux meilleurs matchs de votre région."}
           </p>
 
           {/* Barre de recherche centrale */}
@@ -227,6 +238,7 @@ const SearchTeams = () => {
             onJoinTeam={handleJoinTeam}
             onLoadMore={handleLoadMore}
             hasMore={hasMoreResults}
+            isManager={isManager} // On passe l'info si SearchResults sait l'utiliser (sinon handleJoinTeam protège)
           />
         </div>
       </div>

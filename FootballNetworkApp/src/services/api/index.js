@@ -4,3 +4,4 @@ export * from './teamsApi';
 export * from './matchesApi';
 export * from './userApi';
 export * from './notificationsApi';
+export * from './searchApi';

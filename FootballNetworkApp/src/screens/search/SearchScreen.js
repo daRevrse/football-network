@@ -1,5 +1,5 @@
-// ====== src/screens/search/SearchScreen.js - VERSION COMPLÈTE AVEC BACKEND ======
-import React, { useState, useCallback, useEffect } from 'react';
+// ====== src/screens/search/SearchScreen.js ======
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -10,1011 +10,590 @@ import {
   StatusBar,
   ActivityIndicator,
   RefreshControl,
-  Alert,
+  Dimensions,
+  Platform,
+  Keyboard,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Feather';
-import LinearGradient from 'react-native-linear-gradient';
-import { teamsApi } from '../../services/api/teamsApi';
-import { matchesApi } from '../../services/api/matchesApi';
-import { useTheme } from '../../hooks/useTheme';
-import { DIMENSIONS, FONTS, SHADOWS } from '../../styles/theme';
+import { searchApi } from '../../services/api/searchApi';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// ============ COMPOSANTS UTILITAIRES ============
+// Thème Premium Night
+const THEME = {
+  BG: '#0F172A',
+  SURFACE: '#1E293B',
+  INPUT_BG: '#334155',
+  TEXT: '#F8FAFC',
+  TEXT_SEC: '#94A3B8',
+  ACCENT: '#22C55E',
+  BORDER: '#334155',
+  PRIMARY: '#3B82F6',
+};
 
-// Composant FilterChip
-const FilterChip = ({ label, icon, active, onPress, COLORS }) => (
+const { width } = Dimensions.get('window');
+
+// --- COMPOSANTS ---
+
+const FilterChip = ({ label, icon, active, onPress }) => (
   <TouchableOpacity
     onPress={onPress}
-    style={[
-      styles.filterChip,
-      {
-        backgroundColor: active ? 'transparent' : COLORS.BACKGROUND_LIGHT,
-        borderColor: active ? COLORS.PRIMARY : COLORS.BORDER,
-      },
-    ]}
+    style={[styles.filterChip, active && styles.filterChipActive]}
   >
-    {active ? (
-      <LinearGradient
-        colors={[COLORS.PRIMARY || '#22C55E', COLORS.PRIMARY_DARK || '#16A34A']}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 0 }}
-        style={styles.filterGradient}
-      >
-        <Icon name={icon} size={16} color={COLORS.WHITE || '#FFFFFF'} />
-        <Text style={[styles.filterText, { color: COLORS.WHITE || '#FFFFFF' }]}>
-          {label}
-        </Text>
-      </LinearGradient>
-    ) : (
-      <View style={styles.filterContent}>
-        <Icon name={icon} size={16} color={COLORS.TEXT_MUTED || '#9CA3AF'} />
-        <Text
-          style={[styles.filterText, { color: COLORS.TEXT_MUTED || '#9CA3AF' }]}
-        >
-          {label}
-        </Text>
-      </View>
-    )}
-  </TouchableOpacity>
-);
-
-// Composant RecentSearchItem
-const RecentSearchItem = ({ search, onPress, onRemove, COLORS }) => (
-  <TouchableOpacity
-    style={[
-      styles.recentItem,
-      {
-        backgroundColor: COLORS.BACKGROUND_LIGHT,
-        borderColor: COLORS.BORDER,
-      },
-    ]}
-    onPress={onPress}
-  >
-    <Icon name="clock" size={16} color={COLORS.TEXT_MUTED} />
-    <View style={styles.recentContent}>
-      <Text style={[styles.recentText, { color: COLORS.TEXT_PRIMARY }]}>
-        {search}
-      </Text>
-    </View>
-    <TouchableOpacity style={styles.removeButton} onPress={onRemove}>
-      <Icon name="x" size={16} color={COLORS.TEXT_MUTED} />
-    </TouchableOpacity>
-  </TouchableOpacity>
-);
-
-// Composant PopularSearchItem
-const PopularSearchItem = ({ search, icon, onPress, COLORS }) => (
-  <TouchableOpacity
-    style={[
-      styles.popularItem,
-      {
-        backgroundColor: COLORS.PRIMARY_ULTRA_LIGHT,
-        borderColor: COLORS.PRIMARY_LIGHT,
-      },
-    ]}
-    onPress={onPress}
-  >
-    <Icon name={icon} size={16} color={COLORS.PRIMARY} />
-    <Text style={[styles.popularText, { color: COLORS.PRIMARY }]}>
-      {search}
-    </Text>
-  </TouchableOpacity>
-);
-
-// Composant TeamResultCard
-const TeamResultCard = ({ team, onPress, COLORS }) => (
-  <TouchableOpacity
-    style={[styles.resultCard, { backgroundColor: COLORS.WHITE }]}
-    onPress={onPress}
-    activeOpacity={0.7}
-  >
-    <View style={styles.resultHeader}>
-      <View
-        style={[
-          styles.teamIconLarge,
-          { backgroundColor: COLORS.PRIMARY_ULTRA_LIGHT },
-        ]}
-      >
-        <Icon name="users" size={24} color={COLORS.PRIMARY} />
-      </View>
-      <View style={styles.resultInfo}>
-        <Text style={[styles.teamNameResult, { color: COLORS.TEXT_PRIMARY }]}>
-          {team.name}
-        </Text>
-        <View style={styles.matchMeta}>
-          <View style={styles.metaItem}>
-            <Icon name="users" size={12} color={COLORS.TEXT_MUTED} />
-            <Text style={[styles.metaText, { color: COLORS.TEXT_MUTED }]}>
-              {team.currentPlayers}/{team.maxPlayers} joueurs
-            </Text>
-          </View>
-          {team.locationCity && (
-            <View style={styles.metaItem}>
-              <Icon name="map-pin" size={12} color={COLORS.TEXT_MUTED} />
-              <Text style={[styles.metaText, { color: COLORS.TEXT_MUTED }]}>
-                {team.locationCity}
-              </Text>
-            </View>
-          )}
-        </View>
-        {team.skillLevel && (
-          <View
-            style={[
-              styles.skillBadgeSmall,
-              { backgroundColor: COLORS.PRIMARY_LIGHT },
-            ]}
-          >
-            <Icon name="award" size={10} color={COLORS.PRIMARY} />
-            <Text style={[styles.skillText, { color: COLORS.PRIMARY }]}>
-              {team.skillLevel.toUpperCase()}
-            </Text>
-          </View>
-        )}
-      </View>
-      <Icon name="chevron-right" size={20} color={COLORS.TEXT_MUTED} />
-    </View>
-  </TouchableOpacity>
-);
-
-// Composant PlayerResultCard
-const PlayerResultCard = ({ player, onPress, COLORS }) => (
-  <TouchableOpacity
-    style={[styles.resultCard, { backgroundColor: COLORS.WHITE }]}
-    onPress={onPress}
-    activeOpacity={0.7}
-  >
-    <View style={styles.resultHeader}>
-      <View
-        style={[
-          styles.playerAvatar,
-          { backgroundColor: COLORS.PRIMARY_ULTRA_LIGHT },
-        ]}
-      >
-        <Icon name="user" size={24} color={COLORS.PRIMARY} />
-      </View>
-      <View style={styles.resultInfo}>
-        <Text style={[styles.playerName, { color: COLORS.TEXT_PRIMARY }]}>
-          {player.firstName} {player.lastName}
-        </Text>
-        <View style={styles.matchMeta}>
-          {player.position && (
-            <View style={styles.metaItem}>
-              <Icon name="target" size={12} color={COLORS.TEXT_MUTED} />
-              <Text style={[styles.metaText, { color: COLORS.TEXT_MUTED }]}>
-                {player.position}
-              </Text>
-            </View>
-          )}
-          {player.skillLevel && (
-            <View
-              style={[
-                styles.skillBadgeSmall,
-                { backgroundColor: COLORS.PRIMARY_LIGHT },
-              ]}
-            >
-              <Icon name="award" size={10} color={COLORS.PRIMARY} />
-              <Text style={[styles.skillText, { color: COLORS.PRIMARY }]}>
-                {player.skillLevel.toUpperCase()}
-              </Text>
-            </View>
-          )}
-        </View>
-      </View>
-      <Icon name="chevron-right" size={20} color={COLORS.TEXT_MUTED} />
-    </View>
-  </TouchableOpacity>
-);
-
-// Composant MatchResultCard
-const MatchResultCard = ({ match, onPress, COLORS }) => (
-  <TouchableOpacity
-    style={[styles.resultCard, { backgroundColor: COLORS.WHITE }]}
-    onPress={onPress}
-    activeOpacity={0.7}
-  >
-    <View style={styles.teamsRow}>
-      <Text style={[styles.teamNameSmall, { color: COLORS.TEXT_PRIMARY }]}>
-        {match.homeTeamName}
-      </Text>
-      <Text style={[styles.vsTextSmall, { color: COLORS.PRIMARY }]}>VS</Text>
-      <Text style={[styles.teamNameSmall, { color: COLORS.TEXT_PRIMARY }]}>
-        {match.awayTeamName}
-      </Text>
-    </View>
-    <View style={styles.matchMeta}>
-      <View style={styles.metaItem}>
-        <Icon name="calendar" size={12} color={COLORS.TEXT_MUTED} />
-        <Text style={[styles.metaText, { color: COLORS.TEXT_MUTED }]}>
-          {new Date(match.matchDate).toLocaleDateString('fr-FR', {
-            day: 'numeric',
-            month: 'short',
-          })}
-        </Text>
-      </View>
-      {match.location && (
-        <View style={styles.metaItem}>
-          <Icon name="map-pin" size={12} color={COLORS.TEXT_MUTED} />
-          <Text style={[styles.metaText, { color: COLORS.TEXT_MUTED }]}>
-            {match.location}
-          </Text>
-        </View>
-      )}
-    </View>
-  </TouchableOpacity>
-);
-
-// Composant EmptyState
-const EmptyState = ({ icon, title, message, COLORS }) => (
-  <View style={styles.emptyState}>
-    <View
+    <Icon name={icon} size={14} color={active ? '#000' : THEME.TEXT_SEC} />
+    <Text
       style={[
-        styles.emptyIcon,
-        { backgroundColor: COLORS.PRIMARY_ULTRA_LIGHT },
+        styles.filterText,
+        active && { color: '#000', fontWeight: 'bold' },
       ]}
     >
-      <Icon name={icon} size={48} color={COLORS.PRIMARY} />
+      {label}
+    </Text>
+  </TouchableOpacity>
+);
+
+const ResultCard = ({ title, subtitle, icon, type, onPress, badge }) => {
+  // Déterminer la couleur en fonction du type
+  const getTypeColor = () => {
+    switch (type) {
+      case 'player':
+        return { bg: '#3B82F620', color: '#3B82F6' };
+      case 'match':
+        return { bg: '#F59E0B20', color: '#F59E0B' };
+      default:
+        return { bg: '#22C55E20', color: THEME.ACCENT };
+    }
+  };
+
+  const typeColor = getTypeColor();
+
+  return (
+    <TouchableOpacity
+      style={styles.resultCard}
+      onPress={onPress}
+      activeOpacity={0.7}
+    >
+      <View style={[styles.iconBox, { backgroundColor: typeColor.bg }]}>
+        <Icon name={icon} size={20} color={typeColor.color} />
+      </View>
+      <View style={styles.resultContent}>
+        <View style={styles.titleRow}>
+          <Text style={styles.resultTitle} numberOfLines={1}>
+            {title}
+          </Text>
+          {badge && (
+            <View style={styles.badge}>
+              <Text style={styles.badgeText}>{badge}</Text>
+            </View>
+          )}
+        </View>
+        <Text style={styles.resultSub}>{subtitle}</Text>
+      </View>
+      <Icon name="chevron-right" size={20} color={THEME.TEXT_SEC} />
+    </TouchableOpacity>
+  );
+};
+
+const EmptyState = ({ icon, title, message }) => (
+  <View style={styles.emptyState}>
+    <View style={styles.emptyIconBox}>
+      <Icon name={icon} size={32} color={THEME.TEXT_SEC} />
     </View>
-    <Text style={[styles.emptyTitle, { color: COLORS.TEXT_PRIMARY }]}>
-      {title}
-    </Text>
-    <Text style={[styles.emptyMessage, { color: COLORS.TEXT_SECONDARY }]}>
-      {message}
-    </Text>
+    <Text style={styles.emptyTitle}>{title}</Text>
+    <Text style={styles.emptyMessage}>{message}</Text>
   </View>
 );
 
-// ============ COMPOSANT PRINCIPAL ============
-
 export const SearchScreen = ({ navigation }) => {
-  const { colors: COLORS, isDark } = useTheme('auto');
-  const [searchQuery, setSearchQuery] = useState('');
+  const [query, setQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState('all');
   const [loading, setLoading] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
-
-  // Résultats de recherche
-  const [teams, setTeams] = useState([]);
-  const [players, setPlayers] = useState([]);
-  const [matches, setMatches] = useState([]);
-
-  // Historique et suggestions
+  const [results, setResults] = useState({
+    teams: [],
+    matches: [],
+    players: [],
+  });
   const [recentSearches, setRecentSearches] = useState([
-    'Les Tigres de Paris',
-    'Match amical Paris',
-    'FC Olympique',
+    'Paris FC',
+    'Ligue 1',
+    'Zidane',
   ]);
 
-  const [popularSearches] = useState([
-    { text: 'Matchs ce weekend', icon: 'calendar' },
-    { text: 'Équipes à Paris', icon: 'map-pin' },
-    { text: 'Joueurs débutants', icon: 'users' },
-  ]);
+  const searchTimeout = useRef(null);
 
-  // Debounce pour la recherche
-  const [searchTimeout, setSearchTimeout] = useState(null);
-
-  // Recherche quand l'utilisateur tape
+  // Charger les recherches récentes au montage
   useEffect(() => {
-    if (searchTimeout) {
-      clearTimeout(searchTimeout);
-    }
+    loadRecentSearches();
+  }, []);
 
-    if (searchQuery.trim().length >= 2) {
-      const timeout = setTimeout(() => {
-        handleSearch();
-      }, 500); // Attendre 500ms après la dernière frappe
-      setSearchTimeout(timeout);
+  // Gestion de la recherche avec Debounce
+  useEffect(() => {
+    if (searchTimeout.current) clearTimeout(searchTimeout.current);
+
+    if (query.length > 2) {
+      setLoading(true);
+      searchTimeout.current = setTimeout(() => performSearch(), 600);
     } else {
-      setTeams([]);
-      setPlayers([]);
-      setMatches([]);
+      setResults({ teams: [], matches: [], players: [] });
+      setLoading(false);
     }
+  }, [query, activeFilter]);
 
-    return () => {
-      if (searchTimeout) {
-        clearTimeout(searchTimeout);
+  // Charger les recherches récentes depuis AsyncStorage
+  const loadRecentSearches = async () => {
+    try {
+      const saved = await AsyncStorage.getItem('recentSearches');
+      if (saved) {
+        const searches = JSON.parse(saved);
+        setRecentSearches(searches);
       }
-    };
-  }, [searchQuery]);
-
-  // Charger les données au focus de l'écran
-  useFocusEffect(
-    useCallback(() => {
-      // Peut charger des données par défaut ici si nécessaire
-    }, []),
-  );
-
-  // ============ FONCTIONS DE RECHERCHE ============
-
-  const handleSearch = async () => {
-    if (!searchQuery.trim() || searchQuery.trim().length < 2) {
-      return;
+    } catch (error) {
+      console.error('Erreur lors du chargement des recherches récentes:', error);
     }
+  };
 
+  // Sauvegarder une recherche dans les recherches récentes
+  const saveToRecentSearches = async searchQuery => {
+    try {
+      const trimmedQuery = searchQuery.trim();
+      if (!trimmedQuery) return;
+
+      // Éviter les doublons et limiter à 10 recherches
+      const updatedSearches = [
+        trimmedQuery,
+        ...recentSearches.filter(s => s !== trimmedQuery),
+      ].slice(0, 10);
+
+      setRecentSearches(updatedSearches);
+      await AsyncStorage.setItem(
+        'recentSearches',
+        JSON.stringify(updatedSearches),
+      );
+    } catch (error) {
+      console.error(
+        'Erreur lors de la sauvegarde des recherches récentes:',
+        error,
+      );
+    }
+  };
+
+  const performSearch = async () => {
     try {
       setLoading(true);
 
-      // Rechercher selon le filtre actif
-      if (activeFilter === 'all' || activeFilter === 'teams') {
-        await searchTeams();
-      }
-      if (activeFilter === 'all' || activeFilter === 'players') {
-        await searchPlayers();
-      }
-      if (activeFilter === 'all' || activeFilter === 'matches') {
-        await searchMatches();
+      // Mapper le filtre actif au type d'API
+      const searchType = activeFilter;
+
+      // Appel à l'API de recherche
+      const response = await searchApi.search(query, searchType);
+
+      if (response.success) {
+        setResults({
+          teams: response.results.teams || [],
+          players: response.results.players || [],
+          matches: response.results.matches || [],
+        });
+
+        // Sauvegarder dans les recherches récentes
+        saveToRecentSearches(query);
+      } else {
+        setResults({ teams: [], matches: [], players: [] });
       }
 
-      // Ajouter à l'historique
-      if (!recentSearches.includes(searchQuery.trim())) {
-        setRecentSearches(prev => [searchQuery.trim(), ...prev.slice(0, 4)]);
-      }
+      setLoading(false);
     } catch (error) {
-      console.error('Search error:', error);
-      Alert.alert('Erreur', 'Erreur lors de la recherche');
-    } finally {
+      console.error('Erreur lors de la recherche:', error);
+      setResults({ teams: [], matches: [], players: [] });
       setLoading(false);
     }
   };
 
-  const searchTeams = async () => {
-    try {
-      const result = await teamsApi.searchTeams({
-        search: searchQuery,
-        limit: 10,
-        offset: 0,
-      });
-
-      if (result.success) {
-        setTeams(result.data || []);
-      } else {
-        console.error('Teams search error:', result.error);
-        setTeams([]);
-      }
-    } catch (error) {
-      console.error('Teams search error:', error);
-      setTeams([]);
-    }
+  const handleClear = () => {
+    setQuery('');
+    Keyboard.dismiss();
   };
 
-  const searchPlayers = async () => {
-    try {
-      const result = await teamsApi.searchPlayers(searchQuery);
-
-      if (result.success) {
-        setPlayers(result.data || []);
-      } else {
-        console.error('Players search error:', result.error);
-        setPlayers([]);
-      }
-    } catch (error) {
-      console.error('Players search error:', error);
-      setPlayers([]);
-    }
-  };
-
-  const searchMatches = async () => {
-    try {
-      const result = await matchesApi.getMatches({
-        search: searchQuery,
-        limit: 10,
-      });
-
-      if (result.success) {
-        setMatches(result.data || []);
-      } else {
-        console.error('Matches search error:', result.error);
-        setMatches([]);
-      }
-    } catch (error) {
-      console.error('Matches search error:', error);
-      setMatches([]);
-    }
-  };
-
-  // ============ GESTIONNAIRES D'ÉVÉNEMENTS ============
-
-  const handleRecentSearch = search => {
-    setSearchQuery(search);
-  };
-
-  const handleRemoveRecentSearch = search => {
-    setRecentSearches(prev => prev.filter(s => s !== search));
-  };
-
-  const handlePopularSearch = search => {
-    setSearchQuery(search);
-  };
-
-  const handleClearSearch = () => {
-    setSearchQuery('');
-    setTeams([]);
-    setPlayers([]);
-    setMatches([]);
-  };
-
-  const onRefresh = async () => {
-    setRefreshing(true);
-    if (searchQuery.trim().length >= 2) {
-      await handleSearch();
-    }
-    setRefreshing(false);
-  };
-
-  // ============ FILTRAGE DES RÉSULTATS ============
-
-  const getFilteredResults = () => {
-    if (!searchQuery || searchQuery.trim().length < 2) return null;
-
-    switch (activeFilter) {
-      case 'matches':
-        return { matches };
-      case 'teams':
-        return { teams };
-      case 'players':
-        return { players };
-      default:
-        return { matches, teams, players };
-    }
-  };
-
-  const filteredResults = getFilteredResults();
   const hasResults =
-    filteredResults &&
-    (filteredResults.matches?.length > 0 ||
-      filteredResults.teams?.length > 0 ||
-      filteredResults.players?.length > 0);
-
-  // ============ RENDU ============
+    results.teams.length > 0 ||
+    results.players.length > 0 ||
+    results.matches.length > 0;
 
   return (
-    <View
-      style={[styles.container, { backgroundColor: COLORS.BACKGROUND_LIGHT }]}
-    >
-      <StatusBar
-        barStyle={isDark ? 'light-content' : 'dark-content'}
-        backgroundColor={COLORS.WHITE}
-      />
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor={THEME.BG} />
 
-      {/* Header avec barre de recherche */}
-      <View style={[styles.header, { backgroundColor: COLORS.WHITE }]}>
-        <View style={styles.headerTop}>
+      {/* HEADER RECHERCHE */}
+      <View style={styles.header}>
+        <View style={styles.searchBarRow}>
           <TouchableOpacity
-            style={styles.backButton}
             onPress={() => navigation.goBack()}
+            style={styles.backBtn}
           >
-            <Icon name="arrow-left" size={24} color={COLORS.TEXT_PRIMARY} />
+            <Icon name="arrow-left" size={24} color={THEME.TEXT} />
           </TouchableOpacity>
-          <View
-            style={[
-              styles.searchBar,
-              {
-                backgroundColor: COLORS.BACKGROUND_LIGHT,
-                borderColor: COLORS.BORDER,
-              },
-            ]}
-          >
-            <Icon name="search" size={20} color={COLORS.TEXT_MUTED} />
-            <TextInput
-              style={[styles.searchInput, { color: COLORS.TEXT_PRIMARY }]}
-              placeholder="Rechercher matchs, équipes, joueurs..."
-              placeholderTextColor={COLORS.TEXT_MUTED}
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-              autoFocus
-              returnKeyType="search"
-              onSubmitEditing={handleSearch}
+
+          <View style={styles.searchInputContainer}>
+            <Icon
+              name="search"
+              size={20}
+              color={THEME.TEXT_SEC}
+              style={{ marginRight: 10 }}
             />
-            {searchQuery.length > 0 && (
-              <TouchableOpacity onPress={handleClearSearch}>
-                <Icon name="x" size={20} color={COLORS.TEXT_MUTED} />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Équipes, joueurs, matchs..."
+              placeholderTextColor={THEME.TEXT_SEC}
+              value={query}
+              onChangeText={setQuery}
+              autoFocus={false}
+              returnKeyType="search"
+            />
+            {query.length > 0 && (
+              <TouchableOpacity onPress={handleClear}>
+                <Icon name="x" size={18} color={THEME.TEXT} />
               </TouchableOpacity>
             )}
           </View>
         </View>
 
-        {/* Filtres */}
-        {searchQuery.length > 0 && (
+        {/* FILTRES */}
+        <View style={styles.filtersRow}>
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.filtersContainer}
+            contentContainerStyle={{ paddingHorizontal: 20 }}
           >
             <FilterChip
               label="Tout"
               icon="grid"
               active={activeFilter === 'all'}
               onPress={() => setActiveFilter('all')}
-              COLORS={COLORS}
-            />
-            <FilterChip
-              label="Matchs"
-              icon="calendar"
-              active={activeFilter === 'matches'}
-              onPress={() => setActiveFilter('matches')}
-              COLORS={COLORS}
             />
             <FilterChip
               label="Équipes"
-              icon="users"
+              icon="shield"
               active={activeFilter === 'teams'}
               onPress={() => setActiveFilter('teams')}
-              COLORS={COLORS}
             />
             <FilterChip
               label="Joueurs"
               icon="user"
               active={activeFilter === 'players'}
               onPress={() => setActiveFilter('players')}
-              COLORS={COLORS}
+            />
+            <FilterChip
+              label="Matchs"
+              icon="calendar"
+              active={activeFilter === 'matches'}
+              onPress={() => setActiveFilter('matches')}
             />
           </ScrollView>
-        )}
+        </View>
       </View>
 
-      {/* Contenu */}
+      {/* CONTENU */}
       <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor={COLORS.PRIMARY}
-            colors={[COLORS.PRIMARY]}
-          />
-        }
+        style={styles.content}
+        contentContainerStyle={{ paddingBottom: 40 }}
+        keyboardShouldPersistTaps="handled"
       >
-        {loading && (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={COLORS.PRIMARY} />
+        {loading ? (
+          <View style={{ marginTop: 50 }}>
+            <ActivityIndicator size="large" color={THEME.ACCENT} />
           </View>
-        )}
-
-        {!searchQuery || searchQuery.trim().length < 2 ? (
-          // État initial - Recherches récentes et populaires
-          <>
-            {/* Recherches récentes */}
-            {recentSearches.length > 0 && (
-              <View style={styles.section}>
-                <View style={styles.sectionHeader}>
-                  <Text
-                    style={[
-                      styles.sectionTitle,
-                      { color: COLORS.TEXT_PRIMARY },
-                    ]}
-                  >
-                    Recherches récentes
-                  </Text>
-                  <TouchableOpacity onPress={() => setRecentSearches([])}>
-                    <Text style={[styles.clearText, { color: COLORS.PRIMARY }]}>
-                      Effacer
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-                <View style={styles.recentList}>
-                  {recentSearches.map((search, index) => (
-                    <RecentSearchItem
-                      key={index}
-                      search={search}
-                      onPress={() => handleRecentSearch(search)}
-                      onRemove={() => handleRemoveRecentSearch(search)}
-                      COLORS={COLORS}
-                    />
-                  ))}
-                </View>
-              </View>
-            )}
-
-            {/* Recherches populaires */}
-            <View style={styles.section}>
-              <View style={styles.sectionHeader}>
-                <Text
-                  style={[styles.sectionTitle, { color: COLORS.TEXT_PRIMARY }]}
-                >
-                  Recherches populaires
-                </Text>
-              </View>
-              <View style={styles.popularGrid}>
-                {popularSearches.map((search, index) => (
-                  <PopularSearchItem
-                    key={index}
-                    search={search.text}
-                    icon={search.icon}
-                    onPress={() => handlePopularSearch(search.text)}
-                    COLORS={COLORS}
-                  />
-                ))}
-              </View>
-            </View>
-
-            {/* Suggestions */}
-            <View
-              style={[
-                styles.suggestionBox,
-                { backgroundColor: COLORS.PRIMARY_ULTRA_LIGHT },
-              ]}
-            >
-              <Icon name="lightbulb" size={20} color={COLORS.PRIMARY} />
-              <Text
-                style={[styles.suggestionText, { color: COLORS.TEXT_PRIMARY }]}
+        ) : query.length < 3 ? (
+          // VUE INITIALE (Recherches récentes)
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Recherches récentes</Text>
+            {recentSearches.map((item, index) => (
+              <TouchableOpacity
+                key={index}
+                style={styles.recentItem}
+                onPress={() => setQuery(item)}
               >
-                Essayez de rechercher par nom d'équipe, ville, ou type de match
-              </Text>
-            </View>
-          </>
-        ) : !hasResults && !loading ? (
-          // Aucun résultat
-          <EmptyState
-            icon="search"
-            title="Aucun résultat"
-            message={`Aucun résultat pour "${searchQuery}". Essayez avec d'autres mots-clés.`}
-            COLORS={COLORS}
-          />
-        ) : (
-          // Résultats de recherche
-          <>
-            {/* Matchs */}
-            {filteredResults.matches && filteredResults.matches.length > 0 && (
-              <View style={styles.resultsSection}>
-                <View style={styles.resultsSectionHeader}>
-                  <Icon name="calendar" size={18} color={COLORS.PRIMARY} />
-                  <Text
-                    style={[
-                      styles.resultsSectionTitle,
-                      { color: COLORS.TEXT_PRIMARY },
-                    ]}
-                  >
-                    Matchs ({filteredResults.matches.length})
-                  </Text>
-                </View>
-                <View style={styles.resultsList}>
-                  {filteredResults.matches.map(match => (
-                    <MatchResultCard
-                      key={match.id}
-                      match={match}
-                      onPress={() =>
-                        navigation.navigate('Matches', {
-                          screen: 'MatchDetail',
-                          params: { matchId: match.id },
-                        })
-                      }
-                      COLORS={COLORS}
-                    />
-                  ))}
-                </View>
-              </View>
-            )}
+                <Icon name="clock" size={16} color={THEME.TEXT_SEC} />
+                <Text style={styles.recentText}>{item}</Text>
+                <Icon name="arrow-up-left" size={16} color={THEME.BORDER} />
+              </TouchableOpacity>
+            ))}
 
-            {/* Équipes */}
-            {filteredResults.teams && filteredResults.teams.length > 0 && (
-              <View style={styles.resultsSection}>
-                <View style={styles.resultsSectionHeader}>
-                  <Icon name="users" size={18} color={COLORS.PRIMARY} />
-                  <Text
-                    style={[
-                      styles.resultsSectionTitle,
-                      { color: COLORS.TEXT_PRIMARY },
-                    ]}
+            <Text style={[styles.sectionTitle, { marginTop: 32 }]}>
+              Tendances
+            </Text>
+            <View style={styles.tagsContainer}>
+              {['#Mercato', '#TournoiParis', '#Foot5', '#Recrutement'].map(
+                (tag, i) => (
+                  <TouchableOpacity
+                    key={i}
+                    style={styles.tag}
+                    onPress={() => setQuery(tag)}
                   >
-                    Équipes ({filteredResults.teams.length})
-                  </Text>
-                </View>
-                <View style={styles.resultsList}>
-                  {filteredResults.teams.map(team => (
-                    <TeamResultCard
+                    <Text style={styles.tagText}>{tag}</Text>
+                  </TouchableOpacity>
+                ),
+              )}
+            </View>
+          </View>
+        ) : !hasResults ? (
+          // AUCUN RÉSULTAT
+          <View style={{ marginTop: 50 }}>
+            <EmptyState
+              icon="search"
+              title="Aucun résultat"
+              message={`Nous n'avons rien trouvé pour "${query}"`}
+            />
+          </View>
+        ) : (
+          // RÉSULTATS
+          <View style={styles.resultsContainer}>
+            {/* Équipes */}
+            {(activeFilter === 'all' || activeFilter === 'teams') &&
+              results.teams.length > 0 && (
+                <View style={styles.section}>
+                  <Text style={styles.sectionTitle}>Équipes</Text>
+                  {results.teams.map(team => (
+                    <ResultCard
                       key={team.id}
-                      team={team}
+                      title={team.name}
+                      subtitle={`${team.city} • ${team.members} membres`}
+                      icon="shield"
+                      type="team"
                       onPress={() =>
                         navigation.navigate('Teams', {
                           screen: 'TeamDetail',
                           params: { teamId: team.id },
                         })
                       }
-                      COLORS={COLORS}
                     />
                   ))}
                 </View>
-              </View>
-            )}
+              )}
 
             {/* Joueurs */}
-            {filteredResults.players && filteredResults.players.length > 0 && (
-              <View style={styles.resultsSection}>
-                <View style={styles.resultsSectionHeader}>
-                  <Icon name="user" size={18} color={COLORS.PRIMARY} />
-                  <Text
-                    style={[
-                      styles.resultsSectionTitle,
-                      { color: COLORS.TEXT_PRIMARY },
-                    ]}
-                  >
-                    Joueurs ({filteredResults.players.length})
-                  </Text>
-                </View>
-                <View style={styles.resultsList}>
-                  {filteredResults.players.map(player => (
-                    <PlayerResultCard
+            {(activeFilter === 'all' || activeFilter === 'players') &&
+              results.players.length > 0 && (
+                <View style={styles.section}>
+                  <Text style={styles.sectionTitle}>Joueurs</Text>
+                  {results.players.map(player => (
+                    <ResultCard
                       key={player.id}
-                      player={player}
+                      title={player.name}
+                      subtitle={player.position || 'Position non définie'}
+                      icon="user"
+                      type="player"
+                      badge={
+                        player.teams_count > 0
+                          ? `${player.teams_count} équipe${player.teams_count > 1 ? 's' : ''}`
+                          : null
+                      }
                       onPress={() => {
-                        // Navigation vers le profil du joueur
-                        Alert.alert('Info', 'Profil du joueur à implémenter');
+                        // Navigation vers le profil du joueur (à implémenter)
+                        console.log('Navigation vers profil joueur:', player.id);
                       }}
-                      COLORS={COLORS}
                     />
                   ))}
                 </View>
-              </View>
-            )}
-          </>
+              )}
+
+            {/* Matchs */}
+            {(activeFilter === 'all' || activeFilter === 'matches') &&
+              results.matches.length > 0 && (
+                <View style={styles.section}>
+                  <Text style={styles.sectionTitle}>Matchs</Text>
+                  {results.matches.map(match => (
+                    <ResultCard
+                      key={match.id}
+                      title={`${match.team1.name} vs ${match.team2.name}`}
+                      subtitle={`${match.location} • ${new Date(match.date).toLocaleDateString('fr-FR')}`}
+                      icon="calendar"
+                      type="match"
+                      badge={match.status}
+                      onPress={() => {
+                        // Navigation vers le détail du match
+                        console.log('Navigation vers match:', match.id);
+                      }}
+                    />
+                  ))}
+                </View>
+              )}
+          </View>
         )}
       </ScrollView>
     </View>
   );
 };
 
-// ============ STYLES ============
-
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
+  container: { flex: 1, backgroundColor: THEME.BG },
+
+  // Header
   header: {
-    paddingTop: Platform.OS === 'ios' ? 50 : 20,
-    paddingBottom: DIMENSIONS.SPACING_MD,
-    ...SHADOWS.SMALL,
+    paddingTop: Platform.OS === 'ios' ? 60 : 30,
+    backgroundColor: THEME.BG,
+    borderBottomWidth: 1,
+    borderBottomColor: THEME.BORDER,
+    paddingBottom: 12,
   },
-  headerTop: {
+  searchBarRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: DIMENSIONS.SPACING_LG,
-    gap: DIMENSIONS.SPACING_MD,
+    paddingHorizontal: 20,
+    marginBottom: 16,
   },
-  backButton: {
-    padding: DIMENSIONS.SPACING_SM,
-  },
-  searchBar: {
+  backBtn: { marginRight: 16 },
+  searchInputContainer: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: DIMENSIONS.SPACING_MD,
-    borderRadius: DIMENSIONS.BORDER_RADIUS_MD,
+    backgroundColor: THEME.INPUT_BG,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    height: 46,
     borderWidth: 1,
-    gap: DIMENSIONS.SPACING_SM,
-    height: 44,
+    borderColor: THEME.BORDER,
   },
   searchInput: {
     flex: 1,
-    fontSize: FONTS.SIZE.MD,
-    fontFamily: FONTS.FAMILY.REGULAR,
+    fontSize: 16,
+    color: THEME.TEXT,
+    height: '100%',
   },
-  filtersContainer: {
-    paddingHorizontal: DIMENSIONS.SPACING_LG,
-    paddingTop: DIMENSIONS.SPACING_MD,
-    gap: DIMENSIONS.SPACING_SM,
+
+  // Filters
+  filtersRow: {
+    flexDirection: 'row',
   },
   filterChip: {
-    borderRadius: DIMENSIONS.BORDER_RADIUS_FULL,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: THEME.SURFACE,
     borderWidth: 1,
-    overflow: 'hidden',
+    borderColor: THEME.BORDER,
+    marginRight: 8,
+    gap: 6,
   },
-  filterGradient: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: DIMENSIONS.SPACING_MD,
-    paddingVertical: DIMENSIONS.SPACING_SM,
-    gap: DIMENSIONS.SPACING_XS,
-  },
-  filterContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: DIMENSIONS.SPACING_MD,
-    paddingVertical: DIMENSIONS.SPACING_SM,
-    gap: DIMENSIONS.SPACING_XS,
+  filterChipActive: {
+    backgroundColor: THEME.ACCENT,
+    borderColor: THEME.ACCENT,
   },
   filterText: {
-    fontSize: FONTS.SIZE.SM,
-    fontWeight: FONTS.WEIGHT.MEDIUM,
+    color: THEME.TEXT_SEC,
+    fontSize: 13,
+    fontWeight: '600',
   },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    padding: DIMENSIONS.SPACING_LG,
-  },
-  loadingContainer: {
-    paddingVertical: DIMENSIONS.SPACING_XXL,
-    alignItems: 'center',
-  },
-  section: {
-    marginBottom: DIMENSIONS.SPACING_XL,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: DIMENSIONS.SPACING_MD,
-  },
+
+  // Content
+  content: { flex: 1 },
+  section: { paddingHorizontal: 20, paddingTop: 24 },
   sectionTitle: {
-    fontSize: FONTS.SIZE.LG,
-    fontWeight: FONTS.WEIGHT.BOLD,
+    color: THEME.ACCENT,
+    fontSize: 12,
+    fontWeight: 'bold',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    marginBottom: 16,
   },
-  clearText: {
-    fontSize: FONTS.SIZE.SM,
-    fontWeight: FONTS.WEIGHT.MEDIUM,
-  },
-  recentList: {
-    gap: DIMENSIONS.SPACING_SM,
-  },
+
+  // Recent Items
   recentItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: DIMENSIONS.SPACING_MD,
-    borderRadius: DIMENSIONS.BORDER_RADIUS_MD,
-    borderWidth: 1,
-    gap: DIMENSIONS.SPACING_MD,
-  },
-  recentContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: DIMENSIONS.SPACING_MD,
-    flex: 1,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: THEME.BORDER,
   },
   recentText: {
-    fontSize: FONTS.SIZE.MD,
+    flex: 1,
+    color: THEME.TEXT,
+    fontSize: 15,
+    marginLeft: 12,
   },
-  removeButton: {
-    padding: DIMENSIONS.SPACING_XS,
-  },
-  popularGrid: {
+
+  // Tags
+  tagsContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: DIMENSIONS.SPACING_SM,
+    gap: 10,
   },
-  popularItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: DIMENSIONS.SPACING_MD,
-    paddingVertical: DIMENSIONS.SPACING_SM,
-    borderRadius: DIMENSIONS.BORDER_RADIUS_MD,
+  tag: {
+    backgroundColor: THEME.SURFACE,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 8,
     borderWidth: 1,
-    gap: DIMENSIONS.SPACING_SM,
+    borderColor: THEME.BORDER,
   },
-  popularText: {
-    fontSize: FONTS.SIZE.SM,
-    fontWeight: FONTS.WEIGHT.MEDIUM,
+  tagText: {
+    color: THEME.PRIMARY,
+    fontWeight: '600',
   },
-  suggestionBox: {
-    flexDirection: 'row',
-    padding: DIMENSIONS.SPACING_LG,
-    borderRadius: DIMENSIONS.BORDER_RADIUS_MD,
-    gap: DIMENSIONS.SPACING_MD,
-    alignItems: 'center',
-  },
-  suggestionText: {
-    fontSize: FONTS.SIZE.SM,
-    flex: 1,
-    lineHeight: FONTS.SIZE.SM * FONTS.LINE_HEIGHT.RELAXED,
-  },
-  resultsSection: {
-    marginBottom: DIMENSIONS.SPACING_XL,
-  },
-  resultsSectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: DIMENSIONS.SPACING_SM,
-    marginBottom: DIMENSIONS.SPACING_MD,
-  },
-  resultsSectionTitle: {
-    fontSize: FONTS.SIZE.MD,
-    fontWeight: FONTS.WEIGHT.BOLD,
-  },
-  resultsList: {
-    gap: DIMENSIONS.SPACING_SM,
-  },
+
+  // Results
   resultCard: {
-    padding: DIMENSIONS.SPACING_MD,
-    borderRadius: DIMENSIONS.BORDER_RADIUS_MD,
-    ...SHADOWS.SMALL,
-  },
-  resultHeader: {
     flexDirection: 'row',
     alignItems: 'center',
+    backgroundColor: THEME.SURFACE,
+    padding: 12,
+    borderRadius: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: THEME.BORDER,
   },
-  teamIconLarge: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: DIMENSIONS.SPACING_MD,
-  },
-  playerAvatar: {
+  iconBox: {
     width: 44,
     height: 44,
-    borderRadius: 22,
+    borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: DIMENSIONS.SPACING_MD,
+    marginRight: 12,
   },
-  resultInfo: {
-    flex: 1,
-  },
-  teamsRow: {
+  resultContent: { flex: 1 },
+  titleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: DIMENSIONS.SPACING_XS,
-    marginBottom: DIMENSIONS.SPACING_XXS,
+    justifyContent: 'space-between',
   },
-  teamNameSmall: {
-    fontSize: FONTS.SIZE.SM,
-    fontWeight: FONTS.WEIGHT.SEMIBOLD,
+  resultTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: THEME.TEXT,
+    marginBottom: 2,
   },
-  vsTextSmall: {
-    fontSize: FONTS.SIZE.XS,
-    fontWeight: FONTS.WEIGHT.BOLD,
+  resultSub: {
+    fontSize: 13,
+    color: THEME.TEXT_SEC,
   },
-  teamNameResult: {
-    fontSize: FONTS.SIZE.MD,
-    fontWeight: FONTS.WEIGHT.SEMIBOLD,
-    marginBottom: DIMENSIONS.SPACING_XXS,
-  },
-  playerName: {
-    fontSize: FONTS.SIZE.MD,
-    fontWeight: FONTS.WEIGHT.SEMIBOLD,
-    marginBottom: DIMENSIONS.SPACING_XXS,
-  },
-  matchMeta: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: DIMENSIONS.SPACING_MD,
-  },
-  metaItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: DIMENSIONS.SPACING_XXS,
-  },
-  metaText: {
-    fontSize: FONTS.SIZE.XS,
-  },
-  skillBadgeSmall: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: DIMENSIONS.SPACING_SM,
+  badge: {
+    backgroundColor: THEME.BORDER,
+    paddingHorizontal: 6,
     paddingVertical: 2,
-    borderRadius: DIMENSIONS.BORDER_RADIUS_FULL,
-    gap: DIMENSIONS.SPACING_XXS,
-    marginTop: DIMENSIONS.SPACING_XS,
-    alignSelf: 'flex-start',
+    borderRadius: 4,
+    marginRight: 10,
   },
-  skillText: {
-    fontSize: FONTS.SIZE.XXS,
-    fontWeight: FONTS.WEIGHT.BOLD,
+  badgeText: {
+    fontSize: 10,
+    color: THEME.TEXT,
   },
-  emptyState: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: DIMENSIONS.SPACING_XXL * 2,
-  },
-  emptyIcon: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
+
+  // Empty
+  emptyState: { alignItems: 'center', paddingHorizontal: 40 },
+  emptyIconBox: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: THEME.SURFACE,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: DIMENSIONS.SPACING_LG,
+    marginBottom: 16,
   },
   emptyTitle: {
-    fontSize: FONTS.SIZE.XL,
-    fontWeight: FONTS.WEIGHT.BOLD,
-    marginBottom: DIMENSIONS.SPACING_SM,
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: THEME.TEXT,
+    marginBottom: 8,
   },
-  emptyMessage: {
-    fontSize: FONTS.SIZE.MD,
-    textAlign: 'center',
-    paddingHorizontal: DIMENSIONS.SPACING_XL,
-  },
+  emptyMessage: { fontSize: 14, color: THEME.TEXT_SEC, textAlign: 'center' },
 });

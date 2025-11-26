@@ -20,6 +20,18 @@ const feedRoutes = require("./routes/feed");
 const uploadRoutes = require("./routes/uploads");
 const teamMediaRoutes = require("./routes/teamMediaRoutes");
 const passwordRoutes = require("./routes/password");
+const searchRoutes = require("./routes/search");
+// Phase 2 - Nouvelles routes
+const venueRoutes = require("./routes/venues");
+const bookingRoutes = require("./routes/bookings");
+const refereeRoutes = require("./routes/referees");
+const refereeAssignmentRoutes = require("./routes/referee-assignments");
+// Phase 4 - Routes admin
+const adminRoutes = require("./routes/admin");
+// Phase 5 - Routes participations
+const participationRoutes = require("./routes/participations");
+// Phase 5 - Routes venue owner
+const venueOwnerRoutes = require("./routes/venue-owner");
 
 // Import de la base de données
 const db = require("./config/database");
@@ -87,6 +99,18 @@ app.use("/api/feed", feedRoutes);
 app.use("/api/uploads", uploadRoutes);
 app.use("/api/teams", teamMediaRoutes);
 app.use("/api/password", passwordRoutes);
+app.use("/api/search", searchRoutes);
+// Phase 2 - Routes stades et arbitres
+app.use("/api/venues", venueRoutes);
+app.use("/api/bookings", bookingRoutes);
+app.use("/api/referees", refereeRoutes);
+app.use("/api/referee-assignments", refereeAssignmentRoutes);
+// Phase 4 - Routes admin
+app.use("/api/admin", adminRoutes);
+// Phase 5 - Routes participations
+app.use("/api/participations", participationRoutes);
+// Phase 5 - Routes venue owner
+app.use("/api/venue-owner", venueOwnerRoutes);
 
 // Routes pour les notifications (nouvelles)
 app.get(
