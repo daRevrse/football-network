@@ -1,14 +1,22 @@
-import React, { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { useAuth } from '../../contexts/AuthContext';
-import axios from 'axios';
+import React, { useState, useEffect } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { useAuth } from "../../contexts/AuthContext";
+import axios from "axios";
 import {
-  MapPin, Calendar, DollarSign, TrendingUp, Clock,
-  CheckCircle, XCircle, AlertCircle, ArrowRight
-} from 'lucide-react';
-import toast from 'react-hot-toast';
+  MapPin,
+  Calendar,
+  DollarSign,
+  TrendingUp,
+  Clock,
+  CheckCircle,
+  XCircle,
+  AlertCircle,
+  ArrowRight,
+} from "lucide-react";
+import toast from "react-hot-toast";
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+const API_BASE_URL =
+  process.env.REACT_APP_API_URL || "http://localhost:5000/api";
 
 const VenueOwnerDashboard = () => {
   const { user } = useAuth();
@@ -18,26 +26,29 @@ const VenueOwnerDashboard = () => {
   const [stats, setStats] = useState(null);
 
   useEffect(() => {
-    if (user?.userType !== 'venue_owner' && user?.userType !== 'superadmin') {
-      navigate('/');
-      return;
-    }
+    // if (user?.user_type !== "venue_owner" && user?.user_type !== "superadmin") {
+    //   navigate("/");
+    //   return;
+    // }
     loadDashboard();
   }, [user, navigate]);
 
   const loadDashboard = async () => {
     try {
       setLoading(true);
-      const token = localStorage.getItem('token');
-      const response = await axios.get(`${API_BASE_URL}/venue-owner/dashboard`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const token = localStorage.getItem("token");
+      const response = await axios.get(
+        `${API_BASE_URL}/venue-owner/dashboard`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
 
       setVenues(response.data.venues);
       setStats(response.data.stats);
     } catch (error) {
-      console.error('Error loading dashboard:', error);
-      toast.error('Erreur lors du chargement');
+      console.error("Error loading dashboard:", error);
+      toast.error("Erreur lors du chargement");
     } finally {
       setLoading(false);
     }
@@ -45,8 +56,8 @@ const VenueOwnerDashboard = () => {
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center min-h-screen">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      <div className="flex justify-center items-center h-96">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600"></div>
       </div>
     );
   }
@@ -55,26 +66,25 @@ const VenueOwnerDashboard = () => {
     <div className="bg-white rounded-lg border border-gray-200 p-6 hover:shadow-md transition-shadow">
       <div className="flex items-center justify-between mb-4">
         <div className={`p-3 rounded-lg ${color} bg-opacity-10`}>
-          <Icon className={`w-6 h-6 ${color.replace('bg-', 'text-')}`} />
+          <Icon className={`w-6 h-6 ${color.replace("bg-", "text-")}`} />
         </div>
       </div>
       <p className="text-3xl font-bold text-gray-900 mb-1">{value}</p>
       <p className="text-sm font-medium text-gray-600">{label}</p>
-      {subtitle && (
-        <p className="text-xs text-gray-500 mt-1">{subtitle}</p>
-      )}
+      {subtitle && <p className="text-xs text-gray-500 mt-1">{subtitle}</p>}
     </div>
   );
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-8">
-      {/* Header */}
+    <>
+      {/* Welcome Message */}
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">
-          Tableau de Bord Propriétaire
-        </h1>
-        <p className="text-gray-600">
-          Bienvenue {user?.firstName} ! Gérez vos terrains et réservations.
+        <p className="text-lg text-gray-700">
+          Bienvenue{" "}
+          <span className="font-semibold text-green-600">
+            {user?.firstName}
+          </span>{" "}
+          ! Gérez vos terrains et réservations.
         </p>
       </div>
 
@@ -116,10 +126,12 @@ const VenueOwnerDashboard = () => {
               <AlertCircle className="w-6 h-6 text-yellow-600 mt-0.5" />
               <div>
                 <h3 className="font-bold text-yellow-900 mb-1">
-                  {stats.pendingBookings} réservation{stats.pendingBookings > 1 ? 's' : ''} en attente
+                  {stats.pendingBookings} réservation
+                  {stats.pendingBookings > 1 ? "s" : ""} en attente
                 </h3>
                 <p className="text-sm text-yellow-700">
-                  Des équipes attendent votre confirmation pour réserver un terrain.
+                  Des équipes attendent votre confirmation pour réserver un
+                  terrain.
                 </p>
               </div>
             </div>
@@ -139,7 +151,7 @@ const VenueOwnerDashboard = () => {
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-2xl font-bold text-gray-900">Mes Terrains</h2>
           <Link
-            to="/venues/new"
+            to="venues/new"
             className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-semibold"
           >
             Ajouter un Terrain
@@ -179,27 +191,31 @@ const VenueOwnerDashboard = () => {
                       {venue.city}
                     </p>
                   </div>
-                  <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
-                    venue.is_active
-                      ? 'bg-green-100 text-green-800'
-                      : 'bg-gray-100 text-gray-800'
-                  }`}>
-                    {venue.is_active ? 'Actif' : 'Inactif'}
+                  <span
+                    className={`px-2 py-1 rounded-full text-xs font-semibold ${
+                      venue.is_active
+                        ? "bg-green-100 text-green-800"
+                        : "bg-gray-100 text-gray-800"
+                    }`}
+                  >
+                    {venue.is_active ? "Actif" : "Inactif"}
                   </span>
                 </div>
 
                 <div className="space-y-2 mb-4">
                   <p className="text-sm text-gray-600">
-                    <span className="font-semibold">Type:</span> {venue.field_type}
+                    <span className="font-semibold">Type:</span>{" "}
+                    {venue.field_type}
                   </p>
                   <p className="text-sm text-gray-600">
-                    <span className="font-semibold">Adresse:</span> {venue.address}
+                    <span className="font-semibold">Adresse:</span>{" "}
+                    {venue.address}
                   </p>
                 </div>
 
                 <div className="flex space-x-2">
                   <Link
-                    to={`/venue-owner/venues/${venue.id}/bookings`}
+                    to={`/venue-owner/bookings?venue_id=${venue.id}`}
                     className="flex-1 px-3 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors text-center font-semibold"
                   >
                     Réservations
@@ -243,12 +259,8 @@ const VenueOwnerDashboard = () => {
             <TrendingUp className="w-8 h-8 text-purple-600" />
             <ArrowRight className="w-5 h-5 text-gray-400 group-hover:text-purple-600 group-hover:translate-x-1 transition-all" />
           </div>
-          <h3 className="text-lg font-bold text-gray-900 mb-1">
-            Statistiques
-          </h3>
-          <p className="text-sm text-gray-600">
-            Analysez vos performances
-          </p>
+          <h3 className="text-lg font-bold text-gray-900 mb-1">Statistiques</h3>
+          <p className="text-sm text-gray-600">Analysez vos performances</p>
         </Link>
 
         <Link
@@ -262,12 +274,10 @@ const VenueOwnerDashboard = () => {
           <h3 className="text-lg font-bold text-gray-900 mb-1">
             Paramètres Terrains
           </h3>
-          <p className="text-sm text-gray-600">
-            Gérez vos horaires et tarifs
-          </p>
+          <p className="text-sm text-gray-600">Gérez vos horaires et tarifs</p>
         </Link>
       </div>
-    </div>
+    </>
   );
 };
 

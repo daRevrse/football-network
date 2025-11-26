@@ -34,50 +34,71 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
 
   // Vérification du rôle
-  const isManager = user?.userType === "manager";
-  const isPlayer = user?.userType === "player";
-  const isSuperadmin = user?.userType === "superadmin";
-  const isVenueOwner = user?.userType === "venue_owner";
+  const isManager = user?.user_type === "manager";
+  const isPlayer = user?.user_type === "player";
+  const isSuperadmin = user?.user_type === "superadmin";
+  const isVenueOwner = user?.user_type === "venue_owner";
 
   useEffect(() => {
-    loadDashboardStats();
-  }, []);
-
-  const loadDashboardStats = async () => {
-    try {
-      setLoading(true);
-
-      // Promise.all pour charger toutes les stats en parallèle
-      const [playerInvites, matchInvites, validations, teams] =
-        await Promise.allSettled([
-          axios
-            .get(`${API_BASE_URL}/player-invitations?status=pending`)
-            .then(
-              (res) => res.data.filter((i) => i.status === "pending").length
-            ),
-          axios
-            .get(`${API_BASE_URL}/matches/invitations/received?status=pending`)
-            .then((res) => res.data.length),
-          axios
-            .get(`${API_BASE_URL}/matches/pending-validation/list`)
-            .then((res) => res.data.count || 0),
-          axios.get(`${API_BASE_URL}/teams/my`).then((res) => res.data.length),
-        ]);
-
-      setStats({
-        playerInvites:
-          playerInvites.status === "fulfilled" ? playerInvites.value : 0,
-        matchInvites:
-          matchInvites.status === "fulfilled" ? matchInvites.value : 0,
-        validations: validations.status === "fulfilled" ? validations.value : 0,
-        teams: teams.status === "fulfilled" ? teams.value : 0,
-      });
-    } catch (error) {
-      console.error("Error loading dashboard:", error);
-    } finally {
-      setLoading(false);
+    if (user?.user_type === "superadmin") {
+      navigate("/admin", { replace: true });
+    } else if (user?.user_type === "venue_owner") {
+      navigate("/venue-owner", { replace: true });
     }
-  };
+  }, [user, navigate]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadDashboardStats = async () => {
+      try {
+        setLoading(true);
+        const [playerInvites, matchInvites, validations, teams] =
+          await Promise.allSettled([
+            axios
+              .get(`${API_BASE_URL}/player-invitations?status=pending`)
+              .then(
+                (res) => res.data.filter((i) => i.status === "pending").length
+              ),
+            axios
+              .get(
+                `${API_BASE_URL}/matches/invitations/received?status=pending`
+              )
+              .then((res) => res.data.length),
+            axios
+              .get(`${API_BASE_URL}/matches/pending-validation/list`)
+              .then((res) => res.data.count || 0),
+            axios
+              .get(`${API_BASE_URL}/teams/my`)
+              .then((res) => res.data.length),
+          ]);
+
+        if (isMounted) {
+          setStats({
+            playerInvites:
+              playerInvites.status === "fulfilled" ? playerInvites.value : 0,
+            matchInvites:
+              matchInvites.status === "fulfilled" ? matchInvites.value : 0,
+            validations:
+              validations.status === "fulfilled" ? validations.value : 0,
+            teams: teams.status === "fulfilled" ? teams.value : 0,
+          });
+        }
+      } catch (error) {
+        console.error("Error loading dashboard:", error);
+      } finally {
+        if (isMounted) setLoading(false);
+      }
+    };
+
+    if (user) {
+      loadDashboardStats();
+    }
+
+    return () => {
+      isMounted = false;
+    };
+  }, [user]);
 
   const ActionCard = ({ to, icon: Icon, title, desc, color, count }) => (
     <Link
@@ -119,15 +140,6 @@ const Dashboard = () => {
     </div>
   );
 
-  // Redirection pour superadmin et venue_owner
-  useEffect(() => {
-    if (isSuperadmin) {
-      navigate('/admin');
-    } else if (isVenueOwner) {
-      navigate('/venue-owner');
-    }
-  }, [isSuperadmin, isVenueOwner, navigate]);
-
   // Si superadmin ou venue_owner, on affiche un loader pendant la redirection
   if (isSuperadmin || isVenueOwner) {
     return (
@@ -135,7 +147,9 @@ const Dashboard = () => {
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
           <p className="text-gray-600">
-            {isSuperadmin ? 'Redirection vers le panel admin...' : 'Redirection vers votre espace propriétaire...'}
+            {isSuperadmin
+              ? "Redirection vers le panel admin..."
+              : "Redirection vers votre espace propriétaire..."}
           </p>
         </div>
       </div>

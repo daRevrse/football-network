@@ -244,15 +244,17 @@ async function getPendingParticipationsForUser(userId) {
         m.match_date,
         m.status as match_status,
         ht.name as home_team_name,
-        ht.logo_url as home_team_logo,
+        home_logo.stored_filename as home_team_logo_filename,
         at.name as away_team_name,
-        at.logo_url as away_team_logo,
+        away_logo.stored_filename as away_team_logo_filename,
         l.city as location_city,
         l.address as location_address
        FROM match_participations mp
        JOIN matches m ON mp.match_id = m.id
        JOIN teams ht ON m.home_team_id = ht.id
+       LEFT JOIN uploads home_logo ON ht.logo_id = home_logo.id
        JOIN teams at ON m.away_team_id = at.id
+       LEFT JOIN uploads away_logo ON at.logo_id = away_logo.id
        LEFT JOIN locations l ON m.location_id = l.id
        WHERE mp.user_id = ?
          AND mp.status = 'pending'
