@@ -142,15 +142,64 @@ async function validateMatchParticipation(matchId) {
       [matchId, status.homeConfirmed, status.awayConfirmed, status.isValid, validationStatus]
     );
 
-    // Mettre à jour le match
-    await db.execute(
-      `UPDATE matches
-       SET participation_validated = ?,
-           last_validation_check = CURRENT_TIMESTAMP,
-           validation_warnings = validation_warnings + ?
-       WHERE id = ?`,
-      [status.isValid, validationStatus === 'warning' ? 1 : 0, matchId]
-    );
+    // Si validation réussie (6+ joueurs par équipe)
+    if (status.isValid) {
+      // Récupérer les infos du match pour vérifier le statut actuel et la réservation
+      const [matchInfo] = await db.execute(
+        'SELECT status, venue_booking_id FROM matches WHERE id = ?',
+        [matchId]
+      );
+
+      if (matchInfo.length > 0) {
+        const currentMatchStatus = matchInfo[0].status;
+        const venueBookingId = matchInfo[0].venue_booking_id;
+
+        // Si le match est en 'pending', le passer à 'confirmed'
+        if (currentMatchStatus === 'pending') {
+          await db.execute(
+            `UPDATE matches
+             SET status = 'confirmed',
+                 participation_validated = true,
+                 last_validation_check = CURRENT_TIMESTAMP
+             WHERE id = ?`,
+            [matchId]
+          );
+
+          console.log(`Match ${matchId} status updated from 'pending' to 'confirmed' (6+ confirmations per team)`);
+
+          // Si une réservation de terrain existe, la confirmer aussi
+          if (venueBookingId) {
+            await db.execute(
+              `UPDATE venue_bookings
+               SET status = 'confirmed'
+               WHERE id = ? AND status = 'pending'`,
+              [venueBookingId]
+            );
+
+            console.log(`Venue booking ${venueBookingId} auto-confirmed for match ${matchId}`);
+          }
+        } else {
+          // Match déjà confirmé, juste mettre à jour participation_validated
+          await db.execute(
+            `UPDATE matches
+             SET participation_validated = ?,
+                 last_validation_check = CURRENT_TIMESTAMP
+             WHERE id = ?`,
+            [true, matchId]
+          );
+        }
+      }
+    } else {
+      // Pas assez de confirmations, juste mettre à jour la validation
+      await db.execute(
+        `UPDATE matches
+         SET participation_validated = ?,
+             last_validation_check = CURRENT_TIMESTAMP,
+             validation_warnings = validation_warnings + ?
+         WHERE id = ?`,
+        [false, validationStatus === 'warning' ? 1 : 0, matchId]
+      );
+    }
 
     return {
       validated: status.isValid,

@@ -38,6 +38,10 @@ const MatchDetails = () => {
   const [showChat, setShowChat] = useState(false);
   const [activeTab, setActiveTab] = useState("info"); // info, lineups, chat
   const [showMenu, setShowMenu] = useState(false);
+  const [bookingVenue, setBookingVenue] = useState(false);
+  const [showVenueModal, setShowVenueModal] = useState(false);
+  const [selectedVenue, setSelectedVenue] = useState(null);
+  const [venues, setVenues] = useState([]);
 
   // Modals state (simplifié pour la démo)
   const [isEditing, setIsEditing] = useState(false);
@@ -51,6 +55,7 @@ const MatchDetails = () => {
       setLoading(true);
       const response = await axios.get(`${API_BASE_URL}/matches/${matchId}`);
       setMatch(response.data);
+      console.log("response.data", response.data);
       // Ouvrir le chat par défaut si le match est en cours ou terminé
       if (
         response.data.status === "confirmed" ||
@@ -94,6 +99,45 @@ const MatchDetails = () => {
       navigate("/matches");
     } catch (error) {
       toast.error("Erreur suppression");
+    }
+  };
+
+  const handleBookVenue = async (venueId) => {
+    try {
+      setBookingVenue(true);
+      const token = localStorage.getItem("token");
+      const response = await axios.post(
+        `${API_BASE_URL}/matches/${matchId}/book-venue`,
+        { venueId, durationMinutes: 90 },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      toast.success("Réservation créée avec succès !");
+      setShowVenueModal(false);
+      loadMatch(); // Recharger le match pour afficher la réservation
+    } catch (error) {
+      console.error("Booking error:", error);
+      toast.error(
+        error.response?.data?.error || "Erreur lors de la réservation"
+      );
+    } finally {
+      setBookingVenue(false);
+    }
+  };
+
+  const loadVenues = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      const response = await axios.get(`${API_BASE_URL}/venues`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      // L'API peut retourner soit un tableau, soit {venues: [...]}
+      const venuesData = Array.isArray(response.data)
+        ? response.data
+        : response.data.venues || response.data.locations || [];
+      setVenues(venuesData);
+    } catch (error) {
+      console.error("Error loading venues:", error);
+      setVenues([]);
     }
   };
 
@@ -322,9 +366,40 @@ const MatchDetails = () => {
             <div className="space-y-6 animate-in fade-in">
               {/* Location Card */}
               <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-                <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center">
-                  <MapPin className="w-5 h-5 mr-2 text-indigo-500" /> Détails du
-                  terrain
+                <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center justify-between">
+                  <span className="flex items-center">
+                    <MapPin className="w-5 h-5 mr-2 text-indigo-500" /> Détails
+                    du terrain
+                  </span>
+                  {canManage && match.status !== "cancelled" && (
+                    <>
+                      {match.venue_booking_id ? (
+                        <div className="flex items-center px-4 py-2 bg-green-50 border border-green-200 rounded-lg">
+                          <CheckCircle className="w-4 h-4 text-green-600 mr-2" />
+                          <span className="text-sm font-semibold text-green-700">
+                            Terrain réservé
+                          </span>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => {
+                            loadVenues();
+                            // Pré-sélectionner le terrain du match s'il existe
+                            if (match.location?.id) {
+                              setSelectedVenue(match.location.id);
+                            }
+                            setShowVenueModal(true);
+                          }}
+                          className="px-3 py-1.5 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition flex items-center"
+                        >
+                          <MapPin className="w-4 h-4 mr-1.5" />
+                          {match.location?.id
+                            ? "Confirmer le terrain"
+                            : "Réserver un terrain"}
+                        </button>
+                      )}
+                    </>
+                  )}
                 </h3>
                 <div className="flex items-start p-4 bg-gray-50 rounded-xl">
                   <div className="flex-1">
@@ -437,6 +512,119 @@ const MatchDetails = () => {
           )}
         </div>
       </div>
+
+      {/* Modal de sélection de terrain */}
+      {showVenueModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[80vh] overflow-hidden shadow-2xl">
+            <div className="p-6 border-b border-gray-200">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-xl font-bold text-gray-900 flex items-center">
+                    <MapPin className="w-6 h-6 mr-2 text-indigo-600" />
+                    Réserver un terrain
+                  </h2>
+                  {match.location?.id && (
+                    <p className="text-sm text-gray-600 mt-1">
+                      Terrain suggéré pour ce match : {match.location?.name}
+                    </p>
+                  )}
+                </div>
+                <button
+                  onClick={() => setShowVenueModal(false)}
+                  className="p-2 hover:bg-gray-100 rounded-lg transition"
+                >
+                  <XCircle className="w-5 h-5 text-gray-500" />
+                </button>
+              </div>
+            </div>
+
+            <div className="p-6 overflow-y-auto max-h-[60vh]">
+              {venues.length === 0 ? (
+                <div className="text-center py-12">
+                  <MapPin className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                  <p className="text-gray-600">Aucun terrain disponible</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {venues?.map((venue) => {
+                    const isMatchVenue = venue.id === match.location?.id;
+                    const isSelected = selectedVenue === venue.id;
+                    return (
+                      <div
+                        key={venue.id}
+                        className={`border rounded-xl p-4 hover:shadow-md transition cursor-pointer ${
+                          isSelected
+                            ? "border-indigo-500 bg-indigo-50"
+                            : isMatchVenue
+                            ? "border-blue-300 bg-blue-50"
+                            : "border-gray-200 hover:border-indigo-300"
+                        }`}
+                        onClick={() => setSelectedVenue(venue.id)}
+                      >
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2">
+                              <h3 className="font-bold text-gray-900">
+                                {venue.name}
+                              </h3>
+                              {isMatchVenue && (
+                                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
+                                  Suggéré
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-sm text-gray-600 mt-1">
+                              {venue.city} - {venue.address}
+                            </p>
+                            {venue.fieldType && (
+                              <span className="inline-block mt-2 text-xs bg-gray-100 px-2 py-1 rounded font-medium text-gray-700">
+                                {venue.fieldType}
+                              </span>
+                            )}
+                          </div>
+                          <input
+                            type="radio"
+                            checked={isSelected}
+                            onChange={() => setSelectedVenue(venue.id)}
+                            className="mt-1 w-5 h-5 text-indigo-600"
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            <div className="p-6 border-t border-gray-200 flex items-center justify-end space-x-3">
+              <button
+                onClick={() => setShowVenueModal(false)}
+                className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition font-medium"
+              >
+                Annuler
+              </button>
+              <button
+                onClick={() => selectedVenue && handleBookVenue(selectedVenue)}
+                disabled={!selectedVenue || bookingVenue}
+                className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
+              >
+                {bookingVenue ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                    Réservation...
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle className="w-4 h-4 mr-2" />
+                    Confirmer la réservation
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

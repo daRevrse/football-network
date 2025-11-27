@@ -34,6 +34,7 @@ import MatchValidation from "./components/matches/MatchValidation";
 import PendingValidations from "./components/matches/PendingValidations";
 import MatchParticipations from "./components/matches/MatchParticipations";
 import MyPendingParticipations from "./components/matches/MyPendingParticipations";
+import PendingParticipations from "./components/participations/PendingParticipations";
 import Feed from "./components/Feed";
 import LandingFeed from "./components/LandingFeed";
 import VenueSearch from "./components/venues/VenueSearch";
@@ -51,6 +52,7 @@ import VenueForm from "./components/venue-owner/VenueForm";
 import VenueBookingDetails from "./components/venue-owner/VenueBookingDetails";
 import VenueCalendar from "./components/venue-owner/VenueCalendar";
 import VenueStats from "./components/venue-owner/VenueStats";
+import BookingManagement from "./components/venue-owner/BookingManagement";
 
 // Protection
 import {
@@ -157,7 +159,8 @@ function App() {
                 }
               >
                 <Route index element={<VenueOwnerDashboard />} />
-                <Route path="bookings" element={<VenueOwnerBookings />} />
+                <Route path="bookings" element={<BookingManagement />} />
+                <Route path="bookings-legacy" element={<VenueOwnerBookings />} />
                 <Route
                   path="venues/:id/bookings"
                   element={<VenueBookingDetails />}
@@ -311,6 +314,14 @@ function App() {
                   element={
                     <ProtectedRoute>
                       <MyPendingParticipations />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/participations"
+                  element={
+                    <ProtectedRoute>
+                      <PendingParticipations />
                     </ProtectedRoute>
                   }
                 />

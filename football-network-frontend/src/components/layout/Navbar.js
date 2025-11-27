@@ -15,6 +15,8 @@ import {
   Menu,
   X,
   Settings,
+  Sword,
+  Swords,
 } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
 import { useNotifications } from "../../hooks/useNotifications";
@@ -99,7 +101,7 @@ const Navbar = () => {
     { path: "/dashboard", icon: Home, label: "Dashboard" },
     { path: "/teams", icon: Users, label: "Équipes" },
     { path: "/feed", icon: Hash, label: "Le Terrain" },
-    { path: "/invitations", icon: MessageSquare, label: "Matchs" },
+    { path: "/invitations", icon: Swords, label: "Défis" },
     {
       path: "/player-invitations",
       icon: UserPlus,
@@ -230,7 +232,7 @@ const Navbar = () => {
                         <User className="w-4 h-4 mr-3" /> Mon Profil
                       </Link>
 
-                      {user?.userType === 'superadmin' && (
+                      {user?.userType === "superadmin" && (
                         <Link
                           to="/admin"
                           className="flex items-center px-4 py-2.5 text-sm text-purple-700 hover:bg-purple-50 hover:text-purple-800 transition-colors font-semibold"

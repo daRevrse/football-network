@@ -48,6 +48,9 @@ const SendInvitationModal = ({
   const [locations, setLocations] = useState([]);
   const [loadingLocations, setLoadingLocations] = useState(false);
 
+  // État pour la vérification de disponibilité des joueurs
+  const [verifyPlayerAvailability, setVerifyPlayerAvailability] = useState(true);
+
   const {
     register,
     handleSubmit,
@@ -143,10 +146,14 @@ const SendInvitationModal = ({
           data.proposedLocationId && data.proposedLocationId !== ""
             ? parseInt(data.proposedLocationId)
             : null,
+        verifyPlayerAvailability: verifyPlayerAvailability,
         message: data.message,
       };
 
-      await axios.post(`${API_BASE_URL}/matches/invitations`, payload);
+      const token = localStorage.getItem("token");
+      await axios.post(`${API_BASE_URL}/matches/invitations`, payload, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
 
       toast.success("Invitation envoyée avec succès !");
       if (onSuccess) onSuccess();
@@ -375,7 +382,47 @@ const SendInvitationModal = ({
             </div>
           </div>
 
-          {/* 3. Message */}
+          {/* 3. Options */}
+          <div className="space-y-4">
+            <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider border-b border-gray-100 pb-2">
+              Options
+            </h3>
+
+            {/* Vérification disponibilité joueurs */}
+            <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+              <label className="flex items-start space-x-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={verifyPlayerAvailability}
+                  onChange={(e) => setVerifyPlayerAvailability(e.target.checked)}
+                  className="mt-1 w-5 h-5 text-blue-600 border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
+                />
+                <div className="flex-1">
+                  <div className="flex items-center space-x-2">
+                    <CheckCircle className="w-4 h-4 text-blue-600" />
+                    <span className="text-sm font-medium text-gray-900">
+                      Vérifier la disponibilité des joueurs
+                    </span>
+                  </div>
+                  <p className="text-xs text-gray-600 mt-1">
+                    {verifyPlayerAvailability ? (
+                      <>
+                        <strong>Activé:</strong> Les deux équipes doivent avoir minimum 6 joueurs disponibles.
+                        Le match sera <strong>confirmé automatiquement</strong> dès l'acceptation de l'invitation.
+                      </>
+                    ) : (
+                      <>
+                        <strong>Désactivé:</strong> Pas de vérification immédiate.
+                        Le match restera en <strong>attente</strong> jusqu'à ce que les joueurs confirment leur participation.
+                      </>
+                    )}
+                  </p>
+                </div>
+              </label>
+            </div>
+          </div>
+
+          {/* 4. Message */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Message (Optionnel)

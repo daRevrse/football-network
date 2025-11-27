@@ -1,11 +1,13 @@
 import React, { useState } from "react";
-import { X, Check, MessageSquare } from "lucide-react";
+import { X, Check, MessageSquare, MapPin } from "lucide-react";
 
 const RespondModal = ({ invitation, onClose, onRespond }) => {
   const [responseMessage, setResponseMessage] = useState("");
   const [responding, setResponding] = useState(false);
+  const [showBookingInfo, setShowBookingInfo] = useState(false);
 
   const isAccepting = invitation.action === "accept";
+  const hasVenueBooking = invitation.venue && invitation.venueId;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -71,7 +73,29 @@ const RespondModal = ({ invitation, onClose, onRespond }) => {
                   <strong>Lieu:</strong> {invitation.location.name}
                 </div>
               )}
+              {hasVenueBooking && isAccepting && (
+                <div className="mt-2 p-2 bg-green-50 border border-green-200 rounded">
+                  <div className="flex items-start space-x-2">
+                    <MapPin className="w-4 h-4 text-green-600 mt-0.5" />
+                    <div className="text-xs text-green-800">
+                      <div className="font-medium mb-1">Terrain déjà réservé</div>
+                      <div>Une réservation sera automatiquement créée pour ce terrain lors de l'acceptation.</div>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
+
+            {isAccepting && !hasVenueBooking && (
+              <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                <div className="flex items-start space-x-2">
+                  <MapPin className="w-4 h-4 text-yellow-600 mt-0.5" />
+                  <div className="text-xs text-yellow-800">
+                    <strong>Rappel:</strong> Aucun terrain n'est encore réservé pour ce match. Vous pourrez en réserver un après l'acceptation.
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="mb-6">

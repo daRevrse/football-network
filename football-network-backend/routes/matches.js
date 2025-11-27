@@ -22,6 +22,7 @@ router.post(
     body("venueId").optional({ nullable: true, checkFalsy: true }).isInt(),
     body("requiresReferee").optional().isBoolean(),
     body("preferredRefereeId").optional({ nullable: true, checkFalsy: true }).isInt(),
+    body("verifyPlayerAvailability").optional().isBoolean(),
     body("message")
       .optional({ nullable: true, checkFalsy: true })
       .isLength({ max: 500 }),
@@ -41,6 +42,7 @@ router.post(
         venueId,
         requiresReferee,
         preferredRefereeId,
+        verifyPlayerAvailability,
         message,
       } = req.body;
 
@@ -56,27 +58,29 @@ router.post(
           .json({ error: "You are not the captain of this team" });
       }
 
-      // Vérifier que l'équipe a minimum 6 joueurs
-      const senderValidation = await validateTeamPlayerCount(senderTeamId, 6);
-      if (!senderValidation.isValid) {
-        return res.status(400).json({
-          error: "Insufficient players",
-          message: senderValidation.message,
+      // Si verifyPlayerAvailability = true, vérifier que l'équipe a minimum 6 joueurs
+      if (verifyPlayerAvailability === true) {
+        const senderValidation = await validateTeamPlayerCount(senderTeamId, 6);
+        if (!senderValidation.isValid) {
+          return res.status(400).json({
+            error: "Insufficient players",
+            message: senderValidation.message,
+            playersCount: senderValidation.playersCount,
+            minimumRequired: 6
+          });
+        }
+
+        // Enregistrer la validation
+        await logTeamValidation({
+          teamId: senderTeamId,
+          invitationId: null,
+          validationType: 'send_invitation',
           playersCount: senderValidation.playersCount,
-          minimumRequired: 6
+          minimumRequired: 6,
+          isValid: true,
+          validatedBy: req.user.id
         });
       }
-
-      // Enregistrer la validation (l'invitationId sera mis à jour après création)
-      const validationLogId = await logTeamValidation({
-        teamId: senderTeamId,
-        invitationId: null,
-        validationType: 'send_invitation',
-        playersCount: senderValidation.playersCount,
-        minimumRequired: 6,
-        isValid: true,
-        validatedBy: req.user.id
-      });
 
       // Vérifier que l'équipe receveuse existe
       const [receiverTeams] = await db.execute(
@@ -123,8 +127,8 @@ router.post(
       const [result] = await db.execute(
         `INSERT INTO match_invitations
        (sender_team_id, receiver_team_id, proposed_date, proposed_location_id,
-        venue_id, requires_referee, preferred_referee_id, message, expires_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        venue_id, requires_referee, preferred_referee_id, verify_player_availability, message, expires_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           senderTeamId,
           receiverTeamId,
@@ -133,6 +137,7 @@ router.post(
           venueId || null,
           requiresReferee || false,
           preferredRefereeId || null,
+          verifyPlayerAvailability || false,
           message || null,
           expiresAt,
         ]
@@ -324,7 +329,13 @@ router.patch(
 
       // Récupérer l'invitation et vérifier les permissions
       const [invitations] = await db.execute(
-        `SELECT mi.*, rt.captain_id as receiver_captain_id, st.name as sender_team_name, rt.name as receiver_team_name
+        `SELECT mi.id, mi.sender_team_id, mi.receiver_team_id, mi.proposed_date,
+                mi.proposed_location_id, mi.venue_id, mi.requires_referee,
+                mi.preferred_referee_id, mi.verify_player_availability, mi.message,
+                mi.status, mi.expires_at,
+                rt.captain_id as receiver_captain_id,
+                st.name as sender_team_name,
+                rt.name as receiver_team_name
        FROM match_invitations mi
        JOIN teams rt ON mi.receiver_team_id = rt.id
        JOIN teams st ON mi.sender_team_id = st.id
@@ -364,8 +375,8 @@ router.patch(
         return res.status(400).json({ error: "Invitation has expired" });
       }
 
-      // Vérifier que l'équipe receveuse a minimum 6 joueurs (si acceptation)
-      if (response === 'accepted') {
+      // Vérifier que l'équipe receveuse a minimum 6 joueurs (si acceptation ET si verify_player_availability = true)
+      if (response === 'accepted' && invitation.verify_player_availability === 1) {
         const receiverValidation = await validateTeamPlayerCount(invitation.receiver_team_id, 6);
         if (!receiverValidation.isValid) {
           return res.status(400).json({
@@ -392,30 +403,115 @@ router.patch(
       await connection.beginTransaction();
 
       try {
-        // Mettre à jour l'invitation
-        await connection.execute(
-          "UPDATE match_invitations SET status = ?, response_message = ?, responded_at = CURRENT_TIMESTAMP WHERE id = ?",
-          [response, responseMessage || null, invitationId]
-        );
-
         // Si acceptée, créer le match
         if (response === "accepted") {
+          // Si un venueId est spécifié dans l'invitation, créer d'abord la réservation
+          let venueBookingId = null;
+          if (invitation.venue_id) {
+            try {
+              // Calculer la durée par défaut (90 minutes pour un match)
+              const matchDate = new Date(invitation.proposed_date);
+              const startTime = matchDate.toTimeString().substring(0, 5); // HH:MM
+              const endDate = new Date(matchDate.getTime() + 90 * 60000);
+              const endTime = endDate.toTimeString().substring(0, 5);
+
+              // Déterminer le type de jeu depuis l'équipe
+              const [senderTeamInfo] = await connection.execute(
+                "SELECT game_type FROM teams WHERE id = ?",
+                [invitation.sender_team_id]
+              );
+              const gameType = senderTeamInfo[0]?.game_type || '11v11';
+
+              // Calculer le prix (simplifié - on prend le prix de base)
+              const bookingDateStr = matchDate.toISOString().split('T')[0];
+              const dayOfWeek = matchDate.getDay();
+              const dayType = (dayOfWeek === 0 || dayOfWeek === 6) ? 'weekend' : 'weekday';
+
+              const hour = matchDate.getHours();
+              let timeSlot;
+              if (hour >= 6 && hour < 12) timeSlot = 'morning';
+              else if (hour >= 12 && hour < 18) timeSlot = 'afternoon';
+              else if (hour >= 18 && hour < 22) timeSlot = 'evening';
+              else timeSlot = 'night';
+
+              const [pricingResults] = await connection.execute(
+                `SELECT price FROM venue_pricing
+                 WHERE location_id = ?
+                 AND game_type = ?
+                 AND duration_minutes = 90
+                 AND day_type = ?
+                 AND (time_slot = ? OR time_slot IS NULL)
+                 AND is_active = true
+                 ORDER BY time_slot DESC
+                 LIMIT 1`,
+                [invitation.venue_id, gameType, dayType, timeSlot]
+              );
+
+              const basePrice = pricingResults.length > 0 ? parseFloat(pricingResults[0].price) : 0;
+
+              // Vérifier si réduction partenaire
+              const [partnerCheck] = await connection.execute(
+                `SELECT discount_percentage
+                 FROM venue_partnerships
+                 WHERE location_id = ?
+                 AND is_active = true
+                 AND (end_date IS NULL OR end_date >= CURDATE())`,
+                [invitation.venue_id]
+              );
+
+              const discountApplied = partnerCheck.length > 0
+                ? basePrice * (parseFloat(partnerCheck[0].discount_percentage) / 100)
+                : 0;
+              const finalPrice = basePrice - discountApplied;
+
+              // Créer la réservation automatiquement
+              const [bookingResult] = await connection.execute(
+                `INSERT INTO venue_bookings
+                 (location_id, team_id, booked_by, booking_date, start_time, end_time,
+                  duration_minutes, game_type, base_price, discount_applied, final_price,
+                  notes, status)
+                 VALUES (?, ?, ?, ?, ?, ?, 90, ?, ?, ?, ?, 'Réservation automatique suite à acceptation invitation match', 'pending')`,
+                [invitation.venue_id, invitation.receiver_team_id, req.user.id, bookingDateStr,
+                 startTime, endTime, gameType, basePrice, discountApplied, finalPrice]
+              );
+
+              venueBookingId = bookingResult.insertId;
+            } catch (bookingError) {
+              console.error('Error creating automatic venue booking:', bookingError);
+              // Continuer sans réservation si erreur
+            }
+          }
+
+          // Déterminer le statut du match selon verify_player_availability
+          // Si verify_player_availability = true → 'confirmed' (validations faites)
+          // Si verify_player_availability = false → 'pending' (attente confirmations joueurs)
+          const matchStatus = invitation.verify_player_availability === 1 ? 'confirmed' : 'pending';
+
           // Créer le match avec les infos venue et referee si fournis
           const [matchResult] = await connection.execute(
             `INSERT INTO matches
              (home_team_id, away_team_id, match_date, location_id, venue_booking_id, has_referee, status)
-             VALUES (?, ?, ?, ?, ?, ?, 'confirmed')`,
+             VALUES (?, ?, ?, ?, ?, ?, ?)`,
             [
               invitation.receiver_team_id,
               invitation.sender_team_id,
               invitation.proposed_date,
-              invitation.proposed_location_id,
-              null, // venue_booking_id sera créé séparément si venueId fourni
+              invitation.venue_id || invitation.proposed_location_id,
+              venueBookingId,
               invitation.requires_referee || false,
+              matchStatus,
             ]
           );
 
           const matchId = matchResult.insertId;
+
+          // Mettre à jour la réservation avec le match_id si créée
+          if (venueBookingId) {
+            await connection.execute(
+              "UPDATE venue_bookings SET match_id = ? WHERE id = ?",
+              [matchId, venueBookingId]
+            );
+          }
 
           // Si un arbitre préféré est spécifié, créer l'assignation
           if (invitation.preferred_referee_id) {
@@ -426,26 +522,41 @@ router.patch(
             );
           }
 
-          // Créer automatiquement les participations pour tous les joueurs des deux équipes
-          try {
-            await createParticipationsForMatch(
-              matchId,
-              invitation.receiver_team_id,
-              invitation.sender_team_id
-            );
-          } catch (participationError) {
-            console.error('Error creating participations:', participationError);
-            // Continue même si erreur (non-bloquant)
-          }
-
-          // Lier l'invitation au match créé
+          // Lier l'invitation au match créé ET mettre à jour le statut en une seule requête
           await connection.execute(
-            "UPDATE match_invitations SET match_id = ? WHERE id = ?",
-            [matchId, invitationId]
+            "UPDATE match_invitations SET status = 'accepted', response_message = ?, responded_at = CURRENT_TIMESTAMP, match_id = ? WHERE id = ?",
+            [responseMessage || null, matchId, invitationId]
+          );
+        } else {
+          // Si refusée, juste mettre à jour le statut
+          await connection.execute(
+            "UPDATE match_invitations SET status = ?, response_message = ?, responded_at = CURRENT_TIMESTAMP WHERE id = ?",
+            [response, responseMessage || null, invitationId]
           );
         }
 
         await connection.commit();
+        connection.release();
+
+        // Créer les participations APRÈS la transaction (asynchrone, non-bloquant)
+        if (response === "accepted") {
+          const matchIdCreated = await db.execute(
+            "SELECT match_id FROM match_invitations WHERE id = ?",
+            [invitationId]
+          ).then(([rows]) => rows[0]?.match_id);
+
+          if (matchIdCreated) {
+            // Créer participations en arrière-plan
+            createParticipationsForMatch(
+              matchIdCreated,
+              invitation.receiver_team_id,
+              invitation.sender_team_id
+            ).catch(participationError => {
+              console.error('Error creating participations (background):', participationError);
+              // Erreur loggée mais n'affecte pas la réponse
+            });
+          }
+        }
 
         res.json({
           message: `Invitation ${response} successfully`,
@@ -455,7 +566,7 @@ router.patch(
         await connection.rollback();
         throw error;
       } finally {
-        connection.release();
+        if (connection) connection.release();
       }
     } catch (error) {
       console.error("Respond to invitation error:", error);
@@ -1978,7 +2089,7 @@ async function updateTeamStats(teamId, goalsFor, goalsAgainst) {
       : "drawn";
 
   await db.execute(
-    `UPDATE team_stats 
+    `UPDATE team_stats
      SET matches_played = matches_played + 1,
          matches_${matchResult} = matches_${matchResult} + 1,
          goals_scored = goals_scored + ?,
@@ -1987,5 +2098,160 @@ async function updateTeamStats(teamId, goalsFor, goalsAgainst) {
     [goalsFor, goalsAgainst, teamId]
   );
 }
+
+/**
+ * POST /api/matches/:matchId/book-venue
+ * Créer une réservation de terrain pour un match existant
+ * Accessible uniquement aux capitaines des équipes du match
+ */
+router.post(
+  "/:matchId/book-venue",
+  [
+    authenticateToken,
+    body("venueId").isInt().withMessage("Venue ID is required"),
+    body("durationMinutes").optional().isInt({ min: 30, max: 180 }).withMessage("Duration must be between 30 and 180 minutes"),
+  ],
+  async (req, res) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ errors: errors.array() });
+      }
+
+      const { matchId } = req.params;
+      const { venueId, durationMinutes = 90 } = req.body;
+
+      // Récupérer les détails du match et vérifier permissions
+      const [matches] = await db.execute(
+        `SELECT m.*,
+                ht.captain_id as home_captain_id,
+                at.captain_id as away_captain_id
+         FROM matches m
+         JOIN teams ht ON m.home_team_id = ht.id
+         JOIN teams at ON m.away_team_id = at.id
+         WHERE m.id = ?`,
+        [matchId]
+      );
+
+      if (matches.length === 0) {
+        return res.status(404).json({ error: "Match not found" });
+      }
+
+      const match = matches[0];
+
+      // Vérifier que l'utilisateur est capitaine d'une des équipes
+      if (req.user.id !== match.home_captain_id && req.user.id !== match.away_captain_id) {
+        return res.status(403).json({ error: "Only team captains can book a venue for this match" });
+      }
+
+      // Vérifier que le match n'a pas déjà une réservation
+      if (match.venue_booking_id) {
+        return res.status(400).json({ error: "This match already has a venue booking" });
+      }
+
+      // Vérifier que le terrain existe
+      const [venues] = await db.execute(
+        "SELECT id FROM locations WHERE id = ? AND is_active = true",
+        [venueId]
+      );
+
+      if (venues.length === 0) {
+        return res.status(404).json({ error: "Venue not found or inactive" });
+      }
+
+      // Calculer les horaires
+      const matchDate = new Date(match.match_date);
+      const bookingDateStr = matchDate.toISOString().split('T')[0];
+      const startTime = matchDate.toTimeString().substring(0, 5); // HH:MM
+      const endDate = new Date(matchDate.getTime() + durationMinutes * 60000);
+      const endTime = endDate.toTimeString().substring(0, 5);
+
+      // Déterminer le type de jeu - par défaut 11v11 (la colonne game_type n'existe pas dans teams)
+      const gameType = '11v11';
+      const dayOfWeek = matchDate.getDay();
+      const dayType = (dayOfWeek === 0 || dayOfWeek === 6) ? 'weekend' : 'weekday';
+
+      const hour = matchDate.getHours();
+      let timeSlot;
+      if (hour >= 6 && hour < 12) timeSlot = 'morning';
+      else if (hour >= 12 && hour < 18) timeSlot = 'afternoon';
+      else if (hour >= 18 && hour < 22) timeSlot = 'evening';
+      else timeSlot = 'night';
+
+      // Récupérer le prix
+      const [pricingResults] = await db.execute(
+        `SELECT price FROM venue_pricing
+         WHERE location_id = ?
+         AND game_type = ?
+         AND duration_minutes = ?
+         AND day_type = ?
+         AND (time_slot = ? OR time_slot IS NULL)
+         AND is_active = true
+         ORDER BY time_slot DESC
+         LIMIT 1`,
+        [venueId, gameType, durationMinutes, dayType, timeSlot]
+      );
+
+      const basePrice = pricingResults.length > 0 ? parseFloat(pricingResults[0].price) : 0;
+
+      // Vérifier si réduction partenaire
+      const [partnerCheck] = await db.execute(
+        `SELECT discount_percentage
+         FROM venue_partnerships
+         WHERE location_id = ?
+         AND is_active = true
+         AND (end_date IS NULL OR end_date >= CURDATE())`,
+        [venueId]
+      );
+
+      const discountApplied = partnerCheck.length > 0
+        ? basePrice * (parseFloat(partnerCheck[0].discount_percentage) / 100)
+        : 0;
+      const finalPrice = basePrice - discountApplied;
+
+      // Déterminer l'équipe qui réserve (celle du capitaine qui fait la demande)
+      const bookingTeamId = req.user.id === match.home_captain_id
+        ? match.home_team_id
+        : match.away_team_id;
+
+      // Créer la réservation
+      const [bookingResult] = await db.execute(
+        `INSERT INTO venue_bookings
+         (location_id, team_id, booked_by, booking_date, start_time, end_time,
+          duration_minutes, game_type, base_price, discount_applied, final_price,
+          notes, status, match_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Réservation manuelle depuis match', 'pending', ?)`,
+        [venueId, bookingTeamId, req.user.id, bookingDateStr, startTime, endTime,
+         durationMinutes, gameType, basePrice, discountApplied, finalPrice, matchId]
+      );
+
+      const venueBookingId = bookingResult.insertId;
+
+      // Lier la réservation au match
+      await db.execute(
+        "UPDATE matches SET venue_booking_id = ?, location_id = ? WHERE id = ?",
+        [venueBookingId, venueId, matchId]
+      );
+
+      // Récupérer les détails de la réservation créée
+      const [newBooking] = await db.execute(
+        `SELECT vb.*, l.name as venue_name, l.city, l.address
+         FROM venue_bookings vb
+         JOIN locations l ON vb.location_id = l.id
+         WHERE vb.id = ?`,
+        [venueBookingId]
+      );
+
+      res.status(201).json({
+        message: "Venue booking created successfully",
+        booking: newBooking[0]
+      });
+
+    } catch (error) {
+      console.error("Error creating venue booking:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  }
+);
 
 module.exports = router;

@@ -202,7 +202,8 @@ router.get(
       );
 
       if (rows.length === 0) {
-        return res.status(404).json({ error: "Booking not found" });
+        const booking = [];
+        return res.json(booking);
       }
 
       const b = rows[0];

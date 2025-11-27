@@ -509,4 +509,117 @@ router.patch(
   }
 );
 
+/**
+ * PATCH /api/bookings/:id/link-match
+ * Lier une réservation existante à un match
+ */
+router.patch(
+  "/:id/link-match",
+  [
+    authenticateToken,
+    body("matchId").isInt().withMessage("Valid match ID required")
+  ],
+  async (req, res) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ errors: errors.array() });
+      }
+
+      const bookingId = req.params.id;
+      const { matchId } = req.body;
+
+      // Vérifier que la réservation existe et que l'utilisateur a le droit
+      const [bookings] = await db.execute(
+        `SELECT vb.*, t.captain_id, t.id as team_id
+         FROM venue_bookings vb
+         JOIN teams t ON vb.team_id = t.id
+         WHERE vb.id = ?`,
+        [bookingId]
+      );
+
+      if (bookings.length === 0) {
+        return res.status(404).json({ error: "Booking not found" });
+      }
+
+      const booking = bookings[0];
+
+      // Vérifier que le match existe et que l'utilisateur en fait partie
+      const [matches] = await db.execute(
+        `SELECT m.*,
+                ht.captain_id as home_captain_id,
+                at.captain_id as away_captain_id
+         FROM matches m
+         JOIN teams ht ON m.home_team_id = ht.id
+         JOIN teams at ON m.away_team_id = at.id
+         WHERE m.id = ?`,
+        [matchId]
+      );
+
+      if (matches.length === 0) {
+        return res.status(404).json({ error: "Match not found" });
+      }
+
+      const match = matches[0];
+
+      // Vérifier que l'utilisateur est capitaine de l'une des équipes du match
+      const isHomeCaptain = match.home_captain_id === req.user.id;
+      const isAwayCaptain = match.away_captain_id === req.user.id;
+      const isBookingOwner = booking.booked_by === req.user.id;
+      const isTeamCaptain = booking.captain_id === req.user.id;
+
+      if (!isHomeCaptain && !isAwayCaptain && !isBookingOwner && !isTeamCaptain) {
+        return res.status(403).json({ error: "Access denied. Must be captain of one of the teams or booking owner" });
+      }
+
+      // Vérifier que la réservation n'est pas déjà liée à un autre match
+      if (booking.match_id && booking.match_id !== matchId) {
+        return res.status(400).json({ error: "Booking is already linked to another match" });
+      }
+
+      // Vérifier que le match n'a pas déjà une réservation
+      const [existingBookings] = await db.execute(
+        "SELECT id FROM venue_bookings WHERE match_id = ? AND id != ?",
+        [matchId, bookingId]
+      );
+
+      if (existingBookings.length > 0) {
+        return res.status(400).json({ error: "Match already has a venue booking" });
+      }
+
+      // Vérifier que la date de la réservation correspond à celle du match
+      const matchDate = new Date(match.match_date).toISOString().split('T')[0];
+      const bookingDate = new Date(booking.booking_date).toISOString().split('T')[0];
+
+      if (matchDate !== bookingDate) {
+        return res.status(400).json({
+          error: "Booking date does not match match date",
+          matchDate: matchDate,
+          bookingDate: bookingDate
+        });
+      }
+
+      // Lier la réservation au match
+      await db.execute(
+        "UPDATE venue_bookings SET match_id = ? WHERE id = ?",
+        [matchId, bookingId]
+      );
+
+      // Mettre à jour le match avec le venue_booking_id
+      await db.execute(
+        "UPDATE matches SET venue_booking_id = ?, location_id = ? WHERE id = ?",
+        [bookingId, booking.location_id, matchId]
+      );
+
+      res.json({
+        success: true,
+        message: "Booking successfully linked to match"
+      });
+    } catch (error) {
+      console.error("Link booking to match error:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  }
+);
+
 module.exports = router;
