@@ -512,4 +512,126 @@ router.get("/search", authenticateToken, async (req, res) => {
   }
 });
 
+// GET /api/users/search - Rechercher des joueurs
+router.get("/recruit", authenticateToken, async (req, res) => {
+  try {
+    const {
+      search,
+      position,
+      skillLevel,
+      city,
+      lat,
+      lng,
+      radius = 50,
+      limit = 20,
+      offset = 0,
+    } = req.query;
+
+    let query = `
+      SELECT u.id, u.first_name, u.last_name, u.position, u.skill_level, 
+             u.location_city, u.location_lat, u.location_lng,
+             pp.stored_filename as profile_picture_filename,
+             ${
+               lat && lng
+                 ? `
+             (6371 * acos(cos(radians(?)) * cos(radians(u.location_lat)) * cos(radians(u.location_lng) - radians(?)) + sin(radians(?)) * sin(radians(u.location_lat)))) AS distance,
+             `
+                 : "NULL as distance,"
+             }
+             -- Nouvelle colonne : Liste des équipes du capitaine qui ont déjà invité ce joueur (en attente)
+             (
+                SELECT GROUP_CONCAT(t.name SEPARATOR ', ')
+                FROM player_invitations pi
+                JOIN teams t ON pi.team_id = t.id
+                WHERE pi.user_id = u.id 
+                  AND pi.status = 'pending'
+                  AND t.captain_id = ? 
+             ) as invited_by_teams
+      FROM users u
+      LEFT JOIN uploads pp ON u.profile_picture_id = pp.id AND pp.is_active = true
+      WHERE u.is_active = true 
+      AND u.id != ?               -- Exclure soi-même
+      AND u.user_type = 'player'  -- Exclure les non-joueurs
+      
+      -- Exclure les joueurs déjà DANS une de mes équipes
+      AND NOT EXISTS (
+        SELECT 1
+        FROM team_members tm_target
+        JOIN team_members tm_me ON tm_target.team_id = tm_me.team_id
+        WHERE tm_me.user_id = ? 
+          AND tm_target.user_id = u.id
+          AND tm_me.is_active = true 
+          AND tm_target.is_active = true
+      )
+    `;
+
+    const queryParams = [];
+
+    // 1. Paramètres de distance
+    if (lat && lng) {
+      queryParams.push(lat, lng, lat);
+    }
+
+    // 2. Paramètres pour invited_by_teams (captain_id)
+    queryParams.push(req.user.id);
+
+    // 3. Paramètres d'exclusion
+    queryParams.push(req.user.id); // Exclure soi-même
+    queryParams.push(req.user.id); // Exclure membres existants
+
+    // 4. Filtres
+    if (search) {
+      query +=
+        " AND (u.first_name LIKE ? OR u.last_name LIKE ? OR u.email LIKE ?)";
+      const searchPattern = `%${search}%`;
+      queryParams.push(searchPattern, searchPattern, searchPattern);
+    }
+
+    if (position && position !== "any") {
+      query += " AND u.position = ?";
+      queryParams.push(position);
+    }
+
+    if (skillLevel) {
+      query += " AND u.skill_level = ?";
+      queryParams.push(skillLevel);
+    }
+
+    if (city) {
+      query += " AND u.location_city LIKE ?";
+      queryParams.push(`%${city}%`);
+    }
+
+    // 5. Tri et Pagination
+    // On peut trier pour afficher ceux qu'on n'a pas encore invités en premier
+    query += ` ORDER BY (invited_by_teams IS NOT NULL) ASC, u.created_at DESC`;
+    query += ` LIMIT ? OFFSET ?`;
+    queryParams.push(parseInt(limit), parseInt(offset));
+
+    const [users] = await db.execute(query, queryParams);
+
+    const formattedUsers = users.map((user) => ({
+      id: user.id,
+      firstName: user.first_name,
+      lastName: user.last_name,
+      position: user.position,
+      skillLevel: user.skill_level,
+      locationCity: user.location_city,
+      profilePictureUrl: user.profile_picture_filename
+        ? `/uploads/users/${user.profile_picture_filename}`
+        : null,
+      distance: user.distance ? Math.round(user.distance * 10) / 10 : null,
+      // Nouveau champ envoyé au front
+      invitedByTeams: user.invited_by_teams
+        ? user.invited_by_teams.split(", ")
+        : [],
+    }));
+
+    res.json(formattedUsers);
+  } catch (error) {
+    console.error("Search users error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 module.exports = router;

@@ -59,6 +59,7 @@ import {
   ManagerOnlyRoute,
   SuperadminOnlyRoute,
 } from "./components/routes/RoleProtectedRoute";
+import PlayerSearch from "./components/teams/PlayerSearch";
 
 // --- NOUVEAU COMPOSANT : Gestion intelligente de la racine "/" ---
 const RootRoute = () => {
@@ -160,7 +161,10 @@ function App() {
               >
                 <Route index element={<VenueOwnerDashboard />} />
                 <Route path="bookings" element={<BookingManagement />} />
-                <Route path="bookings-legacy" element={<VenueOwnerBookings />} />
+                <Route
+                  path="bookings-legacy"
+                  element={<VenueOwnerBookings />}
+                />
                 <Route
                   path="venues/:id/bookings"
                   element={<VenueBookingDetails />}
@@ -291,6 +295,14 @@ function App() {
                     <ProtectedRoute>
                       <PlayerInvitations />
                     </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/recruitment"
+                  element={
+                    <ManagerOnlyRoute>
+                      <PlayerSearch />
+                    </ManagerOnlyRoute>
                   }
                 />
                 <Route
