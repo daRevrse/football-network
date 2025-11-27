@@ -73,7 +73,7 @@ const VenueBookingDetails = () => {
           action === "accept" ? "confirmée" : "refusée"
         } avec succès`
       );
-      fetchBookingDetails(); // Rafraîchir
+      fetchBookingDetails();
     } catch (error) {
       toast.error("Erreur lors du traitement");
     } finally {
@@ -89,13 +89,7 @@ const VenueBookingDetails = () => {
     );
   if (!booking) return null;
 
-  const statusColors = {
-    pending: "bg-yellow-100 text-yellow-800",
-    confirmed: "bg-green-100 text-green-800",
-    cancelled: "bg-red-100 text-red-800",
-    completed: "bg-gray-100 text-gray-800",
-  };
-
+  // Utilisation des clés camelCase ici
   return (
     <div className="max-w-4xl mx-auto space-y-6">
       <button
@@ -105,169 +99,159 @@ const VenueBookingDetails = () => {
         <ChevronLeft className="w-4 h-4 mr-1" /> Retour
       </button>
 
-      {/* En-tête Carte */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-        <div className="p-6 border-b border-gray-100 flex justify-between items-start">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900 mb-2">
-              Réservation #{booking.id}
-            </h1>
-            <span
-              className={`px-3 py-1 rounded-full text-sm font-semibold ${
-                statusColors[booking.status]
-              }`}
-            >
-              {booking.status === "pending"
-                ? "En attente de validation"
-                : booking.status === "confirmed"
-                ? "Confirmée"
-                : booking.status === "cancelled"
-                ? "Annulée"
-                : "Terminée"}
-            </span>
-          </div>
-          <div className="text-right">
-            <p className="text-sm text-gray-500">Montant total</p>
-            <p className="text-2xl font-bold text-green-600">
-              {booking.final_price || booking.base_price}€
-            </p>
-          </div>
+      {booking.length === 0 ? (
+        <div className="flex flex-col items-center justify-center min-h-screen  px-4">
+          <button
+            onClick={() => navigate(-1)}
+            className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            Aucune réservation trouvée
+          </button>
         </div>
-
-        <div className="p-6 grid md:grid-cols-2 gap-8">
-          {/* Détails Terrain & Date */}
-          <div className="space-y-4">
-            <h3 className="font-semibold text-gray-900 border-b pb-2">
-              Informations Session
-            </h3>
-
-            <div className="flex items-start gap-3">
-              <MapPin className="w-5 h-5 text-gray-400 mt-1" />
+      ) : (
+        <>
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+            <div className="p-6 border-b border-gray-100 flex justify-between items-start">
               <div>
-                <p className="font-medium text-gray-900">
-                  {booking.venue_name}
-                </p>
-                <p className="text-sm text-gray-500">{booking.venue_address}</p>
-                <p className="text-xs text-gray-400 mt-1">
-                  {booking.field_type}
-                </p>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-3">
-              <Calendar className="w-5 h-5 text-gray-400" />
-              <div>
-                <p className="font-medium text-gray-900">
-                  {new Date(booking.booking_date).toLocaleDateString("fr-FR", {
-                    weekday: "long",
-                    day: "numeric",
-                    month: "long",
-                    year: "numeric",
-                  })}
-                </p>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-3">
-              <Clock className="w-5 h-5 text-gray-400" />
-              <div>
-                <p className="font-medium text-gray-900">
-                  {booking.start_time.slice(0, 5)} -{" "}
-                  {booking.end_time.slice(0, 5)}
-                </p>
-                <p className="text-sm text-gray-500">
-                  {booking.duration_minutes} minutes
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {/* Détails Client */}
-          <div className="space-y-4">
-            <h3 className="font-semibold text-gray-900 border-b pb-2">
-              Client & Équipe
-            </h3>
-
-            <div className="flex items-start gap-3">
-              <Shield className="w-5 h-5 text-blue-500 mt-1" />
-              <div>
-                <p className="font-medium text-gray-900">{booking.team_name}</p>
-                <p className="text-sm text-gray-500">Équipe organisatrice</p>
-              </div>
-            </div>
-
-            <div className="flex items-start gap-3">
-              <User className="w-5 h-5 text-gray-400 mt-1" />
-              <div>
-                <p className="font-medium text-gray-900">
-                  {booking.booker_first_name} {booking.booker_last_name}
-                </p>
-                <p className="text-sm text-gray-500">Responsable réservation</p>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-3">
-              <Mail className="w-5 h-5 text-gray-400" />
-              <a
-                href={`mailto:${booking.booker_email}`}
-                className="text-sm text-blue-600 hover:underline"
-              >
-                {booking.booker_email}
-              </a>
-            </div>
-
-            {booking.booker_phone && (
-              <div className="flex items-center gap-3">
-                <Phone className="w-5 h-5 text-gray-400" />
-                <a
-                  href={`tel:${booking.booker_phone}`}
-                  className="text-sm text-blue-600 hover:underline"
+                <h1 className="text-2xl font-bold text-gray-900 mb-2">
+                  Réservation #{booking.id}
+                </h1>
+                <span
+                  className={`px-3 py-1 rounded-full text-sm font-semibold ${
+                    booking.status === "confirmed"
+                      ? "bg-green-100 text-green-800"
+                      : booking.status === "pending"
+                      ? "bg-yellow-100 text-yellow-800"
+                      : "bg-red-100 text-red-800"
+                  }`}
                 >
-                  {booking.booker_phone}
-                </a>
+                  {booking.status === "pending"
+                    ? "En attente"
+                    : booking.status === "confirmed"
+                    ? "Confirmée"
+                    : "Annulée"}
+                </span>
+              </div>
+              <div className="text-right">
+                <p className="text-sm text-gray-500">Prix</p>
+                <p className="text-2xl font-bold text-green-600">
+                  {booking.price}€
+                </p>
+              </div>
+            </div>
+
+            <div className="p-6 grid md:grid-cols-2 gap-8">
+              <div className="space-y-4">
+                <h3 className="font-semibold text-gray-900 border-b pb-2">
+                  Détails Terrain
+                </h3>
+                <div className="flex items-start gap-3">
+                  <MapPin className="w-5 h-5 text-gray-400 mt-1" />
+                  <div>
+                    <p className="font-medium text-gray-900">
+                      {booking.venueName}
+                    </p>
+                    <p className="text-sm text-gray-500">
+                      {booking.venueAddress}
+                    </p>
+                    <p className="text-xs text-gray-400 mt-1 capitalize">
+                      {booking.fieldType}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <Calendar className="w-5 h-5 text-gray-400" />
+                  <p className="font-medium text-gray-900">
+                    {new Date(booking.bookingDate).toLocaleDateString()}
+                  </p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <Clock className="w-5 h-5 text-gray-400" />
+                  <p className="font-medium text-gray-900">
+                    {booking.startTime} - {booking.endTime} (
+                    {booking.durationMinutes} min)
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <h3 className="font-semibold text-gray-900 border-b pb-2">
+                  Client
+                </h3>
+                <div className="flex items-start gap-3">
+                  <Shield className="w-5 h-5 text-blue-500 mt-1" />
+                  <div>
+                    <p className="font-medium text-gray-900">
+                      {booking.teamName}
+                    </p>
+                    <p className="text-sm text-gray-500">Équipe</p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-3">
+                  <User className="w-5 h-5 text-gray-400 mt-1" />
+                  <div>
+                    <p className="font-medium text-gray-900">
+                      {booking.bookerFirstName} {booking.bookerLastName}
+                    </p>
+                    <p className="text-sm text-gray-500">Contact</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <Mail className="w-5 h-5 text-gray-400" />
+                  <a
+                    href={`mailto:${booking.bookerEmail}`}
+                    className="text-sm text-blue-600 hover:underline"
+                  >
+                    {booking.bookerEmail}
+                  </a>
+                </div>
+                {booking.bookerPhone && (
+                  <div className="flex items-center gap-3">
+                    <Phone className="w-5 h-5 text-gray-400" />
+                    <a
+                      href={`tel:${booking.bookerPhone}`}
+                      className="text-sm text-blue-600 hover:underline"
+                    >
+                      {booking.bookerPhone}
+                    </a>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {booking.status === "pending" && (
+              <div className="bg-gray-50 p-6 border-t border-gray-200">
+                <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                  <MessageSquare className="w-5 h-5" /> Réponse propriétaire
+                </h3>
+                <textarea
+                  value={responseMessage}
+                  onChange={(e) => setResponseMessage(e.target.value)}
+                  placeholder="Message pour le client (optionnel)..."
+                  className="w-full p-3 border border-gray-300 rounded-lg mb-4 focus:ring-2 focus:ring-green-500 outline-none"
+                  rows="3"
+                />
+                <div className="flex gap-4">
+                  <button
+                    onClick={() => handleResponse("accept")}
+                    disabled={processing}
+                    className="flex-1 bg-green-600 text-white py-2 px-4 rounded-lg font-bold hover:bg-green-700 transition flex justify-center items-center gap-2"
+                  >
+                    <Check className="w-5 h-5" /> Accepter
+                  </button>
+                  <button
+                    onClick={() => handleResponse("reject")}
+                    disabled={processing}
+                    className="flex-1 bg-white text-red-600 border border-red-200 py-2 px-4 rounded-lg font-bold hover:bg-red-50 transition flex justify-center items-center gap-2"
+                  >
+                    <X className="w-5 h-5" /> Refuser
+                  </button>
+                </div>
               </div>
             )}
           </div>
-        </div>
-
-        {/* Zone d'action pour les réservations en attente */}
-        {booking.status === "pending" && (
-          <div className="bg-gray-50 p-6 border-t border-gray-200">
-            <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
-              <MessageSquare className="w-5 h-5" /> Répondre à la demande
-            </h3>
-
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Message (optionnel)
-              </label>
-              <textarea
-                value={responseMessage}
-                onChange={(e) => setResponseMessage(e.target.value)}
-                placeholder="Ajoutez une note pour le client..."
-                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 outline-none h-24 resize-none"
-              />
-            </div>
-
-            <div className="flex gap-4">
-              <button
-                onClick={() => handleResponse("accept")}
-                disabled={processing}
-                className="flex-1 bg-green-600 text-white py-3 px-4 rounded-lg font-bold hover:bg-green-700 transition flex items-center justify-center gap-2 disabled:opacity-50"
-              >
-                <Check className="w-5 h-5" /> Accepter la réservation
-              </button>
-              <button
-                onClick={() => handleResponse("reject")}
-                disabled={processing}
-                className="flex-1 bg-white text-red-600 border border-red-200 py-3 px-4 rounded-lg font-bold hover:bg-red-50 transition flex items-center justify-center gap-2 disabled:opacity-50"
-              >
-                <X className="w-5 h-5" /> Refuser
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
+        </>
+      )}
     </div>
   );
 };

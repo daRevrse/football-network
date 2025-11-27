@@ -30,6 +30,7 @@ const Dashboard = () => {
     matchInvites: 0,
     validations: 0,
     teams: 0,
+    pendingParticipations: 0,
   });
   const [loading, setLoading] = useState(true);
 
@@ -53,7 +54,8 @@ const Dashboard = () => {
     const loadDashboardStats = async () => {
       try {
         setLoading(true);
-        const [playerInvites, matchInvites, validations, teams] =
+        const token = localStorage.getItem("token");
+        const [playerInvites, matchInvites, validations, teams, pendingParticipations] =
           await Promise.allSettled([
             axios
               .get(`${API_BASE_URL}/player-invitations?status=pending`)
@@ -71,6 +73,11 @@ const Dashboard = () => {
             axios
               .get(`${API_BASE_URL}/teams/my`)
               .then((res) => res.data.length),
+            axios
+              .get(`${API_BASE_URL}/participations/my-pending`, {
+                headers: { Authorization: `Bearer ${token}` },
+              })
+              .then((res) => res.data.participations?.length || 0),
           ]);
 
         if (isMounted) {
@@ -82,6 +89,8 @@ const Dashboard = () => {
             validations:
               validations.status === "fulfilled" ? validations.value : 0,
             teams: teams.status === "fulfilled" ? teams.value : 0,
+            pendingParticipations:
+              pendingParticipations.status === "fulfilled" ? pendingParticipations.value : 0,
           });
         }
       } catch (error) {
@@ -205,7 +214,8 @@ const Dashboard = () => {
       {/* Actions Urgentes (Si nécessaire) */}
       {(stats.validations > 0 ||
         stats.playerInvites > 0 ||
-        stats.matchInvites > 0) && (
+        stats.matchInvites > 0 ||
+        stats.pendingParticipations > 0) && (
         <div className="bg-orange-50 border border-orange-100 rounded-2xl p-6">
           <h2 className="font-bold text-orange-800 flex items-center mb-4">
             <Bell className="w-5 h-5 mr-2" /> Actions requises
@@ -236,6 +246,15 @@ const Dashboard = () => {
               >
                 <UserPlus className="w-4 h-4 mr-2 text-purple-500" />{" "}
                 {stats.playerInvites} invitations d'équipe
+              </Link>
+            )}
+            {stats.pendingParticipations > 0 && (
+              <Link
+                to="/participations"
+                className="flex items-center px-4 py-2 bg-white text-green-700 border border-green-200 rounded-lg hover:bg-green-50 transition font-medium text-sm"
+              >
+                <CheckCircle className="w-4 h-4 mr-2 text-green-500" />{" "}
+                {stats.pendingParticipations} participations à confirmer
               </Link>
             )}
           </div>
@@ -311,6 +330,14 @@ const Dashboard = () => {
                 desc="Consultez vos invitations à rejoindre des équipes."
                 color="bg-green-500"
                 count={stats.playerInvites}
+              />
+              <ActionCard
+                to="/participations"
+                icon={CheckCircle}
+                title="Mes Participations"
+                desc="Confirmez votre présence aux prochains matchs."
+                color="bg-emerald-600"
+                count={stats.pendingParticipations}
               />
               <ActionCard
                 to="/venues"

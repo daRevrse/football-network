@@ -34,6 +34,7 @@ import MatchValidation from "./components/matches/MatchValidation";
 import PendingValidations from "./components/matches/PendingValidations";
 import MatchParticipations from "./components/matches/MatchParticipations";
 import MyPendingParticipations from "./components/matches/MyPendingParticipations";
+import PendingParticipations from "./components/participations/PendingParticipations";
 import Feed from "./components/Feed";
 import LandingFeed from "./components/LandingFeed";
 import VenueSearch from "./components/venues/VenueSearch";
@@ -51,12 +52,14 @@ import VenueForm from "./components/venue-owner/VenueForm";
 import VenueBookingDetails from "./components/venue-owner/VenueBookingDetails";
 import VenueCalendar from "./components/venue-owner/VenueCalendar";
 import VenueStats from "./components/venue-owner/VenueStats";
+import BookingManagement from "./components/venue-owner/BookingManagement";
 
 // Protection
 import {
   ManagerOnlyRoute,
   SuperadminOnlyRoute,
 } from "./components/routes/RoleProtectedRoute";
+import PlayerSearch from "./components/teams/PlayerSearch";
 
 // --- NOUVEAU COMPOSANT : Gestion intelligente de la racine "/" ---
 const RootRoute = () => {
@@ -157,8 +160,15 @@ function App() {
                 }
               >
                 <Route index element={<VenueOwnerDashboard />} />
-                <Route path="bookings" element={<VenueOwnerBookings />} />
-                <Route path="bookings/:id" element={<VenueBookingDetails />} />
+                <Route path="bookings" element={<BookingManagement />} />
+                <Route
+                  path="bookings-legacy"
+                  element={<VenueOwnerBookings />}
+                />
+                <Route
+                  path="venues/:id/bookings"
+                  element={<VenueBookingDetails />}
+                />
                 <Route path="venues/new" element={<VenueForm />} />
                 <Route path="venues/:id/calendar" element={<VenueCalendar />} />
                 <Route path="stats" element={<VenueStats />} />
@@ -288,6 +298,14 @@ function App() {
                   }
                 />
                 <Route
+                  path="/recruitment"
+                  element={
+                    <ManagerOnlyRoute>
+                      <PlayerSearch />
+                    </ManagerOnlyRoute>
+                  }
+                />
+                <Route
                   path="/matches/:matchId"
                   element={
                     <ProtectedRoute>
@@ -308,6 +326,14 @@ function App() {
                   element={
                     <ProtectedRoute>
                       <MyPendingParticipations />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/participations"
+                  element={
+                    <ProtectedRoute>
+                      <PendingParticipations />
                     </ProtectedRoute>
                   }
                 />

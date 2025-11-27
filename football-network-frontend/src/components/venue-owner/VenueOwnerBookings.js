@@ -1,44 +1,50 @@
-import React, { useState, useEffect } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
-import axios from 'axios';
+// football-network-frontend/src/components/venue-owner/VenueOwnerBookings.js
+import React, { useState, useEffect } from "react";
+import { Link, useSearchParams } from "react-router-dom";
+import axios from "axios";
 import {
-  Calendar, MapPin, Clock, CheckCircle, XCircle,
-  AlertCircle, Shield, Eye, Filter
-} from 'lucide-react';
-import toast from 'react-hot-toast';
+  Calendar,
+  MapPin,
+  Clock,
+  CheckCircle,
+  XCircle,
+  AlertCircle,
+  Shield,
+  Eye,
+  Filter,
+} from "lucide-react";
+import toast from "react-hot-toast";
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+const API_BASE_URL =
+  process.env.REACT_APP_API_URL || "http://localhost:5000/api";
 
 const VenueOwnerBookings = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const [loading, setLoading] = useState(true);
   const [bookings, setBookings] = useState([]);
-  const [filter, setFilter] = useState(searchParams.get('status') || 'all');
-  const venueIdFromUrl = searchParams.get('venue_id');
+  const [filter, setFilter] = useState(searchParams.get("status") || "all");
 
   useEffect(() => {
     loadBookings();
-  }, [filter, venueIdFromUrl]);
+  }, [filter]);
 
   const loadBookings = async () => {
     try {
       setLoading(true);
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem("token");
+      const params = filter !== "all" ? `?status=${filter}` : "";
 
-      // Build query params
-      const queryParams = new URLSearchParams();
-      if (filter !== 'all') queryParams.append('status', filter);
-      if (venueIdFromUrl) queryParams.append('venue_id', venueIdFromUrl);
-      const params = queryParams.toString() ? `?${queryParams.toString()}` : '';
-
-      const response = await axios.get(`${API_BASE_URL}/venue-owner/bookings${params}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const response = await axios.get(
+        `${API_BASE_URL}/venue-owner/bookings${params}`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
 
       setBookings(response.data.bookings);
     } catch (error) {
-      console.error('Error loading bookings:', error);
-      toast.error('Erreur lors du chargement');
+      console.error("Error loading bookings:", error);
+      toast.error("Erreur lors du chargement");
     } finally {
       setLoading(false);
     }
@@ -46,7 +52,7 @@ const VenueOwnerBookings = () => {
 
   const handleFilterChange = (newFilter) => {
     setFilter(newFilter);
-    if (newFilter !== 'all') {
+    if (newFilter !== "all") {
       setSearchParams({ status: newFilter });
     } else {
       setSearchParams({});
@@ -56,35 +62,37 @@ const VenueOwnerBookings = () => {
   const getStatusBadge = (status) => {
     const config = {
       pending: {
-        bg: 'bg-yellow-100',
-        text: 'text-yellow-800',
+        bg: "bg-yellow-100",
+        text: "text-yellow-800",
         icon: Clock,
-        label: 'En attente'
+        label: "En attente",
       },
       confirmed: {
-        bg: 'bg-green-100',
-        text: 'text-green-800',
+        bg: "bg-green-100",
+        text: "text-green-800",
         icon: CheckCircle,
-        label: 'Confirmée'
+        label: "Confirmée",
       },
       cancelled: {
-        bg: 'bg-red-100',
-        text: 'text-red-800',
+        bg: "bg-red-100",
+        text: "text-red-800",
         icon: XCircle,
-        label: 'Annulée'
+        label: "Annulée",
       },
       completed: {
-        bg: 'bg-gray-100',
-        text: 'text-gray-800',
+        bg: "bg-gray-100",
+        text: "text-gray-800",
         icon: CheckCircle,
-        label: 'Terminée'
-      }
+        label: "Terminée",
+      },
     };
 
     const { bg, text, icon: Icon, label } = config[status] || config.pending;
 
     return (
-      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${bg} ${text}`}>
+      <span
+        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${bg} ${text}`}
+      >
         <Icon className="w-3.5 h-3.5 mr-1" />
         {label}
       </span>
@@ -93,18 +101,21 @@ const VenueOwnerBookings = () => {
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center h-96">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600"></div>
+      <div className="flex justify-center items-center min-h-screen">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
       </div>
     );
   }
 
   return (
-    <>
-      {/* Summary */}
+    <div className="max-w-7xl mx-auto px-4 py-8">
+      {/* Header */}
       <div className="mb-8">
-        <p className="text-lg text-gray-700">
-          <span className="font-semibold text-green-600">{bookings.length}</span> réservation{bookings.length > 1 ? 's' : ''}
+        <h1 className="text-3xl font-bold text-gray-900 mb-2">
+          Gestion des Réservations
+        </h1>
+        <p className="text-gray-600">
+          {bookings.length} réservation{bookings.length > 1 ? "s" : ""}
         </p>
       </div>
 
@@ -114,18 +125,18 @@ const VenueOwnerBookings = () => {
           <Filter className="w-5 h-5 text-gray-500" />
           <div className="flex space-x-2">
             {[
-              { value: 'all', label: 'Toutes' },
-              { value: 'pending', label: 'En attente' },
-              { value: 'confirmed', label: 'Confirmées' },
-              { value: 'cancelled', label: 'Annulées' }
+              { value: "all", label: "Toutes" },
+              { value: "pending", label: "En attente" },
+              { value: "confirmed", label: "Confirmées" },
+              { value: "cancelled", label: "Annulées" },
             ].map((option) => (
               <button
                 key={option.value}
                 onClick={() => handleFilterChange(option.value)}
                 className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
                   filter === option.value
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    ? "bg-blue-600 text-white"
+                    : "bg-gray-100 text-gray-700 hover:bg-gray-200"
                 }`}
               >
                 {option.label}
@@ -143,15 +154,22 @@ const VenueOwnerBookings = () => {
             Aucune réservation
           </h3>
           <p className="text-gray-600">
-            {filter !== 'all'
-              ? `Aucune réservation ${filter === 'pending' ? 'en attente' : filter === 'confirmed' ? 'confirmée' : 'annulée'}.`
-              : 'Vos réservations apparaîtront ici.'}
+            {filter !== "all"
+              ? `Aucune réservation ${
+                  filter === "pending"
+                    ? "en attente"
+                    : filter === "confirmed"
+                    ? "confirmée"
+                    : "annulée"
+                }.`
+              : "Vos réservations apparaîtront ici."}
           </p>
         </div>
       ) : (
         <div className="space-y-4">
           {bookings.map((booking) => {
-            const bookingDate = new Date(booking.booking_date);
+            // Utilisation des propriétés camelCase
+            const bookingDate = new Date(booking.bookingDate);
             const now = new Date();
             const isUpcoming = bookingDate > now;
 
@@ -164,10 +182,10 @@ const VenueOwnerBookings = () => {
                   <div className="flex-1">
                     <div className="flex items-center space-x-3 mb-2">
                       <h3 className="text-lg font-bold text-gray-900">
-                        {booking.venue_name}
+                        {booking.venueName}
                       </h3>
                       {getStatusBadge(booking.status)}
-                      {isUpcoming && booking.status === 'confirmed' && (
+                      {isUpcoming && booking.status === "confirmed" && (
                         <span className="px-2 py-1 bg-blue-100 text-blue-800 text-xs font-semibold rounded-full">
                           À venir
                         </span>
@@ -176,7 +194,7 @@ const VenueOwnerBookings = () => {
 
                     <div className="flex items-center space-x-2 text-sm text-gray-600">
                       <MapPin className="w-4 h-4" />
-                      <span>{booking.venue_city}</span>
+                      <span>{booking.venueCity}</span>
                     </div>
                   </div>
                 </div>
@@ -189,7 +207,9 @@ const VenueOwnerBookings = () => {
                     </div>
                     <div>
                       <p className="text-xs text-gray-500">Équipe</p>
-                      <p className="font-semibold text-gray-900">{booking.team_name}</p>
+                      <p className="font-semibold text-gray-900">
+                        {booking.teamName}
+                      </p>
                     </div>
                   </div>
 
@@ -201,10 +221,10 @@ const VenueOwnerBookings = () => {
                     <div>
                       <p className="text-xs text-gray-500">Date</p>
                       <p className="font-semibold text-gray-900">
-                        {bookingDate.toLocaleDateString('fr-FR', {
-                          weekday: 'short',
-                          day: 'numeric',
-                          month: 'short'
+                        {bookingDate.toLocaleDateString("fr-FR", {
+                          weekday: "short",
+                          day: "numeric",
+                          month: "short",
                         })}
                       </p>
                     </div>
@@ -218,29 +238,35 @@ const VenueOwnerBookings = () => {
                     <div>
                       <p className="text-xs text-gray-500">Horaire</p>
                       <p className="font-semibold text-gray-900">
-                        {booking.start_time} ({booking.duration}min)
+                        {booking.startTime} ({booking.duration}min)
                       </p>
                     </div>
                   </div>
                 </div>
 
-                {/* Payment Info */}
-                {booking.payment_amount > 0 && (
+                {/* Payment Info - Updated to use 'price' */}
+                {booking.price > 0 && (
                   <div className="mb-4 p-3 bg-gray-50 rounded-lg">
                     <div className="flex items-center justify-between">
                       <span className="text-sm text-gray-600">Montant:</span>
                       <span className="text-lg font-bold text-gray-900">
-                        {booking.payment_amount.toFixed(2)}€
+                        {booking.price.toFixed(2)}€
                       </span>
                     </div>
                     <div className="flex items-center justify-between mt-1">
-                      <span className="text-xs text-gray-500">Statut paiement:</span>
-                      <span className={`text-xs font-semibold ${
-                        booking.payment_status === 'paid'
-                          ? 'text-green-600'
-                          : 'text-yellow-600'
-                      }`}>
-                        {booking.payment_status === 'paid' ? 'Payé' : 'En attente'}
+                      <span className="text-xs text-gray-500">
+                        Statut paiement:
+                      </span>
+                      <span
+                        className={`text-xs font-semibold ${
+                          booking.paymentStatus === "paid"
+                            ? "text-green-600"
+                            : "text-yellow-600"
+                        }`}
+                      >
+                        {booking.paymentStatus === "paid"
+                          ? "Payé"
+                          : "En attente"}
                       </span>
                     </div>
                   </div>
@@ -256,7 +282,7 @@ const VenueOwnerBookings = () => {
                     <span>Voir Détails</span>
                   </Link>
 
-                  {booking.status === 'pending' && (
+                  {booking.status === "pending" && (
                     <Link
                       to={`/venue-owner/bookings/${booking.id}?action=respond`}
                       className="flex-1 flex items-center justify-center space-x-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-semibold"
@@ -271,7 +297,7 @@ const VenueOwnerBookings = () => {
           })}
         </div>
       )}
-    </>
+    </div>
   );
 };
 

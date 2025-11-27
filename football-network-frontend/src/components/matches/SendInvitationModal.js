@@ -2,131 +2,174 @@ import React, { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { yupResolver } from "@hookform/resolvers/yup";
 import * as yup from "yup";
-import { X, Send, Calendar, MapPin, MessageSquare, Users } from "lucide-react";
+import {
+  X,
+  Send,
+  Calendar,
+  MapPin,
+  MessageSquare,
+  Users,
+  Search,
+  Shield,
+  CheckCircle,
+  Loader2,
+} from "lucide-react";
 import toast from "react-hot-toast";
 import axios from "axios";
 
 const API_BASE_URL =
   process.env.REACT_APP_API_URL || "http://localhost:5000/api";
 
+// Schema de validation
 const sendInvitationSchema = yup.object({
-  senderTeamId: yup.string().required("Équipe expéditrice requise"),
-  receiverTeamId: yup.string().required("Équipe destinataire requise"),
+  senderTeamId: yup.string().required("Votre équipe est requise"),
+  // receiverTeamId est géré hors du register pour supporter la recherche
   proposedDate: yup.string().required("Date requise"),
   proposedTime: yup.string().required("Heure requise"),
   proposedLocationId: yup.string().optional(),
   message: yup.string().max(500, "Maximum 500 caractères").optional(),
 });
 
-const SendInvitationModal = ({ teams, onClose, onSend }) => {
+const SendInvitationModal = ({
+  teams, // Liste de mes équipes (où je suis capitaine)
+  targetTeam, // (Optionnel) Équipe adverse pré-sélectionnée
+  onClose,
+  onSuccess, // Callback appelé après succès
+}) => {
   const [sending, setSending] = useState(false);
-  const [availableTeams, setAvailableTeams] = useState([]);
+
+  // États pour la recherche d'adversaire
+  const [receiverSearchTerm, setReceiverSearchTerm] = useState("");
+  const [foundTeams, setFoundTeams] = useState([]);
+  const [selectedReceiver, setSelectedReceiver] = useState(targetTeam || null);
+  const [searchingReceiver, setSearchingReceiver] = useState(false);
+
+  // États pour les lieux
   const [locations, setLocations] = useState([]);
-  const [loadingTeams, setLoadingTeams] = useState(false);
+  const [loadingLocations, setLoadingLocations] = useState(false);
+
+  // État pour la vérification de disponibilité des joueurs
+  const [verifyPlayerAvailability, setVerifyPlayerAvailability] = useState(true);
 
   const {
     register,
     handleSubmit,
     formState: { errors },
-    watch,
     setValue,
   } = useForm({
     resolver: yupResolver(sendInvitationSchema),
+    defaultValues: {
+      senderTeamId: teams.length > 0 ? teams[0].id.toString() : "",
+    },
   });
 
-  const selectedSenderTeam = watch("senderTeamId");
-
+  // Initialisation
   useEffect(() => {
-    if (teams.length > 0) {
-      setValue("senderTeamId", teams[0].id.toString());
-    }
     loadLocations();
-  }, [teams, setValue]);
+  }, []);
 
+  // Recherche d'équipe (Debounce)
   useEffect(() => {
-    if (selectedSenderTeam) {
-      searchAvailableTeams();
-    }
-  }, [selectedSenderTeam]);
+    const timer = setTimeout(() => {
+      if (receiverSearchTerm.length > 2 && !selectedReceiver) {
+        searchTeams();
+      }
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [receiverSearchTerm, selectedReceiver]);
 
   const loadLocations = async () => {
     try {
-      // Pour cette démo, on peut créer quelques lieux fictifs
-      // Dans la vraie app, ça viendrait de l'API
-      setLocations([
-        { id: 1, name: "Stade Municipal", address: "15 Rue du Sport, Paris" },
-        {
-          id: 2,
-          name: "Terrain Synthétique",
-          address: "25 Avenue des Sports, Lyon",
-        },
-        {
-          id: 3,
-          name: "Complex Sportif",
-          address: "10 Boulevard du Football, Marseille",
-        },
-      ]);
+      setLoadingLocations(true);
+      // On récupère les vrais terrains depuis l'API
+      const response = await axios.get(`${API_BASE_URL}/venues?limit=100`);
+      if (response.data && response.data.venues) {
+        setLocations(response.data.venues);
+      }
     } catch (error) {
       console.error("Error loading locations:", error);
-      // Assurer qu'on a toujours un array même en cas d'erreur
-      setLocations([]);
+    } finally {
+      setLoadingLocations(false);
     }
   };
 
-  const searchAvailableTeams = async () => {
+  const searchTeams = async () => {
     try {
-      setLoadingTeams(true);
-      const response = await axios.get(`${API_BASE_URL}/teams`);
+      setSearchingReceiver(true);
+      const response = await axios.get(`${API_BASE_URL}/teams`, {
+        params: { search: receiverSearchTerm, limit: 5 },
+      });
 
-      // Vérifier que response.data existe et est un array
-      const teamsData = response.data || [];
+      // Filtrer pour ne pas afficher mes propres équipes
+      const myTeamIds = teams.map((t) => t.id);
+      const filtered = (response.data || []).filter(
+        (t) => !myTeamIds.includes(t.id)
+      );
 
-      // Exclure les équipes de l'utilisateur
-      const myTeamIds = teams.map((team) => team.id);
-      const filtered = teamsData.filter((team) => !myTeamIds.includes(team.id));
-
-      setAvailableTeams(filtered);
+      setFoundTeams(filtered);
     } catch (error) {
-      console.error("Error loading teams:", error);
-      toast.error("Erreur lors du chargement des équipes");
-      // Assurer qu'on a toujours un array même en cas d'erreur
-      setAvailableTeams([]);
+      console.error("Error searching teams:", error);
     } finally {
-      setLoadingTeams(false);
+      setSearchingReceiver(false);
     }
+  };
+
+  const handleSelectReceiver = (team) => {
+    setSelectedReceiver(team);
+    setReceiverSearchTerm(""); // Reset search
+    setFoundTeams([]);
   };
 
   const onSubmit = async (data) => {
+    if (!selectedReceiver) {
+      return toast.error("Veuillez sélectionner une équipe adverse");
+    }
+
+    // Vérification basique pour ne pas s'inviter soi-même
+    if (parseInt(data.senderTeamId) === selectedReceiver.id) {
+      return toast.error("Vous ne pouvez pas inviter votre propre équipe");
+    }
+
     try {
       setSending(true);
 
-      // Combiner date et heure
+      // Construction de la date ISO
       const proposedDate = new Date(
         `${data.proposedDate}T${data.proposedTime}`
       );
 
-      // Nettoyer et valider les données
-      const locationId = data.proposedLocationId?.trim();
-      const messageText = data.message?.trim();
-
-      const invitationData = {
+      const payload = {
         senderTeamId: parseInt(data.senderTeamId),
-        receiverTeamId: parseInt(data.receiverTeamId),
+        receiverTeamId: selectedReceiver.id,
         proposedDate: proposedDate.toISOString(),
         proposedLocationId:
-          locationId && locationId !== "" && locationId !== "null"
-            ? parseInt(locationId)
+          data.proposedLocationId && data.proposedLocationId !== ""
+            ? parseInt(data.proposedLocationId)
             : null,
-        message: messageText && messageText !== "" ? messageText : null,
+        verifyPlayerAvailability: verifyPlayerAvailability,
+        message: data.message,
       };
 
-      console.log("Sending invitation data:", invitationData); // Debug
-      await onSend(invitationData);
+      const token = localStorage.getItem("token");
+      await axios.post(`${API_BASE_URL}/matches/invitations`, payload, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      toast.success("Invitation envoyée avec succès !");
+      if (onSuccess) onSuccess();
+      onClose();
     } catch (error) {
       console.error("Send invitation error:", error);
-      // Afficher l'erreur pour déboguer
-      if (error.response?.data?.error) {
-        toast.error(error.response.data.error);
+      const errorData = error.response?.data;
+
+      if (errorData?.error === "Insufficient players") {
+        toast.error(
+          `Effectif insuffisant : ${errorData.playersCount}/${errorData.minimumRequired} joueurs requis.`
+        );
+      } else if (errorData?.error) {
+        toast.error(errorData.error);
+      } else {
+        toast.error("Erreur lors de l'envoi de l'invitation");
       }
     } finally {
       setSending(false);
@@ -134,113 +177,165 @@ const SendInvitationModal = ({ teams, onClose, onSend }) => {
   };
 
   // Date minimum : demain
-  const tomorrow = new Date();
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  const minDate = tomorrow.toISOString().split("T")[0];
+  const minDate = new Date();
+  minDate.setDate(minDate.getDate() + 1);
+  const minDateStr = minDate.toISOString().split("T")[0];
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
+      <div className="bg-white rounded-2xl w-full max-w-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b">
-          <h2 className="text-2xl font-bold text-gray-900">
-            Envoyer une invitation
-          </h2>
+        <div className="bg-gray-900 p-6 flex justify-between items-center shrink-0">
+          <div className="text-white">
+            <h2 className="text-lg font-bold flex items-center">
+              <Send className="w-5 h-5 mr-2 text-blue-400" /> Organiser un match
+            </h2>
+            <p className="text-xs text-gray-400 mt-1">
+              Invitez une équipe à vous affronter
+            </p>
+          </div>
           <button
             onClick={onClose}
-            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+            className="text-gray-400 hover:text-white transition-colors"
           >
-            <X className="w-5 h-5" />
+            <X className="w-6 h-6" />
           </button>
         </div>
 
         {/* Formulaire */}
-        <form onSubmit={handleSubmit(onSubmit)} className="p-6 space-y-6">
-          {/* Sélection des équipes */}
+        <form
+          onSubmit={handleSubmit(onSubmit)}
+          className="flex-1 overflow-y-auto p-6 space-y-6"
+        >
+          {/* 1. Équipes */}
           <div className="space-y-4">
-            <h3 className="text-lg font-semibold text-gray-900 flex items-center">
-              <Users className="w-5 h-5 mr-2" />
-              Équipes
+            <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider border-b border-gray-100 pb-2">
+              Les Équipes
             </h3>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Expéditeur */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Votre équipe *
+                  Votre équipe
                 </label>
-                <select
-                  {...register("senderTeamId")}
-                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent ${
-                    errors.senderTeamId ? "border-red-500" : "border-gray-300"
-                  }`}
-                >
-                  {teams.map((team) => (
-                    <option key={team.id} value={team.id}>
-                      {team.name}
-                    </option>
-                  ))}
-                </select>
-                {errors.senderTeamId && (
-                  <p className="text-red-500 text-sm mt-1">
-                    {errors.senderTeamId.message}
-                  </p>
-                )}
+                <div className="relative">
+                  <Shield className="absolute left-3 top-2.5 h-5 w-5 text-gray-400" />
+                  <select
+                    {...register("senderTeamId")}
+                    className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none appearance-none"
+                  >
+                    {teams.map((team) => (
+                      <option key={team.id} value={team.id}>
+                        {team.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
 
+              {/* Destinataire */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Équipe à inviter *
+                  Adversaire
                 </label>
-                <select
-                  {...register("receiverTeamId")}
-                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent ${
-                    errors.receiverTeamId ? "border-red-500" : "border-gray-300"
-                  }`}
-                  disabled={loadingTeams}
-                >
-                  <option value="">Sélectionner une équipe</option>
-                  {availableTeams.map((team) => (
-                    <option key={team.id} value={team.id}>
-                      {team.name} ({team.skillLevel})
-                    </option>
-                  ))}
-                </select>
-                {errors.receiverTeamId && (
-                  <p className="text-red-500 text-sm mt-1">
-                    {errors.receiverTeamId.message}
-                  </p>
-                )}
-                {loadingTeams && (
-                  <p className="text-gray-500 text-sm mt-1">
-                    Chargement des équipes...
-                  </p>
+
+                {selectedReceiver ? (
+                  <div className="flex items-center justify-between p-2.5 bg-blue-50 border border-blue-200 rounded-xl">
+                    <div className="flex items-center gap-3 overflow-hidden">
+                      <div className="w-8 h-8 bg-blue-200 rounded-full flex items-center justify-center text-blue-700 font-bold text-xs shrink-0">
+                        {selectedReceiver.name[0]}
+                      </div>
+                      <div className="truncate">
+                        <p className="font-bold text-sm text-blue-900 truncate">
+                          {selectedReceiver.name}
+                        </p>
+                        <p className="text-xs text-blue-700">
+                          {selectedReceiver.skillLevel || "Amateur"}
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => !targetTeam && setSelectedReceiver(null)}
+                      className={`text-blue-400 hover:text-blue-600 ${
+                        targetTeam ? "hidden" : ""
+                      }`}
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="relative">
+                    <Search className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
+                    <input
+                      type="text"
+                      placeholder="Rechercher une équipe..."
+                      className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                      value={receiverSearchTerm}
+                      onChange={(e) => setReceiverSearchTerm(e.target.value)}
+                    />
+
+                    {/* Liste déroulante de recherche */}
+                    {(searchingReceiver || foundTeams.length > 0) && (
+                      <div className="absolute z-10 left-0 right-0 mt-2 bg-white rounded-xl shadow-lg border border-gray-100 max-h-48 overflow-y-auto">
+                        {searchingReceiver ? (
+                          <div className="p-4 text-center text-gray-500 text-sm">
+                            Recherche...
+                          </div>
+                        ) : (
+                          foundTeams.map((team) => (
+                            <div
+                              key={team.id}
+                              onClick={() => handleSelectReceiver(team)}
+                              className="p-3 hover:bg-gray-50 cursor-pointer flex items-center gap-3 border-b border-gray-50 last:border-0"
+                            >
+                              <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center text-xs font-bold text-gray-600">
+                                {team.name[0]}
+                              </div>
+                              <div>
+                                <p className="font-medium text-sm text-gray-900">
+                                  {team.name}
+                                </p>
+                                <p className="text-xs text-gray-500">
+                                  {team.locationCity || "Ville inconnue"}
+                                </p>
+                              </div>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    )}
+                  </div>
                 )}
               </div>
             </div>
           </div>
 
-          {/* Date et heure */}
+          {/* 2. Détails Match */}
           <div className="space-y-4">
-            <h3 className="text-lg font-semibold text-gray-900 flex items-center">
-              <Calendar className="w-5 h-5 mr-2" />
-              Date et heure
+            <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider border-b border-gray-100 pb-2">
+              Détails du match
             </h3>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Date du match *
+                  Date
                 </label>
-                <input
-                  type="date"
-                  {...register("proposedDate")}
-                  min={minDate}
-                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent ${
-                    errors.proposedDate ? "border-red-500" : "border-gray-300"
-                  }`}
-                />
+                <div className="relative">
+                  <Calendar className="absolute left-3 top-2.5 h-5 w-5 text-gray-400" />
+                  <input
+                    type="date"
+                    min={minDateStr}
+                    {...register("proposedDate")}
+                    className={`w-full pl-10 pr-4 py-2.5 bg-gray-50 border rounded-xl focus:ring-2 focus:ring-blue-500 outline-none ${
+                      errors.proposedDate ? "border-red-500" : "border-gray-200"
+                    }`}
+                  />
+                </div>
                 {errors.proposedDate && (
-                  <p className="text-red-500 text-sm mt-1">
+                  <p className="text-red-500 text-xs mt-1">
                     {errors.proposedDate.message}
                   </p>
                 )}
@@ -248,99 +343,127 @@ const SendInvitationModal = ({ teams, onClose, onSend }) => {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Heure du match *
+                  Heure
                 </label>
                 <input
                   type="time"
                   {...register("proposedTime")}
-                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent ${
-                    errors.proposedTime ? "border-red-500" : "border-gray-300"
+                  className={`w-full px-4 py-2.5 bg-gray-50 border rounded-xl focus:ring-2 focus:ring-blue-500 outline-none ${
+                    errors.proposedTime ? "border-red-500" : "border-gray-200"
                   }`}
                 />
                 {errors.proposedTime && (
-                  <p className="text-red-500 text-sm mt-1">
+                  <p className="text-red-500 text-xs mt-1">
                     {errors.proposedTime.message}
                   </p>
                 )}
               </div>
             </div>
-          </div>
-
-          {/* Lieu */}
-          <div className="space-y-4">
-            <h3 className="text-lg font-semibold text-gray-900 flex items-center">
-              <MapPin className="w-5 h-5 mr-2" />
-              Lieu (optionnel)
-            </h3>
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Terrain proposé
+                Lieu proposé (Optionnel)
               </label>
-              <select
-                {...register("proposedLocationId")}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-              >
-                <option value="">Lieu à définir</option>
-                {locations.map((location) => (
-                  <option key={location.id} value={location.id}>
-                    {location.name} - {location.address}
-                  </option>
-                ))}
-              </select>
-              <p className="text-xs text-gray-500 mt-1">
-                Le lieu peut être discuté et modifié ultérieurement
-              </p>
+              <div className="relative">
+                <MapPin className="absolute left-3 top-2.5 h-5 w-5 text-gray-400" />
+                <select
+                  {...register("proposedLocationId")}
+                  disabled={loadingLocations}
+                  className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none appearance-none"
+                >
+                  <option value="">À définir plus tard</option>
+                  {locations.map((loc) => (
+                    <option key={loc.id} value={loc.id}>
+                      {loc.name} - {loc.city}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
           </div>
 
-          {/* Message */}
+          {/* 3. Options */}
           <div className="space-y-4">
-            <h3 className="text-lg font-semibold text-gray-900 flex items-center">
-              <MessageSquare className="w-5 h-5 mr-2" />
-              Message
+            <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider border-b border-gray-100 pb-2">
+              Options
             </h3>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Message d'accompagnement (optionnel)
+            {/* Vérification disponibilité joueurs */}
+            <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+              <label className="flex items-start space-x-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={verifyPlayerAvailability}
+                  onChange={(e) => setVerifyPlayerAvailability(e.target.checked)}
+                  className="mt-1 w-5 h-5 text-blue-600 border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
+                />
+                <div className="flex-1">
+                  <div className="flex items-center space-x-2">
+                    <CheckCircle className="w-4 h-4 text-blue-600" />
+                    <span className="text-sm font-medium text-gray-900">
+                      Vérifier la disponibilité des joueurs
+                    </span>
+                  </div>
+                  <p className="text-xs text-gray-600 mt-1">
+                    {verifyPlayerAvailability ? (
+                      <>
+                        <strong>Activé:</strong> Les deux équipes doivent avoir minimum 6 joueurs disponibles.
+                        Le match sera <strong>confirmé automatiquement</strong> dès l'acceptation de l'invitation.
+                      </>
+                    ) : (
+                      <>
+                        <strong>Désactivé:</strong> Pas de vérification immédiate.
+                        Le match restera en <strong>attente</strong> jusqu'à ce que les joueurs confirment leur participation.
+                      </>
+                    )}
+                  </p>
+                </div>
               </label>
+            </div>
+          </div>
+
+          {/* 4. Message */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Message (Optionnel)
+            </label>
+            <div className="relative">
+              <MessageSquare className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
               <textarea
                 {...register("message")}
-                rows={4}
-                className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent resize-none ${
-                  errors.message ? "border-red-500" : "border-gray-300"
-                }`}
-                placeholder="Salut ! Nous cherchons un match amical pour ce weekend. Êtes-vous disponibles ?"
-                maxLength={500}
+                rows={3}
+                className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none resize-none"
+                placeholder="Ex: Salut, on cherche un match amical 5v5, vous êtes dispos ?"
               />
-              {errors.message && (
-                <p className="text-red-500 text-sm mt-1">
-                  {errors.message.message}
-                </p>
-              )}
-              <p className="text-xs text-gray-500 mt-1">
-                Maximum 500 caractères
+            </div>
+            <div className="flex justify-between mt-1">
+              <p className="text-xs text-gray-500">
+                Visible par le capitaine adverse
               </p>
+              <p className="text-xs text-gray-400">{errors.message?.message}</p>
             </div>
           </div>
 
-          {/* Actions */}
-          <div className="flex space-x-4 pt-4">
+          {/* Footer Actions */}
+          <div className="pt-2 flex gap-4">
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 px-4 py-2 text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+              className="flex-1 px-4 py-3 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-xl font-medium transition-colors"
             >
               Annuler
             </button>
             <button
               type="submit"
-              disabled={sending || loadingTeams}
-              className="flex-1 flex items-center justify-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 transition-colors"
+              disabled={sending}
+              className="flex-1 flex items-center justify-center px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <Send className="w-4 h-4 mr-2" />
-              {sending ? "Envoi..." : "Envoyer l'invitation"}
+              {sending ? (
+                <Loader2 className="w-5 h-5 animate-spin mr-2" />
+              ) : (
+                <Send className="w-5 h-5 mr-2" />
+              )}
+              Envoyer l'invitation
             </button>
           </div>
         </form>
