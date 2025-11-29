@@ -637,7 +637,10 @@ router.post(
   "/:id/invite",
   [
     authenticateToken,
-    body("userIdOrEmail").trim().notEmpty().withMessage("User ID or email required"),
+    body("userIdOrEmail")
+      .trim()
+      .notEmpty()
+      .withMessage("User ID or email required"),
     body("message").optional().isLength({ max: 500 }),
   ],
   async (req, res) => {
@@ -652,12 +655,14 @@ router.post(
 
       // Vérifier que l'utilisateur est capitaine
       const [teamCheck] = await db.execute(
-        'SELECT id, name FROM teams WHERE id = ? AND captain_id = ?',
+        "SELECT id, name FROM teams WHERE id = ? AND captain_id = ?",
         [teamId, req.user.id]
       );
 
       if (teamCheck.length === 0) {
-        return res.status(403).json({ error: "Only team captain can invite players" });
+        return res
+          .status(403)
+          .json({ error: "Only team captain can invite players" });
       }
 
       let userId = null;
@@ -681,7 +686,7 @@ router.post(
         invitedName = `${users[0].first_name} ${users[0].last_name}`;
       } else {
         // C'est un email ou un nom
-        const isEmail = userIdOrEmail.includes('@');
+        const isEmail = userIdOrEmail.includes("@");
 
         if (isEmail) {
           // Recherche par email
@@ -711,18 +716,20 @@ router.post(
           );
 
           if (users.length === 0) {
-            return res.status(404).json({ error: "No player found with this name" });
+            return res
+              .status(404)
+              .json({ error: "No player found with this name" });
           }
 
           if (users.length > 1) {
             // Plusieurs résultats, retourner la liste pour que l'utilisateur choisisse
             return res.status(300).json({
               message: "Multiple players found, please specify",
-              players: users.map(u => ({
+              players: users.map((u) => ({
                 id: u.id,
                 name: `${u.first_name} ${u.last_name}`,
-                email: u.email
-              }))
+                email: u.email,
+              })),
             });
           }
 
@@ -741,7 +748,9 @@ router.post(
         );
 
         if (existing.length > 0) {
-          return res.status(400).json({ error: "Player is already a team member" });
+          return res
+            .status(400)
+            .json({ error: "Player is already a team member" });
         }
 
         // Vérifier invitation en attente
@@ -751,20 +760,35 @@ router.post(
         );
 
         if (pendingInvites.length > 0) {
-          return res.status(400).json({ error: "Invitation already sent to this player" });
+          return res
+            .status(400)
+            .json({ error: "Invitation already sent to this player" });
         }
       }
 
       // Générer token pour invitation externe (si pas d'userId)
-      const token = !userId ? require('crypto').randomBytes(32).toString('hex') : null;
-      const tokenExpires = !userId ? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) : null;
+      const token = !userId
+        ? require("crypto").randomBytes(32).toString("hex")
+        : null;
+      const tokenExpires = !userId
+        ? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+        : null;
 
       // Créer l'invitation
       const [result] = await db.execute(
         `INSERT INTO player_invitations
          (team_id, user_id, invited_by, invited_email, invited_name, message, invitation_token, token_expires_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-        [teamId, userId, req.user.id, invitedEmail, invitedName, message || null, token, tokenExpires]
+        [
+          teamId,
+          userId,
+          req.user.id,
+          invitedEmail,
+          invitedName,
+          message || null,
+          token,
+          tokenExpires,
+        ]
       );
 
       // TODO: Envoyer email si invité externe (!userId)
@@ -773,7 +797,7 @@ router.post(
         message: "Invitation sent successfully",
         invitationId: result.insertId,
         invitedPlayer: { email: invitedEmail, name: invitedName },
-        requiresEmailConfirmation: !userId
+        requiresEmailConfirmation: !userId,
       });
     } catch (error) {
       console.error("Invite player error:", error);
@@ -795,26 +819,91 @@ router.post(
   ],
   async (req, res) => {
     try {
-      const { email } = req.body;
-      const [userCheck] = await db.execute(
-        "SELECT id FROM users WHERE email = ?",
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ errors: errors.array() });
+      }
+
+      const teamId = req.params.id;
+      const { email, message } = req.body;
+
+      // Vérifier que l'utilisateur est capitaine
+      const [teamCheck] = await db.execute(
+        "SELECT id, name FROM teams WHERE id = ? AND captain_id = ?",
+        [teamId, req.user.id]
+      );
+
+      if (teamCheck.length === 0) {
+        return res
+          .status(403)
+          .json({ error: "Only team captain can invite players" });
+      }
+
+      // Vérifier si l'utilisateur existe
+      const [users] = await db.execute(
+        "SELECT id, email, first_name, last_name FROM users WHERE email = ?",
         [email]
       );
-      if (userCheck.length > 0) {
-        req.body.playerId = userCheck[0].id;
-        delete req.body.email;
-        return router.stack
-          .find(
-            (l) =>
-              l.route && l.route.path === "/:id/invite" && l.route.methods.post
-          )
-          .route.stack.find((l) => l.name === "bound dispatch")
-          .handle(req, res);
+
+      if (users.length === 0) {
+        // Pour l'instant, on rejette si l'email n'est pas inscrit
+        return res
+          .status(404)
+          .json({ error: "This email is not registered on the platform." });
       }
-      res
-        .status(400)
-        .json({ error: "This email is not registered on the platform." });
+
+      const targetUser = users[0];
+
+      // Vérifier si déjà membre
+      const [existingMember] = await db.execute(
+        "SELECT id FROM team_members WHERE team_id = ? AND user_id = ? AND is_active = true",
+        [teamId, targetUser.id]
+      );
+
+      if (existingMember.length > 0) {
+        return res
+          .status(400)
+          .json({ error: "Player is already a team member" });
+      }
+
+      // Vérifier invitation en attente
+      const [pendingInvites] = await db.execute(
+        "SELECT id FROM player_invitations WHERE team_id = ? AND user_id = ? AND status = 'pending'",
+        [teamId, targetUser.id]
+      );
+
+      if (pendingInvites.length > 0) {
+        return res
+          .status(400)
+          .json({ error: "Invitation already sent to this player" });
+      }
+
+      // Créer l'invitation
+      const [result] = await db.execute(
+        `INSERT INTO player_invitations
+         (team_id, user_id, invited_by, invited_email, invited_name, message)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        [
+          teamId,
+          targetUser.id,
+          req.user.id,
+          targetUser.email,
+          `${targetUser.first_name} ${targetUser.last_name}`,
+          message || null,
+        ]
+      );
+
+      // Notification
+      if (req.notificationService) {
+        req.notificationService.notifyInvitationStatusUpdate(targetUser.id);
+      }
+
+      res.status(201).json({
+        message: "Invitation sent successfully",
+        invitationId: result.insertId,
+      });
     } catch (e) {
+      console.error("Invite email error:", e);
       res.status(500).json({ error: "Server error" });
     }
   }

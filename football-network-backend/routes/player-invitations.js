@@ -1,4 +1,4 @@
-// football-network-backend/routes/player-invitations.js - VERSION CORRIGÉE
+// football-network-backend/routes/player-invitations.js - VERSION CORRIGÉE DUPLICATE ENTRY
 const express = require("express");
 const { body, validationResult } = require("express-validator");
 const db = require("../config/database");
@@ -72,7 +72,7 @@ router.get("/", authenticateToken, async (req, res) => {
   }
 });
 
-// PATCH /api/player-invitations/:id/respond - Répondre à une invitation (VERSION CORRIGÉE)
+// PATCH /api/player-invitations/:id/respond - Répondre à une invitation
 router.patch(
   "/:id/respond",
   [
@@ -136,7 +136,17 @@ router.patch(
       await connection.beginTransaction();
 
       try {
-        // Mettre à jour l'invitation
+        // CORRECTION MAJEURE : Si on accepte, on supprime les anciennes invitations 'accepted'
+        // pour cette équipe et ce joueur afin d'éviter l'erreur 'Duplicate entry'
+        if (response === "accepted") {
+          await connection.execute(
+            `DELETE FROM player_invitations 
+             WHERE team_id = ? AND user_id = ? AND status = 'accepted' AND id != ?`,
+            [invitation.team_id, req.user.id, invitationId]
+          );
+        }
+
+        // Mettre à jour l'invitation actuelle
         await connection.execute(
           "UPDATE player_invitations SET status = ?, response_message = ?, responded_at = CURRENT_TIMESTAMP WHERE id = ?",
           [response, responseMessage || null, invitationId]
@@ -164,11 +174,12 @@ router.patch(
 
           if (existingMember.length > 0) {
             if (existingMember[0].is_active) {
-              throw new Error("Already a member of this team");
+              // Déjà actif, rien à faire (ou erreur si on veut être strict)
+              // throw new Error("Already a member of this team");
             } else {
               // Réactiver le membership existant
               await connection.execute(
-                "UPDATE team_members SET is_active = true, joined_at = CURRENT_TIMESTAMP WHERE team_id = ? AND user_id = ?",
+                "UPDATE team_members SET is_active = true, joined_at = CURRENT_TIMESTAMP, role = 'player' WHERE team_id = ? AND user_id = ?",
                 [invitation.team_id, req.user.id]
               );
             }
@@ -191,10 +202,10 @@ router.patch(
 
         await connection.commit();
 
-        // CORRECTION : Vérifier si le service de notification est disponible
+        // Gestion des notifications (Hors transaction)
         if (req.notificationService) {
           try {
-            // Notifier le capitaine de la réponse
+            // Notifier le capitaine
             if (req.notificationService.notifyPlayerInvitationResponse) {
               await req.notificationService.notifyPlayerInvitationResponse(
                 invitation.captain_id,
@@ -208,13 +219,9 @@ router.patch(
                   responseMessage: responseMessage,
                 }
               );
-              console.log(
-                "📨 Captain notification sent for response:",
-                response
-              );
             }
 
-            // Si acceptée, notifier les autres membres de l'équipe
+            // Si acceptée, notifier les coéquipiers
             if (response === "accepted" && teamMemberIds.length > 0) {
               if (req.notificationService.notifyTeamJoin) {
                 await req.notificationService.notifyTeamJoin(teamMemberIds, {
@@ -223,11 +230,10 @@ router.patch(
                   teamId: invitation.team_id,
                   teamName: invitation.team_name,
                 });
-                console.log("📨 Team join notification sent to members");
               }
             }
 
-            // Signal de mise à jour des invitations
+            // Mettre à jour les compteurs en temps réel
             if (req.notificationService.notifyInvitationStatusUpdate) {
               await req.notificationService.notifyInvitationStatusUpdate(
                 req.user.id
@@ -235,14 +241,10 @@ router.patch(
               await req.notificationService.notifyInvitationStatusUpdate(
                 invitation.captain_id
               );
-              console.log("🔄 Invitation status update signals sent");
             }
           } catch (notifError) {
             console.error("⚠️ Failed to send notifications:", notifError);
-            // Ne pas faire échouer la réponse à l'invitation si les notifications échouent
           }
-        } else {
-          console.log("⚠️ Notification service not available");
         }
 
         res.json({
@@ -256,7 +258,7 @@ router.patch(
         await connection.rollback();
         throw error;
       } finally {
-        connection.release();
+        if (connection) connection.release();
       }
     } catch (error) {
       console.error("Respond to invitation error:", error);

@@ -3,7 +3,8 @@ const imageOptimizer = require("./ImageOptimizer");
 const uploadService = require("./UploadService");
 
 class TeamGalleryService {
-  async createGalleryItem(teamId, uploadId, options = {}) {
+  // MODIFIÉ : Ajout du paramètre userId
+  async createGalleryItem(teamId, uploadId, userId, options = {}) {
     const {
       caption = null,
       album = "general",
@@ -14,9 +15,9 @@ class TeamGalleryService {
     try {
       const [result] = await db.execute(
         `INSERT INTO team_gallery 
-        (team_id, upload_id, caption, album, display_order, is_featured, created_at) 
-        VALUES (?, ?, ?, ?, ?, ?, NOW())`,
-        [teamId, uploadId, caption, album, display_order, is_featured]
+        (team_id, upload_id, uploaded_by, caption, album, display_order, is_featured, created_at, is_active) 
+        VALUES (?, ?, ?, ?, ?, ?, ?, NOW(), true)`,
+        [teamId, uploadId, userId, caption, album, display_order, is_featured]
       );
 
       return await this.getGalleryItemById(result.insertId);
@@ -217,20 +218,17 @@ class TeamGalleryService {
     }
   }
 
+  // ... (Garder reorderGalleryItems, setFeaturedImage, getFeaturedImage, getGalleryStats inchangés) ...
   async reorderGalleryItems(teamId, itemOrders) {
-    // itemOrders: [{ id, display_order }, ...]
     const connection = await db.getConnection();
-
     try {
       await connection.beginTransaction();
-
       for (const item of itemOrders) {
         await connection.execute(
           "UPDATE team_gallery SET display_order = ? WHERE id = ? AND team_id = ?",
           [item.display_order, item.id, teamId]
         );
       }
-
       await connection.commit();
       return { success: true };
     } catch (error) {
@@ -243,22 +241,16 @@ class TeamGalleryService {
 
   async setFeaturedImage(itemId, teamId) {
     const connection = await db.getConnection();
-
     try {
       await connection.beginTransaction();
-
-      // Unset all featured images for this team
       await connection.execute(
         "UPDATE team_gallery SET is_featured = false WHERE team_id = ?",
         [teamId]
       );
-
-      // Set the new featured image
       await connection.execute(
         "UPDATE team_gallery SET is_featured = true WHERE id = ? AND team_id = ?",
         [itemId, teamId]
       );
-
       await connection.commit();
       return await this.getGalleryItemById(itemId);
     } catch (error) {
@@ -272,24 +264,18 @@ class TeamGalleryService {
   async getFeaturedImage(teamId) {
     try {
       const [items] = await db.execute(
-        `SELECT 
-          tg.*,
-          u.file_path,
-          u.variants,
-          u.mime_type
+        `SELECT tg.*, u.file_path, u.variants, u.mime_type
         FROM team_gallery tg
         JOIN uploads u ON tg.upload_id = u.id
         WHERE tg.team_id = ? AND tg.is_featured = true AND tg.is_active = true
         LIMIT 1`,
         [teamId]
       );
-
       if (items.length > 0) {
         const item = items[0];
         item.variants = item.variants ? JSON.parse(item.variants) : null;
         return item;
       }
-
       return null;
     } catch (error) {
       throw new Error(`Failed to get featured image: ${error.message}`);
@@ -308,14 +294,14 @@ class TeamGalleryService {
         WHERE team_id = ? AND is_active = true`,
         [teamId]
       );
-
       return stats[0];
     } catch (error) {
       throw new Error(`Failed to get gallery stats: ${error.message}`);
     }
   }
 
-  async bulkAddToGallery(teamId, uploadIds, album = "general") {
+  // MODIFIÉ : Ajout du paramètre userId et colonne uploaded_by
+  async bulkAddToGallery(teamId, uploadIds, userId, album = "general") {
     const connection = await db.getConnection();
 
     try {
@@ -326,9 +312,9 @@ class TeamGalleryService {
       for (const uploadId of uploadIds) {
         const [result] = await connection.execute(
           `INSERT INTO team_gallery 
-          (team_id, upload_id, album, created_at) 
-          VALUES (?, ?, ?, NOW())`,
-          [teamId, uploadId, album]
+          (team_id, upload_id, uploaded_by, album, created_at, is_active) 
+          VALUES (?, ?, ?, ?, NOW(), true)`,
+          [teamId, uploadId, userId, album]
         );
 
         items.push(result.insertId);

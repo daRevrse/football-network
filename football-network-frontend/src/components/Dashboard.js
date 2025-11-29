@@ -4,8 +4,6 @@ import { useAuth } from "../contexts/AuthContext";
 import {
   Users,
   Calendar,
-  MessageSquare,
-  Search,
   UserPlus,
   Bell,
   CheckCircle,
@@ -15,21 +13,28 @@ import {
   Shield,
   MapPin,
   Award,
+  MessageSquare,
+  Search,
 } from "lucide-react";
 import axios from "axios";
 
-const API_BASE_URL = process.env.REACT_APP_API_URL;
+const API_BASE_URL =
+  process.env.REACT_APP_API_URL || "http://localhost:5000/api";
 
 const Dashboard = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
+
+  // MODIFIÉ : Ajout de matchesPlayed dans l'état initial
   const [stats, setStats] = useState({
     playerInvites: 0,
     matchInvites: 0,
     validations: 0,
     teams: 0,
     pendingParticipations: 0,
+    matchesPlayed: 0, // Nouveau champ
   });
+
   const [loading, setLoading] = useState(true);
 
   // Vérification du rôle
@@ -53,45 +58,74 @@ const Dashboard = () => {
       try {
         setLoading(true);
         const token = localStorage.getItem("token");
+
+        // MODIFIÉ : Ajout de l'appel à /users/stats
         const [
           playerInvites,
           matchInvites,
           validations,
           teams,
           pendingParticipations,
+          userGlobalStats, // Récupération des stats globales (victoires, matchs joués)
         ] = await Promise.allSettled([
-          axios
-            .get(`${API_BASE_URL}/player-invitations?status=pending`)
-            .then(
-              (res) => res.data.filter((i) => i.status === "pending").length
-            ),
-          axios
-            .get(`${API_BASE_URL}/matches/invitations/received?status=pending`)
-            .then((res) => res.data.length),
-          axios
-            .get(`${API_BASE_URL}/matches/pending-validation/list`)
-            .then((res) => res.data.count || 0),
-          axios.get(`${API_BASE_URL}/teams/my`).then((res) => res.data.length),
-          axios
-            .get(`${API_BASE_URL}/participations/my-pending`, {
-              headers: { Authorization: `Bearer ${token}` },
-            })
-            .then((res) => res.data.participations?.length || 0),
+          axios.get(`${API_BASE_URL}/player-invitations?status=pending`),
+          axios.get(
+            `${API_BASE_URL}/matches/invitations/received?status=pending`
+          ),
+          axios.get(`${API_BASE_URL}/matches/pending-validation/list`),
+          axios.get(`${API_BASE_URL}/teams/my`),
+          axios.get(`${API_BASE_URL}/participations/my-pending`),
+          axios.get(`${API_BASE_URL}/users/stats`), // Appel existant dans users.js backend
         ]);
 
         if (isMounted) {
+          // Helper pour extraire la valeur ou 0 en cas d'erreur
+          const getValue = (result, path = null) => {
+            if (result.status !== "fulfilled") return 0;
+            if (!path) return result.value.data;
+            // Pour gérer les tableaux (ex: .length) ou les objets
+            return Array.isArray(result.value.data)
+              ? result.value.data.length
+              : result.value.data[path] || result.value.data;
+          };
+
+          // Extraction spécifique selon la structure de retour de chaque API
+          const playerInvitesCount =
+            playerInvites.status === "fulfilled"
+              ? playerInvites.value.data.filter((i) => i.status === "pending")
+                  .length
+              : 0;
+
+          const matchInvitesCount =
+            matchInvites.status === "fulfilled"
+              ? matchInvites.value.data.length
+              : 0;
+
+          const validationsCount =
+            validations.status === "fulfilled"
+              ? validations.value.data.count || 0
+              : 0;
+
+          const teamsCount =
+            teams.status === "fulfilled" ? teams.value.data.length : 0;
+
+          const pendingPartCount =
+            pendingParticipations.status === "fulfilled"
+              ? pendingParticipations.value.data.participations?.length || 0
+              : 0;
+
+          const matchesPlayedCount =
+            userGlobalStats.status === "fulfilled"
+              ? userGlobalStats.value.data.matchesCount || 0
+              : 0;
+
           setStats({
-            playerInvites:
-              playerInvites.status === "fulfilled" ? playerInvites.value : 0,
-            matchInvites:
-              matchInvites.status === "fulfilled" ? matchInvites.value : 0,
-            validations:
-              validations.status === "fulfilled" ? validations.value : 0,
-            teams: teams.status === "fulfilled" ? teams.value : 0,
-            pendingParticipations:
-              pendingParticipations.status === "fulfilled"
-                ? pendingParticipations.value
-                : 0,
+            playerInvites: playerInvitesCount,
+            matchInvites: matchInvitesCount,
+            validations: validationsCount,
+            teams: teamsCount,
+            pendingParticipations: pendingPartCount,
+            matchesPlayed: matchesPlayedCount,
           });
         }
       } catch (error) {
@@ -110,6 +144,7 @@ const Dashboard = () => {
     };
   }, [user]);
 
+  // ... (Garder ActionCard et StatCard inchangés) ...
   const ActionCard = ({ to, icon: Icon, title, desc, color, count }) => (
     <Link
       to={to}
@@ -150,36 +185,7 @@ const Dashboard = () => {
     </div>
   );
 
-  const commomActions = (
-    <>
-      {/* Actions Communes */}
-      <ActionCard
-        to="/calendar"
-        icon={Calendar}
-        title="Calendrier"
-        desc="Vos prochains matchs et disponibilités."
-        color="bg-indigo-500"
-      />
-
-      <ActionCard
-        to="/profile"
-        icon={Trophy}
-        title="Mon Profil"
-        desc="Vos informations personnelles et historique."
-        color="bg-orange-500"
-      />
-
-      <ActionCard
-        to="/feed"
-        icon={MessageSquare}
-        title="Le Terrain"
-        desc="Fil d'actualité de la communauté."
-        color="bg-pink-500"
-      />
-    </>
-  );
-
-  // Si superadmin ou venue_owner, on affiche un loader pendant la redirection
+  // ... (Garder le bloc de redirection loading inchangé) ...
   if (isSuperadmin || isVenueOwner) {
     return (
       <div className="flex justify-center items-center min-h-screen">
@@ -221,9 +227,10 @@ const Dashboard = () => {
           icon={isManager ? Shield : Users}
           color="bg-blue-500"
         />
+        {/* MODIFIÉ : Utilisation de la vraie valeur stats.matchesPlayed */}
         <StatCard
-          label="Matchs Validés"
-          value="12" // Valeur statique pour l'instant
+          label="Matchs Joués"
+          value={stats.matchesPlayed}
           icon={Trophy}
           color="bg-yellow-500"
         />
@@ -241,7 +248,7 @@ const Dashboard = () => {
         />
       </div>
 
-      {/* Actions Urgentes (Si nécessaire) */}
+      {/* Actions Urgentes */}
       {(stats.validations > 0 ||
         stats.playerInvites > 0 ||
         stats.matchInvites > 0 ||
@@ -291,10 +298,11 @@ const Dashboard = () => {
         </div>
       )}
 
-      {/* Main Grid Actions */}
+      {/* Main Grid Actions (Reste inchangé) */}
       <div>
         <h2 className="text-xl font-bold text-gray-900 mb-6">Accès Rapide</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {/* ... (Contenu identique au fichier original) ... */}
           {/* Actions Manager */}
           {isManager && (
             <>
@@ -378,8 +386,31 @@ const Dashboard = () => {
               />
             </>
           )}
+
           {/* Actions Communes */}
-          {commomActions}
+          <ActionCard
+            to="/calendar"
+            icon={Calendar}
+            title="Calendrier"
+            desc="Vos prochains matchs et disponibilités."
+            color="bg-indigo-500"
+          />
+
+          <ActionCard
+            to="/profile"
+            icon={Trophy}
+            title="Mon Profil"
+            desc="Vos informations personnelles et historique."
+            color="bg-orange-500"
+          />
+
+          <ActionCard
+            to="/feed"
+            icon={MessageSquare}
+            title="Le Terrain"
+            desc="Fil d'actualité de la communauté."
+            color="bg-pink-500"
+          />
         </div>
       </div>
     </div>
