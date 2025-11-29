@@ -13,14 +13,12 @@ import {
   ArrowRight,
   Trophy,
   Shield,
-  Settings,
   MapPin,
   Award,
 } from "lucide-react";
 import axios from "axios";
 
-const API_BASE_URL =
-  process.env.REACT_APP_API_URL || "http://localhost:5000/api";
+const API_BASE_URL = process.env.REACT_APP_API_URL;
 
 const Dashboard = () => {
   const { user } = useAuth();
@@ -35,15 +33,15 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
 
   // Vérification du rôle
-  const isManager = user?.user_type === "manager";
-  const isPlayer = user?.user_type === "player";
-  const isSuperadmin = user?.user_type === "superadmin";
-  const isVenueOwner = user?.user_type === "venue_owner";
+  const isManager = user?.userType === "manager";
+  const isPlayer = user?.userType === "player";
+  const isSuperadmin = user?.userType === "superadmin";
+  const isVenueOwner = user?.userType === "venue_owner";
 
   useEffect(() => {
-    if (user?.user_type === "superadmin") {
+    if (user?.userType === "superadmin") {
       navigate("/admin", { replace: true });
-    } else if (user?.user_type === "venue_owner") {
+    } else if (user?.userType === "venue_owner") {
       navigate("/venue-owner", { replace: true });
     }
   }, [user, navigate]);
@@ -55,30 +53,31 @@ const Dashboard = () => {
       try {
         setLoading(true);
         const token = localStorage.getItem("token");
-        const [playerInvites, matchInvites, validations, teams, pendingParticipations] =
-          await Promise.allSettled([
-            axios
-              .get(`${API_BASE_URL}/player-invitations?status=pending`)
-              .then(
-                (res) => res.data.filter((i) => i.status === "pending").length
-              ),
-            axios
-              .get(
-                `${API_BASE_URL}/matches/invitations/received?status=pending`
-              )
-              .then((res) => res.data.length),
-            axios
-              .get(`${API_BASE_URL}/matches/pending-validation/list`)
-              .then((res) => res.data.count || 0),
-            axios
-              .get(`${API_BASE_URL}/teams/my`)
-              .then((res) => res.data.length),
-            axios
-              .get(`${API_BASE_URL}/participations/my-pending`, {
-                headers: { Authorization: `Bearer ${token}` },
-              })
-              .then((res) => res.data.participations?.length || 0),
-          ]);
+        const [
+          playerInvites,
+          matchInvites,
+          validations,
+          teams,
+          pendingParticipations,
+        ] = await Promise.allSettled([
+          axios
+            .get(`${API_BASE_URL}/player-invitations?status=pending`)
+            .then(
+              (res) => res.data.filter((i) => i.status === "pending").length
+            ),
+          axios
+            .get(`${API_BASE_URL}/matches/invitations/received?status=pending`)
+            .then((res) => res.data.length),
+          axios
+            .get(`${API_BASE_URL}/matches/pending-validation/list`)
+            .then((res) => res.data.count || 0),
+          axios.get(`${API_BASE_URL}/teams/my`).then((res) => res.data.length),
+          axios
+            .get(`${API_BASE_URL}/participations/my-pending`, {
+              headers: { Authorization: `Bearer ${token}` },
+            })
+            .then((res) => res.data.participations?.length || 0),
+        ]);
 
         if (isMounted) {
           setStats({
@@ -90,7 +89,9 @@ const Dashboard = () => {
               validations.status === "fulfilled" ? validations.value : 0,
             teams: teams.status === "fulfilled" ? teams.value : 0,
             pendingParticipations:
-              pendingParticipations.status === "fulfilled" ? pendingParticipations.value : 0,
+              pendingParticipations.status === "fulfilled"
+                ? pendingParticipations.value
+                : 0,
           });
         }
       } catch (error) {
@@ -147,6 +148,35 @@ const Dashboard = () => {
         </p>
       </div>
     </div>
+  );
+
+  const commomActions = (
+    <>
+      {/* Actions Communes */}
+      <ActionCard
+        to="/calendar"
+        icon={Calendar}
+        title="Calendrier"
+        desc="Vos prochains matchs et disponibilités."
+        color="bg-indigo-500"
+      />
+
+      <ActionCard
+        to="/profile"
+        icon={Trophy}
+        title="Mon Profil"
+        desc="Vos informations personnelles et historique."
+        color="bg-orange-500"
+      />
+
+      <ActionCard
+        to="/feed"
+        icon={MessageSquare}
+        title="Le Terrain"
+        desc="Fil d'actualité de la communauté."
+        color="bg-pink-500"
+      />
+    </>
   );
 
   // Si superadmin ou venue_owner, on affiche un loader pendant la redirection
@@ -348,31 +378,8 @@ const Dashboard = () => {
               />
             </>
           )}
-
           {/* Actions Communes */}
-          <ActionCard
-            to="/calendar"
-            icon={Calendar}
-            title="Calendrier"
-            desc="Vos prochains matchs et disponibilités."
-            color="bg-indigo-500"
-          />
-
-          <ActionCard
-            to="/profile"
-            icon={Trophy}
-            title="Mon Profil"
-            desc="Vos informations personnelles et historique."
-            color="bg-orange-500"
-          />
-
-          <ActionCard
-            to="/feed"
-            icon={MessageSquare}
-            title="Le Terrain"
-            desc="Fil d'actualité de la communauté."
-            color="bg-pink-500"
-          />
+          {commomActions}
         </div>
       </div>
     </div>

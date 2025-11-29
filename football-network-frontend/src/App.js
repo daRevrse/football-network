@@ -1,4 +1,3 @@
-import React from "react";
 import {
   BrowserRouter as Router,
   Routes,
@@ -60,6 +59,7 @@ import {
   SuperadminOnlyRoute,
 } from "./components/routes/RoleProtectedRoute";
 import PlayerSearch from "./components/teams/PlayerSearch";
+import VerifyEmail from "./components/auth/VerifyEmail";
 
 // --- NOUVEAU COMPOSANT : Gestion intelligente de la racine "/" ---
 const RootRoute = () => {
@@ -200,6 +200,14 @@ function App() {
                   element={
                     <PublicRoute>
                       <Signup />
+                    </PublicRoute>
+                  }
+                />
+                <Route
+                  path="/verify-email"
+                  element={
+                    <PublicRoute>
+                      <VerifyEmail />
                     </PublicRoute>
                   }
                 />

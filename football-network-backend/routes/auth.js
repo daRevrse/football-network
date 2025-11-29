@@ -1,13 +1,15 @@
 const express = require("express");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
+const crypto = require("node:crypto");
 const { body, validationResult } = require("express-validator");
 const db = require("../config/database");
 const { authenticateToken } = require("../middleware/auth");
+const EmailService = require("../services/EmailService");
 
 const router = express.Router();
 
-// Inscription
+// --- INSCRIPTION ---
 router.post(
   "/signup",
   [
@@ -55,14 +57,14 @@ router.post(
         lastName,
         phone,
         birthDate,
-        userType = "player", // Par défaut 'player'
-        teamName, // Nouveau champ pour manager
+        userType = "player",
+        teamName,
         position,
         skillLevel,
         locationCity,
       } = req.body;
 
-      // Vérifier si l'email existe déjà
+      // 1. Vérifier si l'email existe déjà
       const [existingUsers] = await db.execute(
         "SELECT id FROM users WHERE email = ?",
         [email]
@@ -72,24 +74,24 @@ router.post(
         return res.status(400).json({ error: "Email already registered" });
       }
 
-      // Si Manager, vérifier que le nom d'équipe n'est pas pris (optionnel, mais recommandé)
-      if (userType === "manager") {
-        // Logique de vérification équipe ici si nécessaire
-      }
-
-      // Hasher le mot de passe
+      // 2. Hasher le mot de passe
       const hashedPassword = await bcrypt.hash(password, 12);
+
+      // 3. Génération du token de vérification
+      // Utilisation de node:crypto qui est maintenant sûr
+      const verificationToken = crypto.randomBytes(32).toString("hex");
+      const tokenExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24h
 
       // Définir les valeurs football (null si manager)
       const dbPosition = userType === "manager" ? null : position || "any";
       const dbSkillLevel =
         userType === "manager" ? null : skillLevel || "amateur";
 
-      // Créer l'utilisateur
-      // Note: Assurez-vous d'avoir ajouté la colonne user_type dans votre table users !
+      // 4. Créer l'utilisateur (is_verified = false par défaut)
       const [result] = await db.execute(
-        `INSERT INTO users (email, password, first_name, last_name, phone, birth_date, user_type, position, skill_level, location_city) 
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO users 
+        (email, password, first_name, last_name, phone, birth_date, user_type, position, skill_level, location_city, verification_token, verification_token_expires_at, is_verified) 
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, false)`,
         [
           email,
           hashedPassword,
@@ -101,14 +103,15 @@ router.post(
           dbPosition,
           dbSkillLevel,
           locationCity || null,
+          verificationToken,
+          tokenExpiresAt,
         ]
       );
 
       const newUserId = result.insertId;
 
-      // === LOGIQUE SPÉCIALE MANAGER : CRÉATION D'ÉQUIPE ===
+      // === LOGIQUE MANAGER : CRÉATION D'ÉQUIPE ===
       if (userType === "manager") {
-        // 1. Créer l'équipe
         const [teamResult] = await db.execute(
           `INSERT INTO teams (name, captain_id, skill_level, location_city, max_players) 
            VALUES (?, ?, 'amateur', ?, 15)`,
@@ -117,37 +120,34 @@ router.post(
 
         const newTeamId = teamResult.insertId;
 
-        // 2. Ajouter le manager comme membre (capitaine)
         await db.execute(
           "INSERT INTO team_members (team_id, user_id, role) VALUES (?, ?, 'captain')",
           [newTeamId, newUserId]
         );
 
-        // 3. Initialiser les stats
         await db.execute("INSERT INTO team_stats (team_id) VALUES (?)", [
           newTeamId,
         ]);
       }
 
-      // Générer le token JWT
-      const token = jwt.sign(
-        { userId: newUserId, email, userType }, // On ajoute userType au token
-        process.env.JWT_SECRET,
-        { expiresIn: "24h" }
-      );
-
-      res.status(201).json({
-        message: "User created successfully",
-        token,
-        user: {
-          id: newUserId,
+      // 5. Envoyer l'email de confirmation
+      try {
+        await EmailService.sendVerificationEmail(
           email,
-          firstName,
-          lastName,
-          userType,
-          position: dbPosition,
-          skillLevel: dbSkillLevel,
-        },
+          verificationToken,
+          firstName
+        );
+      } catch (emailError) {
+        console.error("Failed to send verification email:", emailError);
+        // On ne bloque pas l'inscription, mais le user devra demander un renvoi
+      }
+
+      // 6. Réponse (Sans Token JWT car email non vérifié)
+      res.status(201).json({
+        message:
+          "Registration successful. Please check your email to verify your account.",
+        userId: newUserId,
+        requiresVerification: true,
       });
     } catch (error) {
       console.error("Signup error:", error);
@@ -156,7 +156,7 @@ router.post(
   }
 );
 
-// Connexion
+// --- CONNEXION ---
 router.post(
   "/login",
   [
@@ -165,7 +165,6 @@ router.post(
   ],
   async (req, res) => {
     try {
-      // Validation des entrées
       const errors = validationResult(req);
       if (!errors.isEmpty()) {
         return res.status(400).json({ errors: errors.array() });
@@ -173,9 +172,9 @@ router.post(
 
       const { email, password } = req.body;
 
-      // Trouver l'utilisateur
+      // Trouver l'utilisateur + vérifier is_verified
       const [users] = await db.execute(
-        "SELECT id, email, password, first_name, last_name, user_type, position, skill_level, is_active FROM users WHERE email = ?",
+        "SELECT id, email, password, first_name, last_name, user_type, position, skill_level, is_active, is_verified, verification_token FROM users WHERE email = ?",
         [email]
       );
 
@@ -193,6 +192,15 @@ router.post(
       const isValidPassword = await bcrypt.compare(password, user.password);
       if (!isValidPassword) {
         return res.status(401).json({ error: "Invalid credentials" });
+      }
+
+      // [NOUVEAU] Vérifier si l'email est confirmé
+      if (!user.is_verified) {
+        return res.status(403).json({
+          error: "Email not verified",
+          message: "Please verify your email address to login.",
+          requiresVerification: true, // Flag pour le frontend
+        });
       }
 
       // Générer le token JWT
@@ -222,18 +230,113 @@ router.post(
   }
 );
 
-// Vérification du token
+// --- VÉRIFICATION EMAIL ---
+router.get("/verify-email", async (req, res) => {
+  try {
+    const { token } = req.query;
+
+    if (!token) {
+      return res.status(400).json({ error: "Token is required" });
+    }
+
+    const [users] = await db.execute(
+      "SELECT id, email, first_name FROM users WHERE verification_token = ? AND verification_token_expires_at > NOW()",
+      [token]
+    );
+
+    if (users.length === 0) {
+      return res
+        .status(400)
+        .json({ error: "Invalid or expired verification link" });
+    }
+
+    const user = users[0];
+
+    // Valider le compte
+    await db.execute(
+      "UPDATE users SET is_verified = true, verification_token = NULL, verification_token_expires_at = NULL WHERE id = ?",
+      [user.id]
+    );
+
+    // Email de bienvenue
+    try {
+      await EmailService.sendWelcomeEmail(user.email, user.first_name);
+    } catch (e) {
+      console.error("Welcome email error:", e);
+    }
+
+    res.json({ message: "Email verified successfully. You can now login." });
+  } catch (error) {
+    console.error("Verification error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// --- RENVOI EMAIL CONFIRMATION ---
+router.post(
+  "/resend-verification",
+  [body("email").isEmail()],
+  async (req, res) => {
+    try {
+      const { email } = req.body;
+
+      const [users] = await db.execute(
+        "SELECT id, first_name, is_verified FROM users WHERE email = ?",
+        [email]
+      );
+
+      if (users.length === 0)
+        return res.status(404).json({ error: "User not found" });
+      if (users[0].is_verified)
+        return res.status(400).json({ error: "Account already verified" });
+
+      const verificationToken = crypto.randomBytes(32).toString("hex");
+      const tokenExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+
+      await db.execute(
+        "UPDATE users SET verification_token = ?, verification_token_expires_at = ? WHERE id = ?",
+        [verificationToken, tokenExpiresAt, users[0].id]
+      );
+
+      await EmailService.sendVerificationEmail(
+        email,
+        verificationToken,
+        users[0].first_name
+      );
+
+      res.json({ message: "Verification email sent" });
+    } catch (error) {
+      console.error("Resend verification error:", error);
+      res.status(500).json({ error: "Server error" });
+    }
+  }
+);
+
+// Vérification du token (Session)
 router.get("/verify", authenticateToken, (req, res) => {
   res.json({
     valid: true,
-    user: req.user,
+
+    user: {
+      id: req.user.id,
+      email: req.user.email,
+      firstName: req.user.first_name,
+      lastName: req.user.last_name,
+      userType: req.user.user_type,
+      position: req.user.position,
+      skillLevel: req.user.skill_level,
+    },
   });
 });
 
 // Rafraîchissement du token
 router.post("/refresh", authenticateToken, (req, res) => {
   const token = jwt.sign(
-    { userId: req.user.id, email: req.user.email, userType: req.user.user_type },
+    {
+      userId: req.user.id,
+      email: req.user.email,
+      userType: req.user.user_type,
+    },
     process.env.JWT_SECRET,
     { expiresIn: "24h" }
   );

@@ -19,8 +19,7 @@ export const useAuth = () => {
   return context;
 };
 
-const API_BASE_URL =
-  process.env.REACT_APP_API_URL || "http://localhost:5000/api";
+const API_BASE_URL = process.env.REACT_APP_API_URL;
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
@@ -40,8 +39,6 @@ export const AuthProvider = ({ children }) => {
         if (error.response?.status === 401) {
           localStorage.removeItem("token");
           setUser(null);
-          // On évite window.location.reload() pour ne pas perdre l'état,
-          // le routeur redirigera vers /login grâce à ProtectedRoute
         }
         return Promise.reject(error);
       }
@@ -83,25 +80,54 @@ export const AuthProvider = ({ children }) => {
       toast.success("Connexion réussie !");
       return { success: true };
     } catch (error) {
-      const message = error.response?.data?.error || "Erreur de connexion";
+      const message =
+        error.response?.data?.error ||
+        error.response?.data?.message ||
+        "Erreur de connexion";
       toast.error(message);
       return { success: false, error: message };
     }
   }, []);
 
+  // MODIFIÉ : Signup ne connecte plus automatiquement, mais renvoie un succès pour afficher le message "Vérifiez vos emails"
   const signup = useCallback(async (userData) => {
     try {
       const response = await axios.post(
-        `${API_BASE_URL}/auth/signup`,
+        `${API_BASE_URL}/auth/signup`, // Attention: vérifiez si votre route est /signup ou /register dans le backend
         userData
       );
-      const { token, user } = response.data;
-      localStorage.setItem("token", token);
-      setUser(user);
-      toast.success("Inscription réussie !");
-      return { success: true };
+      // On ne set PAS le token ici car l'email doit être vérifié d'abord
+      toast.success("Inscription réussie ! Vérifiez vos emails.");
+      return { success: true, message: response.data.message };
     } catch (error) {
       const message = error.response?.data?.error || "Erreur d'inscription";
+      toast.error(message);
+      return { success: false, error: message };
+    }
+  }, []);
+
+  // NOUVEAU : Fonction de vérification d'email
+  const verifyEmail = useCallback(async (token) => {
+    try {
+      const response = await axios.get(`${API_BASE_URL}/auth/verify-email`, {
+        params: { token },
+      });
+      toast.success("Email vérifié avec succès !");
+      return { success: true, message: response.data.message };
+    } catch (error) {
+      const message = error.response?.data?.error || "Lien invalide ou expiré";
+      return { success: false, error: message };
+    }
+  }, []);
+
+  // NOUVEAU : Fonction de renvoi d'email
+  const resendVerification = useCallback(async (email) => {
+    try {
+      await axios.post(`${API_BASE_URL}/auth/resend-verification`, { email });
+      toast.success("Email de vérification renvoyé !");
+      return { success: true };
+    } catch (error) {
+      const message = error.response?.data?.error || "Erreur lors de l'envoi";
       toast.error(message);
       return { success: false, error: message };
     }
@@ -111,15 +137,13 @@ export const AuthProvider = ({ children }) => {
     localStorage.removeItem("token");
     setUser(null);
     toast.success("Déconnexion réussie");
-    // Optionnel : rediriger explicitement si besoin
-    window.location.href = "/login";
+    // window.location.href = "/login"; // Utiliser navigate dans le composant est préférable, mais ceci fonctionne
   }, []);
 
   const updateUser = useCallback((userData) => {
     setUser((prev) => ({ ...prev, ...userData }));
   }, []);
 
-  // CRITIQUE : useMemo empêche la boucle de rendu infinie
   const value = useMemo(
     () => ({
       user,
@@ -128,8 +152,19 @@ export const AuthProvider = ({ children }) => {
       signup,
       logout,
       updateUser,
+      verifyEmail, // Exporté
+      resendVerification, // Exporté
     }),
-    [user, loading, login, signup, logout, updateUser]
+    [
+      user,
+      loading,
+      login,
+      signup,
+      logout,
+      updateUser,
+      verifyEmail,
+      resendVerification,
+    ]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
