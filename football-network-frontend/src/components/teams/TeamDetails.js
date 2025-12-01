@@ -27,6 +27,7 @@ import DeleteTeamModal from "./DeleteTeamModal";
 import InvitePlayerModal from "./InvitePlayerModal";
 import TeamInvitations from "./TeamInvitations";
 import TeamMediaManager from "./TeamMediaManager";
+import SetCaptainModal from "./SetCaptainModal";
 
 const API_BASE_URL =
   process.env.REACT_APP_API_URL || "http://localhost:5000/api";
@@ -46,6 +47,7 @@ const TeamDetails = () => {
   const [showEditModal, setShowEditModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showInviteModal, setShowInviteModal] = useState(false);
+  const [showSetCaptainModal, setShowSetCaptainModal] = useState(false);
 
   const isManager = user?.userType === "manager";
 
@@ -60,6 +62,8 @@ const TeamDetails = () => {
         axios.get(`${API_BASE_URL}/teams/${teamId}`),
         axios.get(`${API_BASE_URL}/matches?teamId=${teamId}&limit=20`),
       ]);
+
+      console.log("first", teamRes.data);
       setTeam(teamRes.data);
       setMatches(matchesRes.data);
     } catch (error) {
@@ -125,7 +129,7 @@ const TeamDetails = () => {
     navigate("/teams");
   };
 
-  const isOwner = team?.userRole === "captain";
+  const isOwner = team?.userRole === "captain" || team?.userRole === "manager";
   const isMember = team?.userRole != null;
 
   const tabs = [
@@ -215,6 +219,19 @@ const TeamDetails = () => {
                           <UserPlus className="w-4 h-4 mr-3 text-green-500" />{" "}
                           Inviter
                         </button>
+                        {/* Bouton Désigner capitaine - uniquement pour les managers */}
+                        {team?.userRole === "manager" && (
+                          <button
+                            onClick={() => {
+                              setShowSetCaptainModal(true);
+                              setShowMenu(false);
+                            }}
+                            className="w-full px-4 py-3 hover:bg-gray-50 text-left flex items-center text-gray-700 text-sm font-medium"
+                          >
+                            <Crown className="w-4 h-4 mr-3 text-yellow-500" />{" "}
+                            Désigner capitaine
+                          </button>
+                        )}
                         <div className="border-t border-gray-100 my-1"></div>
                         <button
                           onClick={() => {
@@ -390,12 +407,19 @@ const TeamDetails = () => {
           }}
         />
       )}
+      {showSetCaptainModal && (
+        <SetCaptainModal
+          team={team}
+          onClose={() => setShowSetCaptainModal(false)}
+          onCaptainSet={() => {
+            setShowSetCaptainModal(false);
+            loadTeamData();
+          }}
+        />
+      )}
     </div>
   );
 };
-
-// ... (Les composants OverviewTab, StatBox, MembersTab, MatchesTab restent identiques)
-// Je les inclus pour que le fichier soit complet
 
 const OverviewTab = ({ team }) => (
   <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

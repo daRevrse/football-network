@@ -39,7 +39,7 @@ const MyTeams = () => {
   const [filterRole, setFilterRole] = useState("all");
   const [sortBy, setSortBy] = useState("name");
 
-  // Rôle Manager
+  // Rôle Manager - Seul un manager peut créer une équipe
   const isManager = user?.userType === "manager";
 
   useEffect(() => {
@@ -255,13 +255,16 @@ const MyTeams = () => {
             </div>
           </div>
 
-          <button
-            onClick={() => setShowCreateModal(true)}
-            className="group flex items-center px-6 py-3 bg-green-500 text-white rounded-xl font-bold hover:bg-green-400 transition-all shadow-lg shadow-green-500/20 hover:shadow-green-500/40 transform hover:-translate-y-0.5"
-          >
-            <Plus className="w-5 h-5 mr-2 group-hover:rotate-90 transition-transform" />
-            {isManager ? "Créer une autre équipe" : "Créer une équipe"}
-          </button>
+          {/* Seuls les managers peuvent créer des équipes */}
+          {isManager && (
+            <button
+              onClick={() => setShowCreateModal(true)}
+              className="group flex items-center px-6 py-3 bg-green-500 text-white rounded-xl font-bold hover:bg-green-400 transition-all shadow-lg shadow-green-500/20 hover:shadow-green-500/40 transform hover:-translate-y-0.5"
+            >
+              <Plus className="w-5 h-5 mr-2 group-hover:rotate-90 transition-transform" />
+              {teams.length > 0 ? "Créer une autre équipe" : "Créer mon équipe"}
+            </button>
+          )}
         </div>
       </div>
 
@@ -329,14 +332,16 @@ const MyTeams = () => {
           <p className="text-gray-500 max-w-md mx-auto mb-6">
             {isManager
               ? "Vous n'avez pas encore d'équipe. Créez-en une pour commencer votre carrière de manager."
-              : "Vous ne faites partie d'aucune équipe pour le moment. Rejoignez une équipe existante ou créez la vôtre."}
+              : "Vous ne faites partie d'aucune équipe pour le moment. Contactez un manager pour rejoindre une équipe."}
           </p>
-          <button
-            onClick={() => setShowCreateModal(true)}
-            className="text-green-600 font-bold hover:text-green-700 hover:underline"
-          >
-            Créer ma première équipe &rarr;
-          </button>
+          {isManager && (
+            <button
+              onClick={() => setShowCreateModal(true)}
+              className="text-green-600 font-bold hover:text-green-700 hover:underline"
+            >
+              Créer ma première équipe &rarr;
+            </button>
+          )}
         </div>
       ) : filteredTeams.length === 0 ? (
         <div className="text-center py-12">

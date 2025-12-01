@@ -28,6 +28,13 @@ router.post(
         return res.status(400).json({ errors: errors.array() });
       }
 
+      // CORRECTION : Seuls les managers peuvent créer des équipes
+      if (req.user.userType !== "manager") {
+        return res.status(403).json({
+          error: "Only managers can create teams. Players must be invited by a manager.",
+        });
+      }
+
       const {
         name,
         description,
@@ -47,15 +54,16 @@ router.post(
         return res.status(400).json({ error: "Maximum 3 teams per user" });
       }
 
-      // Créer l'équipe
+      // Créer l'équipe (captain_id sera NULL initialement car le manager n'est pas un joueur)
+      // Le manager devra désigner un capitaine parmi les joueurs de l'équipe
       const [result] = await db.execute(
-        `INSERT INTO teams (name, description, captain_id, skill_level, max_players, 
-                         location_city, location_lat, location_lng) 
+        `INSERT INTO teams (name, description, captain_id, skill_level, max_players,
+                         location_city, location_lat, location_lng)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           name,
           description || null,
-          req.user.id,
+          null, // Pas de capitaine au départ, le manager devra en désigner un
           skillLevel || "amateur",
           maxPlayers || 15,
           locationCity || null,
@@ -64,10 +72,10 @@ router.post(
         ]
       );
 
-      // Ajouter le capitaine à l'équipe
+      // Ajouter le manager à l'équipe avec le rôle "manager"
       await db.execute(
         "INSERT INTO team_members (team_id, user_id, role) VALUES (?, ?, ?)",
-        [result.insertId, req.user.id, "captain"]
+        [result.insertId, req.user.id, "manager"]
       );
 
       // Initialiser les stats de l'équipe
@@ -506,6 +514,77 @@ router.post("/:id/join", authenticateToken, async (req, res) => {
   }
 });
 
+// POST /api/teams/:id/set-captain - Désigner un capitaine (manager uniquement, joueur uniquement)
+router.post("/:id/set-captain", authenticateToken, async (req, res) => {
+  try {
+    const teamId = req.params.id;
+    const { playerId } = req.body;
+
+    if (!playerId) {
+      return res.status(400).json({ error: "Player ID is required" });
+    }
+
+    // Vérifier que l'utilisateur est le manager de l'équipe
+    const [managerCheck] = await db.execute(
+      'SELECT tm.role, t.captain_id FROM team_members tm JOIN teams t ON tm.team_id = t.id WHERE tm.team_id = ? AND tm.user_id = ? AND tm.is_active = true',
+      [teamId, req.user.id]
+    );
+
+    if (managerCheck.length === 0 || managerCheck[0].role !== "manager") {
+      return res.status(403).json({
+        error: "Only the team manager can designate a captain",
+      });
+    }
+
+    // Vérifier que le joueur existe et est de type 'player'
+    const [playerCheck] = await db.execute(
+      "SELECT u.user_type FROM users u JOIN team_members tm ON u.id = tm.user_id WHERE u.id = ? AND tm.team_id = ? AND tm.is_active = true",
+      [playerId, teamId]
+    );
+
+    if (playerCheck.length === 0) {
+      return res.status(404).json({
+        error: "Player not found in this team",
+      });
+    }
+
+    if (playerCheck[0].user_type !== "player") {
+      return res.status(400).json({
+        error: "Only players can be designated as captain. Managers cannot be captains.",
+      });
+    }
+
+    // Retirer le rôle de capitaine à l'ancien capitaine (s'il existe)
+    const oldCaptainId = managerCheck[0].captain_id;
+    if (oldCaptainId) {
+      await db.execute(
+        'UPDATE team_members SET role = "player" WHERE team_id = ? AND user_id = ? AND is_active = true',
+        [teamId, oldCaptainId]
+      );
+    }
+
+    // Désigner le nouveau capitaine
+    await db.execute(
+      'UPDATE team_members SET role = "captain" WHERE team_id = ? AND user_id = ?',
+      [teamId, playerId]
+    );
+
+    // Mettre à jour captain_id dans la table teams
+    await db.execute(
+      'UPDATE teams SET captain_id = ? WHERE id = ?',
+      [playerId, teamId]
+    );
+
+    res.json({
+      message: "Captain designated successfully",
+      captainId: playerId,
+    });
+  } catch (error) {
+    console.error("Set captain error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 // DELETE /api/teams/:id/leave - Quitter une équipe
 router.delete("/:id/leave", authenticateToken, async (req, res) => {
   try {
@@ -520,9 +599,16 @@ router.delete("/:id/leave", authenticateToken, async (req, res) => {
       return res.status(400).json({ error: "Not a member of this team" });
     }
 
+    // Le capitaine et le manager ne peuvent pas quitter l'équipe
     if (membership[0].role === "captain") {
       return res.status(400).json({
-        error: "Captain cannot leave team. Transfer captaincy or delete team.",
+        error: "Captain cannot leave team. Ask the manager to transfer captaincy first.",
+      });
+    }
+
+    if (membership[0].role === "manager") {
+      return res.status(400).json({
+        error: "Manager cannot leave team. You must delete the team or transfer management.",
       });
     }
 
@@ -565,10 +651,14 @@ router.put(
         [teamId, req.user.id]
       );
 
-      if (membership.length === 0 || membership[0].role !== "captain") {
+      // Seuls le manager et le capitaine peuvent modifier l'équipe
+      if (
+        membership.length === 0 ||
+        (membership[0].role !== "captain" && membership[0].role !== "manager")
+      ) {
         return res
           .status(403)
-          .json({ error: "Only team captain can update team" });
+          .json({ error: "Only team captain or manager can update team" });
       }
 
       const {
@@ -653,16 +743,19 @@ router.post(
       const teamId = req.params.id;
       const { userIdOrEmail, message } = req.body;
 
-      // Vérifier que l'utilisateur est capitaine
-      const [teamCheck] = await db.execute(
-        "SELECT id, name FROM teams WHERE id = ? AND captain_id = ?",
+      // Vérifier que l'utilisateur est capitaine ou manager
+      const [teamMembership] = await db.execute(
+        "SELECT tm.role, t.id, t.name FROM teams t JOIN team_members tm ON t.id = tm.team_id WHERE t.id = ? AND tm.user_id = ? AND tm.is_active = true",
         [teamId, req.user.id]
       );
 
-      if (teamCheck.length === 0) {
+      if (
+        teamMembership.length === 0 ||
+        (teamMembership[0].role !== "captain" && teamMembership[0].role !== "manager")
+      ) {
         return res
           .status(403)
-          .json({ error: "Only team captain can invite players" });
+          .json({ error: "Only team captain or manager can invite players" });
       }
 
       let userId = null;
@@ -827,16 +920,19 @@ router.post(
       const teamId = req.params.id;
       const { email, message } = req.body;
 
-      // Vérifier que l'utilisateur est capitaine
-      const [teamCheck] = await db.execute(
-        "SELECT id, name FROM teams WHERE id = ? AND captain_id = ?",
+      // Vérifier que l'utilisateur est capitaine ou manager
+      const [teamMembership] = await db.execute(
+        "SELECT tm.role, t.id, t.name FROM teams t JOIN team_members tm ON t.id = tm.team_id WHERE t.id = ? AND tm.user_id = ? AND tm.is_active = true",
         [teamId, req.user.id]
       );
 
-      if (teamCheck.length === 0) {
+      if (
+        teamMembership.length === 0 ||
+        (teamMembership[0].role !== "captain" && teamMembership[0].role !== "manager")
+      ) {
         return res
           .status(403)
-          .json({ error: "Only team captain can invite players" });
+          .json({ error: "Only team captain or manager can invite players" });
       }
 
       // Vérifier si l'utilisateur existe
@@ -915,16 +1011,19 @@ router.get("/:id/invitations", authenticateToken, async (req, res) => {
     const teamId = req.params.id;
     const { status = "all", limit = 20, offset = 0 } = req.query;
 
-    // Vérifier que l'utilisateur est capitaine de l'équipe
-    const [captainCheck] = await db.execute(
-      'SELECT team_id FROM team_members WHERE user_id = ? AND team_id = ? AND role = "captain" AND is_active = true',
+    // Vérifier que l'utilisateur est capitaine ou manager de l'équipe
+    const [memberCheck] = await db.execute(
+      'SELECT role FROM team_members WHERE user_id = ? AND team_id = ? AND is_active = true',
       [req.user.id, teamId]
     );
 
-    if (captainCheck.length === 0) {
+    if (
+      memberCheck.length === 0 ||
+      (memberCheck[0].role !== "captain" && memberCheck[0].role !== "manager")
+    ) {
       return res
         .status(403)
-        .json({ error: "Only team captain can view team invitations" });
+        .json({ error: "Only team captain or manager can view team invitations" });
     }
 
     let query = `
@@ -982,16 +1081,19 @@ router.delete(
       const teamId = req.params.id;
       const invitationId = req.params.invitationId;
 
-      // Vérifier que l'utilisateur est capitaine de l'équipe
-      const [captainCheck] = await db.execute(
-        'SELECT team_id FROM team_members WHERE user_id = ? AND team_id = ? AND role = "captain" AND is_active = true',
+      // Vérifier que l'utilisateur est capitaine ou manager de l'équipe
+      const [memberCheck] = await db.execute(
+        'SELECT role FROM team_members WHERE user_id = ? AND team_id = ? AND is_active = true',
         [req.user.id, teamId]
       );
 
-      if (captainCheck.length === 0) {
+      if (
+        memberCheck.length === 0 ||
+        (memberCheck[0].role !== "captain" && memberCheck[0].role !== "manager")
+      ) {
         return res
           .status(403)
-          .json({ error: "Only team captain can cancel invitations" });
+          .json({ error: "Only team captain or manager can cancel invitations" });
       }
 
       // Vérifier que l'invitation existe et est en attente

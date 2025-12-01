@@ -49,8 +49,8 @@ const CreateTeamModal = ({ onClose, onTeamCreated }) => {
       const newTeam = {
         id: response.data.teamId,
         ...data,
-        currentPlayers: 1,
-        role: "captain",
+        currentPlayers: 0, // Pas de joueurs au départ (le manager n'est pas compté)
+        role: "manager", // Le créateur est le manager, pas le capitaine
         stats: { matchesPlayed: 0, matchesWon: 0, averageRating: 0 },
         createdAt: new Date().toISOString(),
       };

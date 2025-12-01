@@ -13,18 +13,17 @@ import {
   Loader2,
   Search,
   MapPin,
-  ChevronRight,
+  ArrowRight,
   Star,
-  Filter,
   Image as ImageIcon,
   Send,
+  LogIn,
+  UserPlus,
 } from "lucide-react";
 
-const API_BASE_URL =
-  process.env.REACT_APP_API_URL || "http://localhost:5000/api";
+const API_BASE_URL = process.env.REACT_APP_API_URL;
 
-// --- Composants Utilitaires (Skeletons, Badges) ---
-
+// --- SKELETONS ---
 const SidebarSkeleton = () => (
   <div className="bg-white rounded-xl shadow-sm p-4 mb-4 animate-pulse">
     <div className="h-5 bg-gray-200 rounded w-1/2 mb-4"></div>
@@ -56,6 +55,7 @@ const PostSkeleton = () => (
   </div>
 );
 
+// --- CONFIGURATION TYPES POST ---
 const POST_TYPES = {
   match_announcement: {
     label: "Match",
@@ -85,6 +85,7 @@ const POST_TYPES = {
 
 const LandingFeed = () => {
   const { token, user } = useAuth();
+  const isAuthenticated = !!user; // Booléen pour vérifier l'état
 
   // États des Données
   const [posts, setPosts] = useState([]);
@@ -97,7 +98,6 @@ const LandingFeed = () => {
   const [createContent, setCreateContent] = useState("");
   const [createType, setCreateType] = useState("general");
   const [isCreating, setIsCreating] = useState(false);
-  const [showFilters, setShowFilters] = useState(false);
   const [activeFilter, setActiveFilter] = useState("all");
 
   // Pagination
@@ -109,7 +109,7 @@ const LandingFeed = () => {
 
   useEffect(() => {
     loadSidebarData();
-  }, []);
+  }, [isAuthenticated]); // Recharger si l'état de connexion change
 
   useEffect(() => {
     setPage(0);
@@ -117,31 +117,41 @@ const LandingFeed = () => {
     setHasMore(true);
     loadFeed(0, true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeFilter]);
+  }, [activeFilter, isAuthenticated]);
 
   const loadSidebarData = async () => {
     try {
       setLoadingSidebar(true);
-      // On tente de charger les suggestions. Si une route échoue (404), on ne bloque pas tout.
+
+      // Configuration headers conditionnelle
+      const config = token
+        ? { headers: { Authorization: `Bearer ${token}` } }
+        : {};
+
       const fetchSafely = async (url) => {
         try {
-          const res = await axios.get(url, {
-            headers: { Authorization: `Bearer ${token}` },
-          });
+          const res = await axios.get(url, config);
           return res.data;
         } catch (e) {
-          console.warn(`Failed to fetch ${url}`, e.message);
+          // On ignore silencieusement les erreurs 401/403 pour les invités
           return null;
         }
       };
 
-      const [teamsData, matchesData] = await Promise.all([
-        fetchSafely(`${API_BASE_URL}/teams/suggestions?limit=5`),
+      // Si invité, on charge uniquement les tendances publiques
+      const requests = [
         fetchSafely(`${API_BASE_URL}/matches/trending?limit=5`),
-      ]);
+      ];
 
-      if (teamsData?.teams) setSuggestedTeams(teamsData.teams);
+      // Si connecté, on charge aussi les suggestions personnalisées
+      if (isAuthenticated) {
+        requests.push(fetchSafely(`${API_BASE_URL}/teams/suggestions?limit=5`));
+      }
+
+      const [matchesData, teamsData] = await Promise.all(requests);
+
       if (matchesData?.matches) setTrendingMatches(matchesData.matches);
+      if (teamsData?.teams) setSuggestedTeams(teamsData.teams);
     } catch (error) {
       console.error("Sidebar error:", error);
     } finally {
@@ -155,11 +165,14 @@ const LandingFeed = () => {
       const offset = pageNum * 10;
       const typeQuery = activeFilter !== "all" ? `&type=${activeFilter}` : "";
 
+      // Configuration headers conditionnelle
+      const config = token
+        ? { headers: { Authorization: `Bearer ${token}` } }
+        : {};
+
       const res = await axios.get(
         `${API_BASE_URL}/feed?limit=10&offset=${offset}${typeQuery}`,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
+        config
       );
 
       setPosts((prev) =>
@@ -195,7 +208,7 @@ const LandingFeed = () => {
   // --- Actions ---
 
   const handleCreatePost = async () => {
-    if (!createContent.trim()) return;
+    if (!createContent.trim() || !isAuthenticated) return;
     setIsCreating(true);
     try {
       const res = await axios.post(
@@ -214,6 +227,11 @@ const LandingFeed = () => {
   };
 
   const handleLike = async (postId, liked) => {
+    if (!isAuthenticated) {
+      alert("Connectez-vous pour aimer ce post !");
+      return;
+    }
+
     // Optimistic Update
     setPosts((prev) =>
       prev.map((p) =>
@@ -234,7 +252,7 @@ const LandingFeed = () => {
         headers: { Authorization: `Bearer ${token}` },
       });
     } catch (error) {
-      // Rollback en cas d'erreur
+      // Rollback
       setPosts((prev) =>
         prev.map((p) =>
           p.id === postId
@@ -313,10 +331,12 @@ const LandingFeed = () => {
         ref={isLast ? lastPostRef : null}
         className="bg-white rounded-xl shadow-sm mb-5 overflow-hidden border border-gray-100"
       >
-        {/* Header du Post */}
         <div className="p-4 flex justify-between items-start">
           <div className="flex items-center space-x-3">
-            <Link to={`/profile/${post.author?.id}`} className="block">
+            <Link
+              to={isAuthenticated ? `/profile/${post.author?.id}` : "#"}
+              className="block"
+            >
               <div className="w-10 h-10 rounded-full bg-gradient-to-r from-green-400 to-blue-500 flex items-center justify-center text-white font-bold shadow-sm">
                 {post.author?.profilePicture ? (
                   <img
@@ -355,14 +375,12 @@ const LandingFeed = () => {
           </div>
         </div>
 
-        {/* Contenu */}
         <div className="px-4 pb-2">
           <p className="text-gray-800 whitespace-pre-line leading-relaxed">
             {post.content}
           </p>
         </div>
 
-        {/* Média */}
         {post.media && (
           <div className="mt-2 mb-4 bg-black">
             <img
@@ -373,7 +391,6 @@ const LandingFeed = () => {
           </div>
         )}
 
-        {/* Footer Actions */}
         <div className="px-4 py-3 border-t border-gray-50 flex items-center justify-between mt-2">
           <div className="flex space-x-6">
             <button
@@ -406,129 +423,175 @@ const LandingFeed = () => {
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          {/* 1. Navigation Gauche (Optionnelle, cachée sur mobile) */}
+          {/* 1. GAUCHE : Profil ou Invitation à rejoindre */}
           <div className="hidden lg:block lg:col-span-3 space-y-6">
-            <div className="bg-white rounded-xl shadow-sm p-6 text-center">
-              <div className="w-20 h-20 mx-auto rounded-full bg-gray-100 mb-3 overflow-hidden">
-                {user?.profilePicture ? (
-                  <img
-                    src={user.profilePicture}
-                    alt=""
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  <Users className="w-10 h-10 m-5 text-gray-400" />
-                )}
-              </div>
-              <h2 className="font-bold text-gray-900 text-lg">
-                {user?.first_name} {user?.last_name}
-              </h2>
-              <p className="text-sm text-gray-500 mb-4">
-                {user?.position || "Joueur passionné"}
-              </p>
-              <div className="flex justify-center space-x-4 text-sm border-t pt-4">
-                <div>
-                  <div className="font-bold text-gray-900">12</div>
-                  <div className="text-gray-400 text-xs">Matchs</div>
+            {isAuthenticated ? (
+              // VERSION CONNECTÉE
+              <div className="bg-white rounded-xl shadow-sm p-6 text-center sticky top-24">
+                <div className="w-20 h-20 mx-auto rounded-full bg-gray-100 mb-3 overflow-hidden">
+                  {user?.profilePicture ? (
+                    <img
+                      src={user.profilePicture}
+                      alt=""
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <Users className="w-10 h-10 m-5 text-gray-400" />
+                  )}
                 </div>
-                <div>
-                  <div className="font-bold text-gray-900">3</div>
-                  <div className="text-gray-400 text-xs">Équipes</div>
+                <h2 className="font-bold text-gray-900 text-lg">
+                  {user?.firstName} {user?.lastName}
+                </h2>
+                <p className="text-sm text-gray-500 mb-4">
+                  {user?.position || "Joueur passionné"}
+                </p>
+                <div className="flex justify-center space-x-4 text-sm border-t pt-4">
+                  <div>
+                    <div className="font-bold text-gray-900">12</div>
+                    <div className="text-gray-400 text-xs">Matchs</div>
+                  </div>
+                  <div>
+                    <div className="font-bold text-gray-900">3</div>
+                    <div className="text-gray-400 text-xs">Équipes</div>
+                  </div>
                 </div>
-              </div>
-            </div>
 
-            <div className="bg-white rounded-xl shadow-sm p-4">
-              <h3 className="font-bold text-gray-400 text-xs uppercase tracking-wider mb-3">
-                Raccourcis
-              </h3>
-              <ul className="space-y-2">
-                <li>
+                <div className="mt-6 text-left">
+                  <h3 className="font-bold text-gray-400 text-xs uppercase tracking-wider mb-3">
+                    Raccourcis
+                  </h3>
+                  <ul className="space-y-2">
+                    <li>
+                      <Link
+                        to="/matches"
+                        className="flex items-center text-gray-700 hover:bg-gray-50 p-2 rounded-lg transition"
+                      >
+                        <Calendar className="w-5 h-5 mr-3 text-green-600" /> Mes
+                        Matchs
+                      </Link>
+                    </li>
+                    <li>
+                      <Link
+                        to="/teams"
+                        className="flex items-center text-gray-700 hover:bg-gray-50 p-2 rounded-lg transition"
+                      >
+                        <Users className="w-5 h-5 mr-3 text-blue-600" /> Mes
+                        Équipes
+                      </Link>
+                    </li>
+                  </ul>
+                </div>
+              </div>
+            ) : (
+              // VERSION INVITÉ
+              <div className="bg-white rounded-xl shadow-sm p-6 sticky top-24">
+                <div className="text-center mb-6">
+                  <div className="w-16 h-16 bg-green-100 rounded-2xl mx-auto mb-4 flex items-center justify-center transform -rotate-6">
+                    <Trophy className="w-8 h-8 text-green-600" />
+                  </div>
+                  <h2 className="text-xl font-bold text-gray-900">
+                    Rejoignez le terrain
+                  </h2>
+                  <p className="text-sm text-gray-500 mt-2">
+                    Connectez-vous pour interagir, créer des équipes et
+                    organiser des matchs.
+                  </p>
+                </div>
+                <div className="space-y-3">
                   <Link
-                    to="/matches"
-                    className="flex items-center text-gray-700 hover:bg-gray-50 p-2 rounded-lg transition"
+                    to="/login"
+                    className="flex items-center justify-center w-full py-2.5 px-4 border border-gray-200 rounded-xl text-gray-700 font-medium hover:bg-gray-50 transition"
                   >
-                    <Calendar className="w-5 h-5 mr-3 text-green-600" /> Mes
-                    Matchs
+                    <LogIn className="w-4 h-4 mr-2" /> Se connecter
                   </Link>
-                </li>
-                <li>
                   <Link
-                    to="/teams"
-                    className="flex items-center text-gray-700 hover:bg-gray-50 p-2 rounded-lg transition"
+                    to="/signup"
+                    className="flex items-center justify-center w-full py-2.5 px-4 bg-green-600 text-white rounded-xl font-medium hover:bg-green-700 transition shadow-lg shadow-green-600/20"
                   >
-                    <Users className="w-5 h-5 mr-3 text-blue-600" /> Mes Équipes
+                    <UserPlus className="w-4 h-4 mr-2" /> Créer un compte
                   </Link>
-                </li>
-                <li>
-                  <Link
-                    to="/teams/search"
-                    className="flex items-center text-gray-700 hover:bg-gray-50 p-2 rounded-lg transition"
-                  >
-                    <Search className="w-5 h-5 mr-3 text-purple-600" /> Trouver
-                    une équipe
-                  </Link>
-                </li>
-              </ul>
-            </div>
+                </div>
+              </div>
+            )}
           </div>
 
-          {/* 2. Feed Central */}
+          {/* 2. CENTRE : Feed */}
           <main className="lg:col-span-6">
-            {/* Création de Post */}
-            <div className="bg-white rounded-xl shadow-sm p-4 mb-6">
-              <div className="flex space-x-3">
-                <div className="w-10 h-10 rounded-full bg-green-100 flex-shrink-0 flex items-center justify-center text-green-700 font-bold">
-                  {user?.first_name?.[0]}
-                </div>
-                <div className="flex-1">
-                  <textarea
-                    value={createContent}
-                    onChange={(e) => setCreateContent(e.target.value)}
-                    placeholder="Quoi de neuf sur le terrain ?"
-                    className="w-full border-none resize-none focus:ring-0 text-gray-700 text-lg h-16 placeholder-gray-400"
-                  />
-                  {/* Type Selector */}
-                  <div className="flex flex-wrap gap-2 mt-2 pb-2 border-b border-gray-50">
-                    {Object.entries(POST_TYPES).map(([key, conf]) => (
-                      <button
-                        key={key}
-                        onClick={() => setCreateType(key)}
-                        className={`text-xs px-3 py-1 rounded-full transition flex items-center ${
-                          createType === key
-                            ? `${conf.bg} ${conf.color} ring-1 ring-current`
-                            : "bg-gray-50 text-gray-500 hover:bg-gray-100"
-                        }`}
-                      >
-                        <conf.icon className="w-3 h-3 mr-1" /> {conf.label}
-                      </button>
-                    ))}
+            {/* Zone de création OU Bannière de bienvenue */}
+            {isAuthenticated ? (
+              <div className="bg-white rounded-xl shadow-sm p-4 mb-6">
+                <div className="flex space-x-3">
+                  <div className="w-10 h-10 rounded-full bg-green-100 flex-shrink-0 flex items-center justify-center text-green-700 font-bold">
+                    {user?.firstName?.[0]}
                   </div>
-                  <div className="flex justify-between items-center mt-3">
-                    <div className="flex space-x-2">
-                      <button className="p-2 text-gray-400 hover:bg-gray-100 rounded-full transition">
-                        <ImageIcon className="w-5 h-5" />
-                      </button>
-                      <button className="p-2 text-gray-400 hover:bg-gray-100 rounded-full transition">
-                        <MapPin className="w-5 h-5" />
+                  <div className="flex-1">
+                    <textarea
+                      value={createContent}
+                      onChange={(e) => setCreateContent(e.target.value)}
+                      placeholder="Quoi de neuf sur le terrain ?"
+                      className="w-full border-none resize-none focus:ring-0 text-gray-700 text-lg h-16 placeholder-gray-400"
+                    />
+                    <div className="flex flex-wrap gap-2 mt-2 pb-2 border-b border-gray-50">
+                      {Object.entries(POST_TYPES).map(([key, conf]) => (
+                        <button
+                          key={key}
+                          onClick={() => setCreateType(key)}
+                          className={`text-xs px-3 py-1 rounded-full transition flex items-center ${
+                            createType === key
+                              ? `${conf.bg} ${conf.color} ring-1 ring-current`
+                              : "bg-gray-50 text-gray-500 hover:bg-gray-100"
+                          }`}
+                        >
+                          <conf.icon className="w-3 h-3 mr-1" /> {conf.label}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="flex justify-between items-center mt-3">
+                      <div className="flex space-x-2">
+                        <button className="p-2 text-gray-400 hover:bg-gray-100 rounded-full transition">
+                          <ImageIcon className="w-5 h-5" />
+                        </button>
+                        <button className="p-2 text-gray-400 hover:bg-gray-100 rounded-full transition">
+                          <MapPin className="w-5 h-5" />
+                        </button>
+                      </div>
+                      <button
+                        onClick={handleCreatePost}
+                        disabled={isCreating || !createContent.trim()}
+                        className="bg-green-600 text-white px-6 py-2 rounded-full font-medium shadow-md hover:bg-green-700 transition disabled:opacity-50 flex items-center"
+                      >
+                        {isCreating && (
+                          <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                        )}
+                        Publier
                       </button>
                     </div>
-                    <button
-                      onClick={handleCreatePost}
-                      disabled={isCreating || !createContent.trim()}
-                      className="bg-green-600 text-white px-6 py-2 rounded-full font-medium shadow-md hover:bg-green-700 transition disabled:opacity-50 flex items-center"
-                    >
-                      {isCreating && (
-                        <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                      )}
-                      Publier
-                    </button>
                   </div>
                 </div>
               </div>
-            </div>
+            ) : (
+              <div className="bg-gradient-to-r from-green-600 to-teal-600 rounded-2xl shadow-lg p-8 mb-8 text-white relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-64 h-64 bg-white opacity-10 rounded-full -mr-16 -mt-16 blur-3xl"></div>
+                <div className="relative z-10">
+                  <h1 className="text-3xl font-bold mb-2">
+                    Bienvenue sur Football Network ⚽
+                  </h1>
+                  <p className="text-green-50 mb-6 max-w-xl">
+                    La plateforme ultime pour gérer vos équipes, organiser des
+                    matchs et trouver des joueurs. Rejoignez la communauté dès
+                    maintenant !
+                  </p>
+                  <Link
+                    to="/signup"
+                    className="inline-flex items-center px-6 py-3 bg-white text-green-700 font-bold rounded-xl hover:bg-gray-50 transition shadow-md"
+                  >
+                    Commencer l'aventure <ArrowRight className="ml-2 w-5 h-5" />
+                  </Link>
+                </div>
+              </div>
+            )}
 
-            {/* Filtres Rapides */}
+            {/* Filtres */}
             <div className="flex items-center justify-between mb-4 overflow-x-auto pb-2 scrollbar-hide">
               <h3 className="font-bold text-lg text-gray-800 mr-4">
                 Actualités
@@ -567,7 +630,7 @@ const LandingFeed = () => {
               </div>
             </div>
 
-            {/* Posts */}
+            {/* Liste des Posts */}
             <div className="space-y-6">
               {loadingFeed && page === 0 ? (
                 <>
@@ -583,7 +646,9 @@ const LandingFeed = () => {
                     C'est calme par ici
                   </h3>
                   <p className="text-gray-500 text-sm mt-1">
-                    Soyez le premier à publier quelque chose !
+                    {isAuthenticated
+                      ? "Soyez le premier à publier quelque chose !"
+                      : "Connectez-vous pour participer à la conversation."}
                   </p>
                 </div>
               ) : (
@@ -604,10 +669,9 @@ const LandingFeed = () => {
             </div>
           </main>
 
-          {/* 3. Sidebar Droite (Tendances) */}
+          {/* 3. DROITE : Tendances (Toujours visible) */}
           <aside className="hidden lg:block lg:col-span-3 space-y-6">
-            {/* Matchs Populaires */}
-            <div className="bg-white rounded-xl shadow-sm overflow-hidden border border-gray-100">
+            <div className="bg-white rounded-xl shadow-sm overflow-hidden border border-gray-100 sticky top-24">
               <div className="p-4 border-b border-gray-50 flex justify-between items-center bg-gradient-to-r from-white to-gray-50">
                 <h3 className="font-bold text-gray-800 flex items-center">
                   <Trophy className="w-4 h-4 mr-2 text-yellow-500" /> A
@@ -637,38 +701,35 @@ const LandingFeed = () => {
               </div>
             </div>
 
-            {/* Suggestions Équipes */}
-            <div className="bg-white rounded-xl shadow-sm overflow-hidden border border-gray-100">
-              <div className="p-4 border-b border-gray-50 flex justify-between items-center bg-gradient-to-r from-white to-gray-50">
-                <h3 className="font-bold text-gray-800 flex items-center">
-                  <Star className="w-4 h-4 mr-2 text-green-500" /> Clubs à
-                  suivre
-                </h3>
-                <Link
-                  to="/teams/search"
-                  className="text-xs text-blue-600 font-medium hover:underline"
-                >
-                  Voir tout
-                </Link>
+            {/* Suggestions (Uniquement si connecté) */}
+            {isAuthenticated && (
+              <div className="bg-white rounded-xl shadow-sm overflow-hidden border border-gray-100">
+                <div className="p-4 border-b border-gray-50 flex justify-between items-center bg-gradient-to-r from-white to-gray-50">
+                  <h3 className="font-bold text-gray-800 flex items-center">
+                    <Star className="w-4 h-4 mr-2 text-green-500" /> Clubs à
+                    suivre
+                  </h3>
+                  <Link
+                    to="/teams/search"
+                    className="text-xs text-blue-600 font-medium hover:underline"
+                  >
+                    Voir tout
+                  </Link>
+                </div>
+                <div className="p-4 space-y-2">
+                  {suggestedTeams.length === 0 ? (
+                    <div className="text-center text-gray-400 text-xs">
+                      Aucune suggestion
+                    </div>
+                  ) : (
+                    suggestedTeams.map((team) => (
+                      <TeamSuggestion key={team.id} team={team} />
+                    ))
+                  )}
+                </div>
               </div>
-              <div className="p-4 space-y-2">
-                {loadingSidebar ? (
-                  <div className="text-center text-gray-400 text-sm">
-                    Chargement...
-                  </div>
-                ) : suggestedTeams.length === 0 ? (
-                  <div className="text-center text-gray-400 text-xs">
-                    Aucune suggestion
-                  </div>
-                ) : (
-                  suggestedTeams.map((team) => (
-                    <TeamSuggestion key={team.id} team={team} />
-                  ))
-                )}
-              </div>
-            </div>
+            )}
 
-            {/* Footer */}
             <div className="text-center text-xs text-gray-400 px-6 leading-relaxed">
               <p>Football Network © 2025</p>
               <div className="flex justify-center space-x-2 mt-1">

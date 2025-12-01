@@ -33,7 +33,7 @@ const TeamCard = ({ team, onLeaveTeam, isOwner, onEditTeam, onDeleteTeam }) => {
   };
 
   const winRate =
-    team.stats.matchesPlayed > 0
+    team.stats?.matchesPlayed > 0
       ? Math.round((team.stats.matchesWon / team.stats.matchesPlayed) * 100)
       : 0;
 
@@ -172,21 +172,21 @@ const TeamCard = ({ team, onLeaveTeam, isOwner, onEditTeam, onDeleteTeam }) => {
         <div className="grid grid-cols-3 gap-2 mb-5 bg-gray-50 rounded-xl p-3">
           <div className="text-center">
             <div className="text-sm font-bold text-gray-900">
-              {team.stats.matchesPlayed}
+              {team.stats?.matchesPlayed || 0}
             </div>
             <div className="text-[10px] text-gray-500">Matchs</div>
           </div>
           <div className="text-center border-l border-gray-200">
             <div className="text-sm font-bold text-gray-900">
-              {team.currentPlayers}
+              {team.currentPlayers || 0}
             </div>
             <div className="text-[10px] text-gray-500">Joueurs</div>
           </div>
           <div className="text-center border-l border-gray-200">
             <div className="text-sm font-bold text-gray-900 flex items-center justify-center">
-              {/* {team.stats.averageRating > 0
-                ? team.stats.averageRating.toFixed(1)
-                : "-"}{" "} */}
+              {team.stats?.averageRating && Number(team.stats.averageRating) > 0
+                ? Number(team.stats.averageRating).toFixed(1)
+                : "-"}
               <Star className="w-3 h-3 text-yellow-400 ml-1 fill-current" />
             </div>
             <div className="text-[10px] text-gray-500">Note</div>
