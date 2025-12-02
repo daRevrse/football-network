@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { yupResolver } from "@hookform/resolvers/yup";
@@ -13,8 +13,8 @@ import {
   MapPin,
   Trophy,
   Loader2,
-  Briefcase, // Nouvel icône pour Manager
-  Shield, // Nouvel icône pour Équipe
+  Briefcase,
+  Shield,
 } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
 
@@ -218,14 +218,16 @@ const Signup = () => {
                   icon={User}
                   name="firstName"
                   label="Prénom *"
-                  placeholder="Kylian"
+                  placeholder={userType === "manager" ? "Carlos" : "Jude"}
                   error={errors.firstName}
                 />
                 <InputField
                   icon={User}
                   name="lastName"
                   label="Nom *"
-                  placeholder="Mbappé"
+                  placeholder={
+                    userType === "manager" ? "Ancelotti" : "Bellingham"
+                  }
                   error={errors.lastName}
                 />
               </div>
@@ -246,7 +248,7 @@ const Signup = () => {
                 name="phone"
                 type="tel"
                 label="Téléphone"
-                placeholder="06 12 34 56 78"
+                placeholder="90 90 90 90"
                 error={errors.phone}
               />
             </div>

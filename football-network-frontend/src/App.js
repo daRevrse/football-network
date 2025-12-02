@@ -1,4 +1,3 @@
-import React from "react";
 import {
   BrowserRouter as Router,
   Routes,
@@ -22,11 +21,14 @@ import ForgotPassword from "./components/auth/ForgotPassword";
 import ResetPassword from "./components/auth/ResetPassword";
 import Dashboard from "./components/Dashboard";
 import Profile from "./components/Profile";
+import PublicProfile from "./components/PublicProfile";
 import MyTeams from "./components/teams/MyTeams";
 import SearchTeams from "./components/teams/SearchTeams";
+import PublicTeamProfile from "./components/teams/PublicTeamProfile";
 import Invitations from "./components/matches/Invitations";
 import MatchDetails from "./components/matches/MatchDetails";
 import Matches from "./components/matches/Matches";
+import CreateMatch from "./components/matches/CreateMatch";
 import Calendar from "./components/calendar/Calendar";
 import TeamDetails from "./components/teams/TeamDetails";
 import PlayerInvitations from "./components/invitations/PlayerInvitations";
@@ -37,6 +39,7 @@ import MyPendingParticipations from "./components/matches/MyPendingParticipation
 import PendingParticipations from "./components/participations/PendingParticipations";
 import Feed from "./components/Feed";
 import LandingFeed from "./components/LandingFeed";
+import ImprovedFeed from "./components/ImprovedFeed";
 import VenueSearch from "./components/venues/VenueSearch";
 import VenueDetails from "./components/venues/VenueDetails";
 import RefereeSearch from "./components/referees/RefereeSearch";
@@ -60,6 +63,7 @@ import {
   SuperadminOnlyRoute,
 } from "./components/routes/RoleProtectedRoute";
 import PlayerSearch from "./components/teams/PlayerSearch";
+import VerifyEmail from "./components/auth/VerifyEmail";
 
 // --- NOUVEAU COMPOSANT : Gestion intelligente de la racine "/" ---
 const RootRoute = () => {
@@ -204,6 +208,14 @@ function App() {
                   }
                 />
                 <Route
+                  path="/verify-email"
+                  element={
+                    <PublicRoute>
+                      <VerifyEmail />
+                    </PublicRoute>
+                  }
+                />
+                <Route
                   path="/forgot-password"
                   element={
                     <PublicRoute>
@@ -238,10 +250,26 @@ function App() {
                   }
                 />
                 <Route
+                  path="/users/:userId"
+                  element={
+                    <ProtectedRoute>
+                      <PublicProfile />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
                   path="/feed"
                   element={
                     <ProtectedRoute>
                       <Feed />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/feed/improved"
+                  element={
+                    <ProtectedRoute>
+                      <ImprovedFeed />
                     </ProtectedRoute>
                   }
                 />
@@ -268,6 +296,14 @@ function App() {
                   element={
                     <ProtectedRoute>
                       <TeamDetails />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/teams/:teamId/public"
+                  element={
+                    <ProtectedRoute>
+                      <PublicTeamProfile />
                     </ProtectedRoute>
                   }
                 />
@@ -360,6 +396,14 @@ function App() {
                   element={
                     <ManagerOnlyRoute>
                       <Matches />
+                    </ManagerOnlyRoute>
+                  }
+                />
+                <Route
+                  path="/matches/create"
+                  element={
+                    <ManagerOnlyRoute>
+                      <CreateMatch />
                     </ManagerOnlyRoute>
                   }
                 />

@@ -3,8 +3,21 @@ const { body, validationResult } = require("express-validator");
 const db = require("../config/database");
 const { authenticateToken } = require("../middleware/auth");
 const NotificationService = require("../services/NotificationService");
+const crypto = require("node:crypto");
 
 const router = express.Router();
+
+// Middleware interne pour vérifier les permissions Admin d'équipe (Manager ou Capitaine)
+const checkTeamAdminPermission = async (userId, teamId) => {
+  const [membership] = await db.execute(
+    "SELECT role FROM team_members WHERE team_id = ? AND user_id = ? AND is_active = true",
+    [teamId, userId]
+  );
+
+  if (membership.length === 0) return false;
+  return ["captain", "manager"].includes(membership[0].role);
+};
+
 // POST /api/teams - Créer une nouvelle équipe
 router.post(
   "/",
@@ -48,6 +61,7 @@ router.post(
       }
 
       // Créer l'équipe
+      // NOTE: captain_id agit ici comme "Owner ID" / "Creator ID"
       const [result] = await db.execute(
         `INSERT INTO teams (name, description, captain_id, skill_level, max_players, 
                          location_city, location_lat, location_lng) 
@@ -64,13 +78,15 @@ router.post(
         ]
       );
 
-      // Ajouter le capitaine à l'équipe
+      // Déterminer le rôle initial : si userType est manager -> 'manager', sinon 'captain'
+      const initialRole =
+        req.user.userType === "manager" ? "manager" : "captain";
+
       await db.execute(
         "INSERT INTO team_members (team_id, user_id, role) VALUES (?, ?, ?)",
-        [result.insertId, req.user.id, "captain"]
+        [result.insertId, req.user.id, initialRole]
       );
 
-      // Initialiser les stats de l'équipe
       await db.execute("INSERT INTO team_stats (team_id) VALUES (?)", [
         result.insertId,
       ]);
@@ -83,8 +99,7 @@ router.post(
           name,
           description,
           captainId: req.user.id,
-          skillLevel: skillLevel || "amateur",
-          maxPlayers: maxPlayers || 15,
+          role: initialRole,
         },
       });
     } catch (error) {
@@ -94,7 +109,235 @@ router.post(
   }
 );
 
-// GET /api/teams - Rechercher des équipes
+// GET /api/teams/suggestions - Suggestions d'équipes à rejoindre (Public)
+router.get("/suggestions", async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit) || 5;
+
+    // On sélectionne des équipes actives aléatoires (ou les plus récentes)
+    // On joint avec uploads pour avoir le logo
+    const [teams] = await db.execute(
+      `SELECT t.id, t.name, t.location_city, t.skill_level,
+              u.stored_filename as logo_filename
+       FROM teams t
+       LEFT JOIN uploads u ON t.logo_id = u.id AND u.is_active = true
+       WHERE t.is_active = true
+       ORDER BY t.created_at DESC
+       LIMIT ?`,
+      [limit]
+    );
+
+    const formattedTeams = teams.map((t) => ({
+      id: t.id,
+      name: t.name,
+      city: t.location_city,
+      skill_level: t.skill_level,
+      logo_url: t.logo_filename ? `/uploads/teams/${t.logo_filename}` : null,
+    }));
+
+    res.json({ teams: formattedTeams });
+  } catch (error) {
+    console.error("Get team suggestions error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// GET /api/teams/feed/activities - Get activity feed from followed teams
+router.get("/feed/activities", authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const limit = parseInt(req.query.limit) || 20;
+
+    // Récupérer les activités des équipes suivies
+    const [activities] = await db.execute(
+      `SELECT
+        'match' as activity_type,
+        m.id as activity_id,
+        m.match_date as activity_date,
+        t.id as team_id,
+        t.name as team_name,
+        logo.stored_filename as team_logo,
+        m.opponent_name,
+        m.team_score,
+        m.opponent_score,
+        m.location,
+        NULL as member_first_name,
+        NULL as member_last_name
+      FROM matches m
+      INNER JOIN teams t ON m.team_id = t.id
+      INNER JOIN team_followers tf ON tf.team_id = t.id
+      LEFT JOIN uploads logo ON t.logo_id = logo.id AND logo.is_active = true
+      WHERE tf.user_id = ? AND m.match_date <= NOW()
+
+      UNION ALL
+
+      SELECT
+        'new_member' as activity_type,
+        tm.id as activity_id,
+        tm.joined_at as activity_date,
+        t.id as team_id,
+        t.name as team_name,
+        logo.stored_filename as team_logo,
+        NULL as opponent_name,
+        NULL as team_score,
+        NULL as opponent_score,
+        NULL as location,
+        u.first_name as member_first_name,
+        u.last_name as member_last_name
+      FROM team_members tm
+      INNER JOIN teams t ON tm.team_id = t.id
+      INNER JOIN team_followers tf ON tf.team_id = t.id
+      INNER JOIN users u ON tm.user_id = u.id
+      LEFT JOIN uploads logo ON t.logo_id = logo.id AND logo.is_active = true
+      WHERE tf.user_id = ? AND tm.role != 'manager'
+
+      ORDER BY activity_date DESC
+      LIMIT ?`,
+      [userId, userId, limit]
+    );
+
+    // Formater les activités
+    const formattedActivities = activities.map((activity) => {
+      const baseActivity = {
+        id: activity.activity_id,
+        type: activity.activity_type,
+        date: activity.activity_date,
+        team: {
+          id: activity.team_id,
+          name: activity.team_name,
+          logoUrl: activity.team_logo
+            ? `/uploads/teams/${activity.team_logo}`
+            : null,
+        },
+      };
+
+      if (activity.activity_type === "match") {
+        return {
+          ...baseActivity,
+          match: {
+            opponent: activity.opponent_name,
+            teamScore: activity.team_score,
+            opponentScore: activity.opponent_score,
+            location: activity.location,
+            result:
+              activity.team_score > activity.opponent_score
+                ? "win"
+                : activity.team_score < activity.opponent_score
+                ? "loss"
+                : "draw",
+          },
+        };
+      } else if (activity.activity_type === "new_member") {
+        return {
+          ...baseActivity,
+          member: {
+            firstName: activity.member_first_name,
+            lastName: activity.member_last_name,
+          },
+        };
+      }
+
+      return baseActivity;
+    });
+
+    res.json({ activities: formattedActivities });
+  } catch (error) {
+    console.error("Get feed activities error:", error);
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+
+// POST /api/teams/:id/follow - Follow a team
+router.post("/:id/follow", authenticateToken, async (req, res) => {
+  try {
+    const teamId = parseInt(req.params.id);
+    const userId = req.user.id;
+
+    // Vérifier que l'équipe existe
+    const [teams] = await db.execute(
+      "SELECT id FROM teams WHERE id = ? AND is_active = true",
+      [teamId]
+    );
+
+    if (teams.length === 0) {
+      return res.status(404).json({ error: "Équipe non trouvée" });
+    }
+
+    // Vérifier si l'utilisateur n'est pas déjà abonné
+    const [existing] = await db.execute(
+      "SELECT id FROM team_followers WHERE user_id = ? AND team_id = ?",
+      [userId, teamId]
+    );
+
+    if (existing.length > 0) {
+      return res.status(400).json({ error: "Vous suivez déjà cette équipe" });
+    }
+
+    // Ajouter l'abonnement
+    await db.execute(
+      "INSERT INTO team_followers (user_id, team_id) VALUES (?, ?)",
+      [userId, teamId]
+    );
+
+    res.json({ success: true, message: "Équipe suivie avec succès" });
+  } catch (error) {
+    console.error("Follow team error:", error);
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+
+// POST /api/teams/:id/unfollow - Unfollow a team
+router.post("/:id/unfollow", authenticateToken, async (req, res) => {
+  try {
+    const teamId = parseInt(req.params.id);
+    const userId = req.user.id;
+
+    // Supprimer l'abonnement
+    const [result] = await db.execute(
+      "DELETE FROM team_followers WHERE user_id = ? AND team_id = ?",
+      [userId, teamId]
+    );
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ error: "Vous ne suivez pas cette équipe" });
+    }
+
+    res.json({ success: true, message: "Équipe retirée des abonnements" });
+  } catch (error) {
+    console.error("Unfollow team error:", error);
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+
+// GET /api/teams/:id/followers - Get team followers count and current user status
+router.get("/:id/followers", authenticateToken, async (req, res) => {
+  try {
+    const teamId = parseInt(req.params.id);
+    const userId = req.user.id;
+
+    // Compter le nombre d'abonnés
+    const [countResult] = await db.execute(
+      "SELECT COUNT(*) as count FROM team_followers WHERE team_id = ?",
+      [teamId]
+    );
+
+    // Vérifier si l'utilisateur actuel suit l'équipe
+    const [userFollows] = await db.execute(
+      "SELECT id FROM team_followers WHERE user_id = ? AND team_id = ?",
+      [userId, teamId]
+    );
+
+    res.json({
+      followersCount: countResult[0].count,
+      isFollowing: userFollows.length > 0,
+    });
+  } catch (error) {
+    console.error("Get followers error:", error);
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+
+// GET /api/teams - Rechercher des équipes (Inchangé)
 router.get("/", authenticateToken, async (req, res) => {
   try {
     const {
@@ -108,7 +351,6 @@ router.get("/", authenticateToken, async (req, res) => {
       offset = 0,
     } = req.query;
 
-    // CORRECTION : Jointure supplémentaire avec users (u_mem) pour filtrer le count
     let query = `
       SELECT t.id, t.name, t.description, t.skill_level, t.max_players,
              t.location_city, t.location_lat, t.location_lng, t.created_at,
@@ -181,14 +423,8 @@ router.get("/", authenticateToken, async (req, res) => {
       if (team.banner_variants) {
         try {
           const variants = JSON.parse(team.banner_variants);
-          bannerUrl =
-            variants.medium?.path ||
-            variants.large?.path ||
-            variants.small?.path ||
-            null;
-        } catch (e) {
-          console.error("Error parsing banner variants:", e);
-        }
+          bannerUrl = variants.medium?.path || variants.large?.path || null;
+        } catch (e) {}
       }
 
       return {
@@ -197,7 +433,7 @@ router.get("/", authenticateToken, async (req, res) => {
         description: team.description,
         skillLevel: team.skill_level,
         maxPlayers: team.max_players,
-        currentPlayers: team.current_players, // Contient maintenant uniquement les joueurs
+        currentPlayers: team.current_players,
         locationCity: team.location_city,
         logoUrl: team.logo_filename
           ? `/uploads/teams/${team.logo_filename}`
@@ -224,32 +460,19 @@ router.get("/", authenticateToken, async (req, res) => {
   }
 });
 
-// GET /api/teams/my - Récupérer les équipes de l'utilisateur (avec logo)
+// GET /api/teams/my - Récupérer les équipes de l'utilisateur (Inchangé)
 router.get("/my", authenticateToken, async (req, res) => {
   try {
-    // CORRECTION : Jointure u_mem2 pour filtrer le count des joueurs
     const [teams] = await db.execute(
       `SELECT
-          t.id,
-          t.name,
-          t.description,
-          t.skill_level,
-          t.max_players,
-          t.location_city,
-          t.created_at,
-          t.logo_id,
-          t.banner_id,
+          t.id, t.name, t.description, t.skill_level, t.max_players, t.location_city, t.created_at,
+          t.logo_id, t.banner_id,
           logo_up.stored_filename AS logo_filename,
-          logo_up.file_path AS logo_path,
           banner_up.stored_filename AS banner_filename,
           banner_up.variants AS banner_variants,
           tm.role,
-          
           COUNT(CASE WHEN u_mem2.user_type = 'player' THEN 1 END) AS current_players,
-          
-          ts.matches_played,
-          ts.matches_won,
-          ts.average_rating
+          ts.matches_played, ts.matches_won, ts.average_rating
        FROM teams t
        JOIN team_members tm ON t.id = tm.team_id
        LEFT JOIN team_members tm2 ON t.id = tm2.team_id AND tm2.is_active = true
@@ -257,19 +480,8 @@ router.get("/my", authenticateToken, async (req, res) => {
        LEFT JOIN team_stats ts ON t.id = ts.team_id
        LEFT JOIN uploads logo_up ON t.logo_id = logo_up.id AND logo_up.is_active = true
        LEFT JOIN uploads banner_up ON t.banner_id = banner_up.id AND banner_up.is_active = true
-       WHERE tm.user_id = ?
-         AND tm.is_active = true
-         AND t.is_active = true
-       GROUP BY
-         t.id,
-         tm.role,
-         ts.matches_played,
-         ts.matches_won,
-         ts.average_rating,
-         logo_up.stored_filename,
-         logo_up.file_path,
-         banner_up.stored_filename,
-         banner_up.variants
+       WHERE tm.user_id = ? AND tm.is_active = true AND t.is_active = true
+       GROUP BY t.id, tm.role, ts.matches_played, ts.matches_won, ts.average_rating, logo_up.stored_filename, banner_up.stored_filename, banner_up.variants
        ORDER BY tm.role DESC, t.created_at DESC`,
       [req.user.id]
     );
@@ -279,14 +491,8 @@ router.get("/my", authenticateToken, async (req, res) => {
       if (team.banner_variants) {
         try {
           const variants = JSON.parse(team.banner_variants);
-          bannerUrl =
-            variants.medium?.path ||
-            variants.large?.path ||
-            variants.small?.path ||
-            null;
-        } catch (e) {
-          console.error("Error parsing banner variants:", e);
-        }
+          bannerUrl = variants.medium?.path || variants.large?.path || null;
+        } catch (e) {}
       }
 
       return {
@@ -318,12 +524,11 @@ router.get("/my", authenticateToken, async (req, res) => {
   }
 });
 
-// GET /api/teams/:id - Récupérer les détails d'une équipe avec logo
+// GET /api/teams/:id - Récupérer les détails (CORRIGÉ voir réponse précédente)
 router.get("/:id", authenticateToken, async (req, res) => {
   try {
     const teamId = req.params.id;
 
-    // Récupérer les informations de l'équipe + logo + banner
     const [teams] = await db.execute(
       `SELECT t.id, t.name, t.description, t.skill_level, t.max_players,
               t.location_city, t.location_lat, t.location_lng, t.created_at,
@@ -332,7 +537,7 @@ router.get("/:id", authenticateToken, async (req, res) => {
               u.last_name as captain_last_name, u.email as captain_email,
               ts.matches_played, ts.matches_won, ts.matches_drawn, ts.matches_lost,
               ts.goals_scored, ts.goals_conceded, ts.average_rating,
-              logo_up.stored_filename as logo_filename, logo_up.file_path as logo_path,
+              logo_up.stored_filename as logo_filename,
               banner_up.stored_filename as banner_filename, banner_up.variants as banner_variants
        FROM teams t
        JOIN users u ON t.captain_id = u.id
@@ -348,42 +553,43 @@ router.get("/:id", authenticateToken, async (req, res) => {
     }
 
     const team = teams[0];
-
-    // URL Logo
     const logoUrl = team.logo_filename
       ? `/uploads/teams/${team.logo_filename}`
       : null;
-
-    // URL Bannière
     let bannerUrl = null;
     if (team.banner_variants) {
       try {
         const variants = JSON.parse(team.banner_variants);
-        bannerUrl =
-          variants.medium?.path ||
-          variants.large?.path ||
-          variants.small?.path ||
-          null;
-      } catch (e) {
-        console.error("Error parsing banner variants:", e);
-      }
+        bannerUrl = variants.medium?.path || variants.large?.path || null;
+      } catch (e) {}
     }
 
-    // CORRECTION : Récupérer u.user_type pour le filtrage
+    // CORRECTION : Tri pour mettre Manager/Captain en premier
     const [members] = await db.execute(
       `SELECT u.id, u.first_name, u.last_name, u.position, u.skill_level, u.user_type,
-              tm.role, tm.joined_at
+              tm.role, tm.joined_at, pp.stored_filename as profile_picture
        FROM team_members tm
        JOIN users u ON tm.user_id = u.id
+       LEFT JOIN uploads pp ON u.profile_picture_id = pp.id
        WHERE tm.team_id = ? AND tm.is_active = true
-       ORDER BY tm.role DESC, tm.joined_at ASC`,
+       ORDER BY 
+         CASE 
+           WHEN tm.role = 'manager' THEN 1
+           WHEN tm.role = 'captain' THEN 2
+           WHEN tm.role = 'vice-captain' THEN 3
+           ELSE 4
+         END ASC, tm.joined_at ASC`,
       [teamId]
     );
 
     const userMembership = members.find((member) => member.id === req.user.id);
-
-    // Calculer le nombre de joueurs (exclure les managers)
     const playerCount = members.filter((m) => m.user_type === "player").length;
+
+    // Trouver le vrai leader (manager ou captain) dans la liste des membres
+    const leader =
+      members.find((m) => m.role === "manager") ||
+      members.find((m) => m.role === "captain") ||
+      {};
 
     res.json({
       id: team.id,
@@ -391,17 +597,16 @@ router.get("/:id", authenticateToken, async (req, res) => {
       description: team.description,
       skillLevel: team.skill_level,
       maxPlayers: team.max_players,
-      currentPlayers: playerCount, // Utilisation du compte filtré
+      currentPlayers: playerCount,
       locationCity: team.location_city,
-      coordinates: {
-        lat: team.location_lat,
-        lng: team.location_lng,
-      },
+      coordinates: { lat: team.location_lat, lng: team.location_lng },
+      // On renvoie le rôle réel du leader
       captain: {
         id: team.captain_id,
         firstName: team.captain_first_name,
         lastName: team.captain_last_name,
         email: team.captain_email,
+        role: leader.role || "captain",
       },
       logoUrl,
       bannerUrl,
@@ -412,9 +617,12 @@ router.get("/:id", authenticateToken, async (req, res) => {
         lastName: member.last_name,
         position: member.position,
         skillLevel: member.skill_level,
-        userType: member.user_type, // Renvoi du type pour le frontend
+        userType: member.user_type,
         role: member.role,
         joinedAt: member.joined_at,
+        profilePictureUrl: member.profile_picture
+          ? `/uploads/users/${member.profile_picture}`
+          : null,
       })),
       stats: {
         matchesPlayed: team.matches_played || 0,
@@ -434,16 +642,12 @@ router.get("/:id", authenticateToken, async (req, res) => {
   }
 });
 
-// POST /api/teams/:id/join - Rejoindre une équipe
+// POST /api/teams/:id/join (Inchangé)
 router.post("/:id/join", authenticateToken, async (req, res) => {
   try {
     const teamId = req.params.id;
-
-    // CORRECTION : Compter uniquement les joueurs pour vérifier la capacité
     const [teams] = await db.execute(
-      `SELECT t.max_players, 
-              COUNT(CASE WHEN u.user_type = 'player' THEN 1 END) as current_players, 
-              t.name
+      `SELECT t.max_players, COUNT(CASE WHEN u.user_type = 'player' THEN 1 END) as current_players, t.name
        FROM teams t
        LEFT JOIN team_members tm ON t.id = tm.team_id AND tm.is_active = true
        LEFT JOIN users u ON tm.user_id = u.id
@@ -452,43 +656,34 @@ router.post("/:id/join", authenticateToken, async (req, res) => {
       [teamId]
     );
 
-    if (teams.length === 0) {
+    if (teams.length === 0)
       return res.status(404).json({ error: "Team not found" });
-    }
-
-    const team = teams[0];
-    if (team.current_players >= team.max_players) {
+    if (teams[0].current_players >= teams[0].max_players)
       return res.status(400).json({ error: "Team is full" });
-    }
 
-    // Vérifier invitation acceptée (Code existant...)
     const [acceptedInvitation] = await db.execute(
       'SELECT id FROM player_invitations WHERE team_id = ? AND user_id = ? AND status = "accepted"',
       [teamId, req.user.id]
     );
 
     if (acceptedInvitation.length === 0) {
-      return res.status(403).json({
-        error:
-          "You need an accepted invitation to join this team. Please ask the team captain to invite you.",
-      });
+      return res
+        .status(403)
+        .json({ error: "You need an accepted invitation to join this team." });
     }
 
-    // Vérifier membership existant
     const [existingMember] = await db.execute(
       "SELECT id, is_active FROM team_members WHERE team_id = ? AND user_id = ?",
       [teamId, req.user.id]
     );
 
     if (existingMember.length > 0) {
-      if (existingMember[0].is_active) {
-        return res.status(400).json({ error: "Already a member of this team" });
-      } else {
-        await db.execute(
-          "UPDATE team_members SET is_active = true, joined_at = CURRENT_TIMESTAMP WHERE team_id = ? AND user_id = ?",
-          [teamId, req.user.id]
-        );
-      }
+      if (existingMember[0].is_active)
+        return res.status(400).json({ error: "Already a member" });
+      await db.execute(
+        "UPDATE team_members SET is_active = true, joined_at = CURRENT_TIMESTAMP WHERE team_id = ? AND user_id = ?",
+        [teamId, req.user.id]
+      );
     } else {
       await db.execute(
         "INSERT INTO team_members (team_id, user_id, role) VALUES (?, ?, ?)",
@@ -496,33 +691,30 @@ router.post("/:id/join", authenticateToken, async (req, res) => {
       );
     }
 
-    res.json({
-      message: "Successfully joined team",
-      teamName: team.name,
-    });
+    res.json({ message: "Successfully joined team", teamName: teams[0].name });
   } catch (error) {
     console.error("Join team error:", error);
     res.status(500).json({ error: "Internal server error" });
   }
 });
 
-// DELETE /api/teams/:id/leave - Quitter une équipe
+// DELETE /api/teams/:id/leave (CORRIGÉ : Support Manager)
 router.delete("/:id/leave", authenticateToken, async (req, res) => {
   try {
     const teamId = req.params.id;
-
     const [membership] = await db.execute(
       "SELECT role FROM team_members WHERE team_id = ? AND user_id = ? AND is_active = true",
       [teamId, req.user.id]
     );
 
-    if (membership.length === 0) {
-      return res.status(400).json({ error: "Not a member of this team" });
-    }
+    if (membership.length === 0)
+      return res.status(400).json({ error: "Not a member" });
 
-    if (membership[0].role === "captain") {
+    // Bloquer le départ si c'est le leader (Captain OU Manager)
+    if (["captain", "manager"].includes(membership[0].role)) {
       return res.status(400).json({
-        error: "Captain cannot leave team. Transfer captaincy or delete team.",
+        error:
+          "Team leader cannot leave team. Transfer leadership or delete team.",
       });
     }
 
@@ -538,7 +730,7 @@ router.delete("/:id/leave", authenticateToken, async (req, res) => {
   }
 });
 
-// PUT /api/teams/:id - Mettre à jour une équipe
+// PUT /api/teams/:id - Update Team (CORRIGÉ : Support Manager)
 router.put(
   "/:id",
   [
@@ -554,21 +746,17 @@ router.put(
   async (req, res) => {
     try {
       const errors = validationResult(req);
-      if (!errors.isEmpty()) {
+      if (!errors.isEmpty())
         return res.status(400).json({ errors: errors.array() });
-      }
 
       const teamId = req.params.id;
 
-      const [membership] = await db.execute(
-        "SELECT role FROM team_members WHERE team_id = ? AND user_id = ? AND is_active = true",
-        [teamId, req.user.id]
-      );
-
-      if (membership.length === 0 || membership[0].role !== "captain") {
+      // Vérification permissions étendue (Manager OU Captain)
+      const isAdmin = await checkTeamAdminPermission(req.user.id, teamId);
+      if (!isAdmin) {
         return res
           .status(403)
-          .json({ error: "Only team captain can update team" });
+          .json({ error: "Only team leader can update team" });
       }
 
       const {
@@ -579,7 +767,6 @@ router.put(
         locationCity,
         coordinates,
       } = req.body;
-
       const updateFields = [];
       const values = [];
 
@@ -612,9 +799,8 @@ router.put(
         values.push(coordinates.lng);
       }
 
-      if (updateFields.length === 0) {
+      if (updateFields.length === 0)
         return res.status(400).json({ error: "No fields to update" });
-      }
 
       updateFields.push("updated_at = CURRENT_TIMESTAMP");
       values.push(teamId);
@@ -632,148 +818,131 @@ router.put(
   }
 );
 
-// POST /api/teams/:id/invite - Inviter un joueur (par ID, email ou nom)
+// POST /api/teams/:id/invite (CORRIGÉ : Support Manager)
 router.post(
   "/:id/invite",
   [
     authenticateToken,
-    body("userIdOrEmail").trim().notEmpty().withMessage("User ID or email required"),
+    body("userIdOrEmail")
+      .trim()
+      .notEmpty()
+      .withMessage("User ID or email required"),
     body("message").optional().isLength({ max: 500 }),
   ],
   async (req, res) => {
     try {
       const errors = validationResult(req);
-      if (!errors.isEmpty()) {
+      if (!errors.isEmpty())
         return res.status(400).json({ errors: errors.array() });
-      }
 
       const teamId = req.params.id;
       const { userIdOrEmail, message } = req.body;
 
-      // Vérifier que l'utilisateur est capitaine
-      const [teamCheck] = await db.execute(
-        'SELECT id, name FROM teams WHERE id = ? AND captain_id = ?',
-        [teamId, req.user.id]
-      );
-
-      if (teamCheck.length === 0) {
-        return res.status(403).json({ error: "Only team captain can invite players" });
+      // Vérification permissions (via team_members, plus fiable que captain_id)
+      const isAdmin = await checkTeamAdminPermission(req.user.id, teamId);
+      if (!isAdmin) {
+        return res
+          .status(403)
+          .json({ error: "Only team leader can invite players" });
       }
 
       let userId = null;
       let invitedEmail = null;
       let invitedName = null;
 
-      // Déterminer si c'est un ID ou un email
       if (!isNaN(userIdOrEmail)) {
-        // C'est un ID
         userId = parseInt(userIdOrEmail);
         const [users] = await db.execute(
           "SELECT id, email, first_name, last_name FROM users WHERE id = ? AND user_type = 'player'",
           [userId]
         );
-
-        if (users.length === 0) {
+        if (users.length === 0)
           return res.status(404).json({ error: "Player not found" });
-        }
-
         invitedEmail = users[0].email;
         invitedName = `${users[0].first_name} ${users[0].last_name}`;
       } else {
-        // C'est un email ou un nom
-        const isEmail = userIdOrEmail.includes('@');
-
+        const isEmail = userIdOrEmail.includes("@");
         if (isEmail) {
-          // Recherche par email
           invitedEmail = userIdOrEmail;
           const [users] = await db.execute(
             "SELECT id, first_name, last_name FROM users WHERE email = ? AND user_type = 'player'",
             [invitedEmail]
           );
-
           if (users.length > 0) {
             userId = users[0].id;
             invitedName = `${users[0].first_name} ${users[0].last_name}`;
           }
         } else {
-          // Recherche par nom
           invitedName = userIdOrEmail;
           const searchPattern = `%${userIdOrEmail}%`;
           const [users] = await db.execute(
-            `SELECT id, email, first_name, last_name
-             FROM users
-             WHERE (CONCAT(first_name, ' ', last_name) LIKE ?
-                    OR first_name LIKE ?
-                    OR last_name LIKE ?)
-             AND user_type = 'player'
-             LIMIT 5`,
+            `SELECT id, email, first_name, last_name FROM users 
+             WHERE (CONCAT(first_name, ' ', last_name) LIKE ? OR first_name LIKE ? OR last_name LIKE ?) AND user_type = 'player' LIMIT 5`,
             [searchPattern, searchPattern, searchPattern]
           );
-
-          if (users.length === 0) {
-            return res.status(404).json({ error: "No player found with this name" });
-          }
-
-          if (users.length > 1) {
-            // Plusieurs résultats, retourner la liste pour que l'utilisateur choisisse
+          if (users.length === 0)
+            return res.status(404).json({ error: "No player found" });
+          if (users.length > 1)
             return res.status(300).json({
-              message: "Multiple players found, please specify",
-              players: users.map(u => ({
+              message: "Multiple players found",
+              players: users.map((u) => ({
                 id: u.id,
                 name: `${u.first_name} ${u.last_name}`,
-                email: u.email
-              }))
+                email: u.email,
+              })),
             });
-          }
-
-          // Un seul résultat
           userId = users[0].id;
           invitedEmail = users[0].email;
           invitedName = `${users[0].first_name} ${users[0].last_name}`;
         }
       }
 
-      // Vérifier si déjà membre
       if (userId) {
         const [existing] = await db.execute(
           "SELECT id FROM team_members WHERE team_id = ? AND user_id = ? AND is_active = true",
           [teamId, userId]
         );
-
-        if (existing.length > 0) {
-          return res.status(400).json({ error: "Player is already a team member" });
-        }
-
-        // Vérifier invitation en attente
-        const [pendingInvites] = await db.execute(
+        if (existing.length > 0)
+          return res
+            .status(400)
+            .json({ error: "Player is already a team member" });
+        const [pending] = await db.execute(
           "SELECT id FROM player_invitations WHERE team_id = ? AND user_id = ? AND status = 'pending'",
           [teamId, userId]
         );
-
-        if (pendingInvites.length > 0) {
-          return res.status(400).json({ error: "Invitation already sent to this player" });
-        }
+        if (pending.length > 0)
+          return res.status(400).json({ error: "Invitation already sent" });
       }
 
-      // Générer token pour invitation externe (si pas d'userId)
-      const token = !userId ? require('crypto').randomBytes(32).toString('hex') : null;
-      const tokenExpires = !userId ? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) : null;
+      const token = !userId ? crypto.randomBytes(32).toString("hex") : null;
+      const tokenExpires = !userId
+        ? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+        : null;
 
-      // Créer l'invitation
       const [result] = await db.execute(
-        `INSERT INTO player_invitations
-         (team_id, user_id, invited_by, invited_email, invited_name, message, invitation_token, token_expires_at)
+        `INSERT INTO player_invitations (team_id, user_id, invited_by, invited_email, invited_name, message, invitation_token, token_expires_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-        [teamId, userId, req.user.id, invitedEmail, invitedName, message || null, token, tokenExpires]
+        [
+          teamId,
+          userId,
+          req.user.id,
+          invitedEmail,
+          invitedName,
+          message || null,
+          token,
+          tokenExpires,
+        ]
       );
 
-      // TODO: Envoyer email si invité externe (!userId)
+      if (req.notificationService && userId) {
+        req.notificationService.notifyInvitationStatusUpdate(userId);
+      }
 
       res.status(201).json({
         message: "Invitation sent successfully",
         invitationId: result.insertId,
         invitedPlayer: { email: invitedEmail, name: invitedName },
-        requiresEmailConfirmation: !userId
+        requiresEmailConfirmation: !userId,
       });
     } catch (error) {
       console.error("Invite player error:", error);
@@ -782,61 +951,87 @@ router.post(
   }
 );
 
-// POST /api/teams/:id/invite-email - Inviter un joueur par email
+// POST /api/teams/:id/invite-email (CORRIGÉ : Support Manager)
 router.post(
   "/:id/invite-email",
   [
     authenticateToken,
     body("email").isEmail().withMessage("Valid email is required"),
-    body("message")
-      .optional({ nullable: true, checkFalsy: true })
-      .isLength({ max: 500 })
-      .withMessage("Message too long"),
+    body("message").optional().isLength({ max: 500 }),
   ],
   async (req, res) => {
     try {
-      const { email } = req.body;
-      const [userCheck] = await db.execute(
-        "SELECT id FROM users WHERE email = ?",
+      const errors = validationResult(req);
+      if (!errors.isEmpty())
+        return res.status(400).json({ errors: errors.array() });
+
+      const teamId = req.params.id;
+      const { email, message } = req.body;
+
+      const isAdmin = await checkTeamAdminPermission(req.user.id, teamId);
+      if (!isAdmin)
+        return res
+          .status(403)
+          .json({ error: "Only team leader can invite players" });
+
+      const [users] = await db.execute(
+        "SELECT id, email, first_name, last_name FROM users WHERE email = ?",
         [email]
       );
-      if (userCheck.length > 0) {
-        req.body.playerId = userCheck[0].id;
-        delete req.body.email;
-        return router.stack
-          .find(
-            (l) =>
-              l.route && l.route.path === "/:id/invite" && l.route.methods.post
-          )
-          .route.stack.find((l) => l.name === "bound dispatch")
-          .handle(req, res);
+      if (users.length === 0)
+        return res.status(404).json({ error: "Email not registered" });
+
+      const targetUser = users[0];
+      const [existing] = await db.execute(
+        "SELECT id FROM team_members WHERE team_id = ? AND user_id = ? AND is_active = true",
+        [teamId, targetUser.id]
+      );
+      if (existing.length > 0)
+        return res.status(400).json({ error: "Already member" });
+
+      const [pending] = await db.execute(
+        "SELECT id FROM player_invitations WHERE team_id = ? AND user_id = ? AND status = 'pending'",
+        [teamId, targetUser.id]
+      );
+      if (pending.length > 0)
+        return res.status(400).json({ error: "Invitation already sent" });
+
+      const [result] = await db.execute(
+        `INSERT INTO player_invitations (team_id, user_id, invited_by, invited_email, invited_name, message)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        [
+          teamId,
+          targetUser.id,
+          req.user.id,
+          targetUser.email,
+          `${targetUser.first_name} ${targetUser.last_name}`,
+          message || null,
+        ]
+      );
+
+      if (req.notificationService) {
+        req.notificationService.notifyInvitationStatusUpdate(targetUser.id);
       }
-      res
-        .status(400)
-        .json({ error: "This email is not registered on the platform." });
+
+      res.status(201).json({
+        message: "Invitation sent successfully",
+        invitationId: result.insertId,
+      });
     } catch (e) {
+      console.error("Invite email error:", e);
       res.status(500).json({ error: "Server error" });
     }
   }
 );
 
-// GET /api/teams/:id/invitations - Récupérer les invitations envoyées par l'équipe
+// GET /api/teams/:id/invitations (CORRIGÉ : Support Manager)
 router.get("/:id/invitations", authenticateToken, async (req, res) => {
   try {
     const teamId = req.params.id;
     const { status = "all", limit = 20, offset = 0 } = req.query;
 
-    // Vérifier que l'utilisateur est capitaine de l'équipe
-    const [captainCheck] = await db.execute(
-      'SELECT team_id FROM team_members WHERE user_id = ? AND team_id = ? AND role = "captain" AND is_active = true',
-      [req.user.id, teamId]
-    );
-
-    if (captainCheck.length === 0) {
-      return res
-        .status(403)
-        .json({ error: "Only team captain can view team invitations" });
-    }
+    const isAdmin = await checkTeamAdminPermission(req.user.id, teamId);
+    if (!isAdmin) return res.status(403).json({ error: "Access denied" });
 
     let query = `
       SELECT pi.id, pi.user_id, pi.message, pi.status, pi.sent_at, pi.expires_at,
@@ -847,18 +1042,15 @@ router.get("/:id/invitations", authenticateToken, async (req, res) => {
       WHERE pi.team_id = ?`;
 
     const queryParams = [teamId];
-
     if (status && status !== "all") {
       query += " AND pi.status = ?";
       queryParams.push(status);
     }
-
     query += " ORDER BY pi.sent_at DESC LIMIT ? OFFSET ?";
     queryParams.push(parseInt(limit), parseInt(offset));
 
     const [invitations] = await db.execute(query, queryParams);
-
-    const formattedInvitations = invitations.map((inv) => ({
+    const formatted = invitations.map((inv) => ({
       id: inv.id,
       status: inv.status,
       message: inv.message,
@@ -877,14 +1069,14 @@ router.get("/:id/invitations", authenticateToken, async (req, res) => {
       isExpired: inv.expires_at && new Date() > new Date(inv.expires_at),
     }));
 
-    res.json(formattedInvitations);
+    res.json(formatted);
   } catch (error) {
     console.error("Get team invitations error:", error);
     res.status(500).json({ error: "Internal server error" });
   }
 });
 
-// DELETE /api/teams/:id/invitations/:invitationId - Annuler une invitation
+// DELETE /api/teams/:id/invitations/:invitationId (CORRIGÉ : Support Manager)
 router.delete(
   "/:id/invitations/:invitationId",
   authenticateToken,
@@ -893,39 +1085,147 @@ router.delete(
       const teamId = req.params.id;
       const invitationId = req.params.invitationId;
 
-      // Vérifier que l'utilisateur est capitaine de l'équipe
-      const [captainCheck] = await db.execute(
-        'SELECT team_id FROM team_members WHERE user_id = ? AND team_id = ? AND role = "captain" AND is_active = true',
-        [req.user.id, teamId]
-      );
+      const isAdmin = await checkTeamAdminPermission(req.user.id, teamId);
+      if (!isAdmin) return res.status(403).json({ error: "Access denied" });
 
-      if (captainCheck.length === 0) {
-        return res
-          .status(403)
-          .json({ error: "Only team captain can cancel invitations" });
-      }
-
-      // Vérifier que l'invitation existe et est en attente
       const [invitation] = await db.execute(
-        'SELECT id, status FROM player_invitations WHERE id = ? AND team_id = ? AND status = "pending"',
+        'SELECT id, status, user_id FROM player_invitations WHERE id = ? AND team_id = ? AND status = "pending"',
         [invitationId, teamId]
       );
 
-      if (invitation.length === 0) {
-        return res.status(404).json({ error: "Pending invitation not found" });
-      }
+      if (invitation.length === 0)
+        return res.status(404).json({ error: "Invitation not found" });
 
-      // Supprimer l'invitation
       await db.execute("DELETE FROM player_invitations WHERE id = ?", [
         invitationId,
       ]);
 
-      req.notificationService.notifyInvitationStatusUpdate(invitation.user_id);
-      req.notificationService.notifyInvitationStatusUpdate(req.user.id);
+      if (req.notificationService) {
+        req.notificationService.notifyInvitationStatusUpdate(
+          invitation[0].user_id
+        );
+        req.notificationService.notifyInvitationStatusUpdate(req.user.id);
+      }
 
       res.json({ message: "Invitation cancelled successfully" });
     } catch (error) {
       console.error("Cancel invitation error:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  }
+);
+
+// POST /api/teams/:id/set-captain - Nommer un nouveau capitaine
+router.post(
+  "/:id/set-captain",
+  [
+    authenticateToken,
+    body("newCaptainId").isInt().withMessage("Valid member ID is required"),
+  ],
+  async (req, res) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ errors: errors.array() });
+      }
+
+      const teamId = req.params.id;
+      const { newCaptainId } = req.body;
+      const requesterId = req.user.id;
+
+      // 1. Vérifier les permissions (Manager ou Capitaine actuel)
+      const isAdmin = await checkTeamAdminPermission(requesterId, teamId);
+      if (!isAdmin) {
+        return res
+          .status(403)
+          .json({ error: "Only team leader can assign a new captain" });
+      }
+
+      // 2. Vérifier que le nouveau capitaine est bien membre de l'équipe
+      const [targetMember] = await db.execute(
+        "SELECT id, role FROM team_members WHERE team_id = ? AND user_id = ? AND is_active = true",
+        [teamId, newCaptainId]
+      );
+
+      if (targetMember.length === 0) {
+        return res
+          .status(404)
+          .json({ error: "Target user is not a member of this team" });
+      }
+
+      // 3. Transaction pour la mise à jour des rôles
+      const connection = await db.getConnection();
+      await connection.beginTransaction();
+
+      try {
+        // A. Rétrograder l'ancien capitaine (s'il y en a un)
+        // On cherche le membre qui est actuellement 'captain'
+        const [currentCaptain] = await connection.execute(
+          "SELECT user_id FROM team_members WHERE team_id = ? AND role = 'captain' AND is_active = true",
+          [teamId]
+        );
+
+        if (currentCaptain.length > 0) {
+          await connection.execute(
+            "UPDATE team_members SET role = 'player' WHERE team_id = ? AND user_id = ?",
+            [teamId, currentCaptain[0].user_id]
+          );
+        }
+
+        // B. Si c'est un transfert de soi-même (ex: le capitaine actuel quitte son poste)
+        // et qu'il n'a pas été traité par l'étape A (ex: il était manager et devient joueur ?)
+        // Dans notre logique, si le Manager nomme un capitaine, le Manager RESTE Manager.
+        // Si un Capitaine nomme un capitaine, le Capitaine DEVIENT Joueur (traité par l'étape A).
+
+        // C. Promouvoir le nouveau capitaine
+        await connection.execute(
+          "UPDATE team_members SET role = 'captain' WHERE team_id = ? AND user_id = ?",
+          [teamId, newCaptainId]
+        );
+
+        // D. Mettre à jour la table teams (propriétaire principal pour compatibilité)
+        // Note : On laisse le Manager comme 'owner' s'il l'était, sinon on met le nouveau capitaine
+        // Ici, on met à jour captain_id pour refléter le leader sur le terrain
+        await connection.execute(
+          "UPDATE teams SET captain_id = ? WHERE id = ?",
+          [newCaptainId, teamId]
+        );
+
+        await connection.commit();
+
+        // Notification (Optionnel)
+        if (req.notificationService) {
+          // Notifier le nouveau capitaine
+          req.notificationService.notifyTeamRoleChange(
+            newCaptainId,
+            teamId,
+            "captain"
+          );
+          // Notifier l'ancien capitaine s'il est différent du demandeur
+          if (
+            currentCaptain.length > 0 &&
+            currentCaptain[0].user_id !== requesterId
+          ) {
+            req.notificationService.notifyTeamRoleChange(
+              currentCaptain[0].user_id,
+              teamId,
+              "player"
+            );
+          }
+        }
+
+        res.json({
+          message: "Captain updated successfully",
+          newCaptainId: newCaptainId,
+        });
+      } catch (error) {
+        await connection.rollback();
+        throw error;
+      } finally {
+        connection.release();
+      }
+    } catch (error) {
+      console.error("Set captain error:", error);
       res.status(500).json({ error: "Internal server error" });
     }
   }

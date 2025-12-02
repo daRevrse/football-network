@@ -72,6 +72,7 @@ router.put(
     body("firstName").optional().trim().isLength({ min: 2 }),
     body("lastName").optional().trim().isLength({ min: 2 }),
     body("phone").optional(),
+    body("birthDate").optional().isISO8601(),
     body("bio").optional().isLength({ max: 500 }),
     body("position")
       .optional()
@@ -630,6 +631,72 @@ router.get("/recruit", authenticateToken, async (req, res) => {
     res.json(formattedUsers);
   } catch (error) {
     console.error("Search users error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// GET /api/users/:id - Récupérer le profil public d'un utilisateur
+router.get("/:id", authenticateToken, async (req, res) => {
+  try {
+    const userId = req.params.id;
+
+    const [users] = await db.execute(
+      `SELECT u.id, u.first_name, u.last_name, u.bio, u.position, u.skill_level,
+              u.location_city, u.created_at, u.user_type,
+              pp.stored_filename as profile_picture,
+              cp.stored_filename as cover_photo
+       FROM users u
+       LEFT JOIN uploads pp ON u.profile_picture_id = pp.id AND pp.is_active = true
+       LEFT JOIN uploads cp ON u.cover_photo_id = cp.id AND cp.is_active = true
+       WHERE u.id = ?`,
+      [userId]
+    );
+
+    if (users.length === 0) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    const user = users[0];
+
+    // Statistiques publiques
+    const [teams] = await db.execute(
+      `SELECT COUNT(DISTINCT tm.team_id) as count
+       FROM team_members tm
+       WHERE tm.user_id = ? AND tm.is_active = true`,
+      [userId]
+    );
+
+    const [matches] = await db.execute(
+      `SELECT COUNT(DISTINCT m.id) as count
+       FROM matches m
+       JOIN team_members tm ON (tm.team_id = m.home_team_id OR tm.team_id = m.away_team_id)
+       WHERE tm.user_id = ? AND tm.is_active = true AND m.status = 'completed'`,
+      [userId]
+    );
+
+    res.json({
+      id: user.id,
+      firstName: user.first_name,
+      lastName: user.last_name,
+      bio: user.bio,
+      position: user.position,
+      skillLevel: user.skill_level,
+      locationCity: user.location_city,
+      userType: user.user_type,
+      profilePictureUrl: user.profile_picture
+        ? `/uploads/users/${user.profile_picture}`
+        : null,
+      coverPhotoUrl: user.cover_photo
+        ? `/uploads/users/${user.cover_photo}`
+        : null,
+      createdAt: user.created_at,
+      stats: {
+        teamsCount: teams[0].count,
+        matchesCount: matches[0].count,
+      },
+    });
+  } catch (error) {
+    console.error("Get user profile error:", error);
     res.status(500).json({ error: "Internal server error" });
   }
 });

@@ -322,10 +322,16 @@ router.post(
 
       // Ajouter à la galerie
       const albumName = album || "general";
+      // const galleryItemIds = await TeamGalleryService.bulkAddToGallery(
+      //   teamId,
+      //   uploadIds,
+      //   albumName
+      // );
       const galleryItemIds = await TeamGalleryService.bulkAddToGallery(
         teamId,
         uploadIds,
-        albumName
+        req.user.id,
+        album
       );
 
       // Mettre à jour les légendes si fournies

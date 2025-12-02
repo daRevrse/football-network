@@ -20,7 +20,7 @@ export const ManagerOnlyRoute = ({ children }) => {
     return <Navigate to="/login" />;
   }
 
-  if (user.user_type !== "manager" && user.user_type !== "superadmin") {
+  if (user.userType !== "manager" && user.userType !== "superadmin") {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50 px-4">
         <div className="bg-white rounded-lg shadow-lg p-8 max-w-md text-center">
@@ -78,7 +78,7 @@ export const SuperadminOnlyRoute = ({ children }) => {
     return <Navigate to="/login" />;
   }
 
-  if (user.user_type !== "superadmin") {
+  if (user.userType !== "superadmin") {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50 px-4">
         <div className="bg-white rounded-lg shadow-lg p-8 max-w-md text-center">

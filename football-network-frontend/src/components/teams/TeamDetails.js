@@ -27,6 +27,7 @@ import DeleteTeamModal from "./DeleteTeamModal";
 import InvitePlayerModal from "./InvitePlayerModal";
 import TeamInvitations from "./TeamInvitations";
 import TeamMediaManager from "./TeamMediaManager";
+import SetCaptainModal from "./SetCaptainModal";
 
 const API_BASE_URL =
   process.env.REACT_APP_API_URL || "http://localhost:5000/api";
@@ -46,6 +47,7 @@ const TeamDetails = () => {
   const [showEditModal, setShowEditModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showInviteModal, setShowInviteModal] = useState(false);
+  const [showSetCaptainModal, setShowSetCaptainModal] = useState(false);
 
   const isManager = user?.userType === "manager";
 
@@ -60,6 +62,7 @@ const TeamDetails = () => {
         axios.get(`${API_BASE_URL}/teams/${teamId}`),
         axios.get(`${API_BASE_URL}/matches?teamId=${teamId}&limit=20`),
       ]);
+
       setTeam(teamRes.data);
       setMatches(matchesRes.data);
     } catch (error) {
@@ -125,7 +128,7 @@ const TeamDetails = () => {
     navigate("/teams");
   };
 
-  const isOwner = team?.userRole === "captain";
+  const isOwner = team?.userRole === "captain" || team?.userRole === "manager";
   const isMember = team?.userRole != null;
 
   const tabs = [
@@ -215,6 +218,19 @@ const TeamDetails = () => {
                           <UserPlus className="w-4 h-4 mr-3 text-green-500" />{" "}
                           Inviter
                         </button>
+                        {/* Bouton Désigner capitaine - uniquement pour les managers */}
+                        {team?.userRole === "manager" && (
+                          <button
+                            onClick={() => {
+                              setShowSetCaptainModal(true);
+                              setShowMenu(false);
+                            }}
+                            className="w-full px-4 py-3 hover:bg-gray-50 text-left flex items-center text-gray-700 text-sm font-medium"
+                          >
+                            <Crown className="w-4 h-4 mr-3 text-yellow-500" />{" "}
+                            Désigner capitaine
+                          </button>
+                        )}
                         <div className="border-t border-gray-100 my-1"></div>
                         <button
                           onClick={() => {
@@ -390,15 +406,25 @@ const TeamDetails = () => {
           }}
         />
       )}
+      {showSetCaptainModal && (
+        <SetCaptainModal
+          team={team}
+          onClose={() => setShowSetCaptainModal(false)}
+          onCaptainSet={() => {
+            setShowSetCaptainModal(false);
+            loadTeamData();
+          }}
+        />
+      )}
     </div>
   );
 };
 
-// ... (Les composants OverviewTab, StatBox, MembersTab, MatchesTab restent identiques)
-// Je les inclus pour que le fichier soit complet
+const OverviewTab = ({ team }) => {
+  const navigate = useNavigate();
 
-const OverviewTab = ({ team }) => (
-  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
     <div className="lg:col-span-2 space-y-6">
       <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
         <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center">
@@ -440,26 +466,67 @@ const OverviewTab = ({ team }) => (
     </div>
 
     <div className="space-y-6">
-      <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-        <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider mb-4">
-          Capitaine
-        </h3>
-        <div className="flex items-center space-x-3">
-          <div className="w-12 h-12 rounded-full bg-yellow-100 flex items-center justify-center text-yellow-700 font-bold">
-            {team.captain?.firstName?.[0]}
-            {team.captain?.lastName?.[0]}
-          </div>
-          <div>
-            <div className="font-bold text-gray-900">
-              {team.captain?.firstName} {team.captain?.lastName}
+      {/* Afficher le Manager */}
+      {team.members?.find((m) => m.role === "manager") && (
+        <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+          <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider mb-4">
+            Manager
+          </h3>
+          <div
+            className="flex items-center space-x-3 cursor-pointer hover:bg-gray-50 -m-2 p-2 rounded-lg transition"
+            onClick={() =>
+              navigate(
+                `/users/${team.members.find((m) => m.role === "manager").id}`
+              )
+            }
+          >
+            <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 font-bold">
+              {team.members.find((m) => m.role === "manager").firstName?.[0]}
+              {team.members.find((m) => m.role === "manager").lastName?.[0]}
             </div>
-            <div className="text-xs text-gray-500">Fondateur</div>
+            <div>
+              <div className="font-bold text-gray-900 hover:text-green-600 transition">
+                {team.members.find((m) => m.role === "manager").firstName}{" "}
+                {team.members.find((m) => m.role === "manager").lastName}
+              </div>
+              <div className="text-xs text-gray-500">Fondateur</div>
+            </div>
           </div>
         </div>
-      </div>
+      )}
+
+      {/* Afficher le Capitaine */}
+      {team.members?.find((m) => m.role === "captain") && (
+        <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+          <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider mb-4">
+            Capitaine
+          </h3>
+          <div
+            className="flex items-center space-x-3 cursor-pointer hover:bg-gray-50 -m-2 p-2 rounded-lg transition"
+            onClick={() =>
+              navigate(
+                `/users/${team.members.find((m) => m.role === "captain").id}`
+              )
+            }
+          >
+            <div className="w-12 h-12 rounded-full bg-yellow-100 flex items-center justify-center text-yellow-700 font-bold">
+              {team.members.find((m) => m.role === "captain").firstName?.[0]}
+              {team.members.find((m) => m.role === "captain").lastName?.[0]}
+            </div>
+            <div>
+              <div className="font-bold text-gray-900 hover:text-green-600 transition">
+                {team.members.find((m) => m.role === "captain").firstName}{" "}
+                {team.members.find((m) => m.role === "captain").lastName}
+              </div>
+              <div className="text-xs text-gray-500">Leader sur le terrain</div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   </div>
-);
+  );
+};
 
 const StatBox = ({ label, value, color, icon: Icon }) => (
   <div
@@ -472,60 +539,70 @@ const StatBox = ({ label, value, color, icon: Icon }) => (
   </div>
 );
 
-const MembersTab = ({ team, isOwner, onRemoveMember, onInvite }) => (
-  <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-    <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
-      <h3 className="font-bold text-gray-900">
-        Effectif ({team.currentPlayers}/{team.maxPlayers})
-      </h3>
-      {isOwner && (
-        <button
-          onClick={onInvite}
-          className="text-sm bg-white border border-gray-200 px-3 py-1.5 rounded-lg font-medium text-gray-700 hover:bg-gray-50 shadow-sm"
-        >
-          + Ajouter
-        </button>
-      )}
-    </div>
-    <div className="divide-y divide-gray-100">
-      {team.members?.map((member) => (
-        <div
-          key={member.id}
-          className="p-4 flex items-center justify-between hover:bg-gray-50 transition"
-        >
-          <div className="flex items-center space-x-4">
+const MembersTab = ({ team, isOwner, onRemoveMember, onInvite }) => {
+  const navigate = useNavigate();
+
+  return (
+    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+      <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
+        <h3 className="font-bold text-gray-900">
+          Effectif ({team.currentPlayers}/{team.maxPlayers})
+        </h3>
+        {isOwner && (
+          <button
+            onClick={onInvite}
+            className="text-sm bg-white border border-gray-200 px-3 py-1.5 rounded-lg font-medium text-gray-700 hover:bg-gray-50 shadow-sm"
+          >
+            + Recruter
+          </button>
+        )}
+      </div>
+      <div className="divide-y divide-gray-100">
+        {team.members?.map((member) => (
+          <div
+            key={member.id}
+            className="p-4 flex items-center justify-between hover:bg-gray-50 transition"
+          >
             <div
-              className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-bold ${
-                member.role === "captain" ? "bg-yellow-500" : "bg-gray-400"
-              }`}
+              className="flex items-center space-x-4 flex-1 cursor-pointer"
+              onClick={() => navigate(`/users/${member.id}`)}
             >
-              {member.firstName[0]}
-            </div>
-            <div>
-              <div className="font-medium text-gray-900 flex items-center">
-                {member.firstName} {member.lastName}
-                {member.role === "captain" && (
-                  <Crown className="w-3 h-3 ml-2 text-yellow-500 fill-current" />
-                )}
+              <div
+                className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-bold ${
+                  member.role === "captain" ? "bg-yellow-500" : "bg-gray-400"
+                }`}
+              >
+                {member.firstName[0]}
               </div>
-              <div className="text-xs text-gray-500 capitalize">
-                {member.position || "Joueur"}
+              <div>
+                <div className="font-medium text-gray-900 flex items-center hover:text-green-600 transition">
+                  {member.firstName} {member.lastName}
+                  {member.role === "captain" && (
+                    <Crown className="w-3 h-3 ml-2 text-yellow-500 fill-current" />
+                  )}
+                </div>
+                <div className="text-xs text-gray-500 capitalize">
+                  {member.position || member.role}
+                </div>
               </div>
             </div>
+            {isOwner && member.role !== "captain" && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onRemoveMember(member.id, member.firstName);
+                }}
+                className="text-gray-400 hover:text-red-600 p-2 rounded-full hover:bg-red-50 transition"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            )}
           </div>
-          {isOwner && member.role !== "captain" && (
-            <button
-              onClick={() => onRemoveMember(member.id, member.firstName)}
-              className="text-gray-400 hover:text-red-600 p-2 rounded-full hover:bg-red-50 transition"
-            >
-              <Trash2 className="w-4 h-4" />
-            </button>
-          )}
-        </div>
-      ))}
+        ))}
+      </div>
     </div>
-  </div>
-);
+  );
+};
 
 const MatchesTab = ({ matches }) => (
   <div className="space-y-4">

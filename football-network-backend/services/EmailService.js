@@ -20,6 +20,48 @@ class EmailService {
     this.frontendUrl = process.env.FRONTEND_URL || "http://localhost:3000";
   }
 
+  // --- NOUVELLE MÉTHODE ---
+  async sendVerificationEmail(email, token, firstName) {
+    const verifyLink = `${this.frontendUrl}/verify-email?token=${token}`;
+
+    const mailOptions = {
+      from: `"Football Network" <${this.fromEmail}>`,
+      to: email,
+      subject: "Confirmez votre inscription sur Football Network ⚽",
+      html: `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8">
+          <style>
+            .container { font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; }
+            .button { background-color: #10b981; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block; margin: 20px 0; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <h2>Bienvenue ${firstName} !</h2>
+            <p>Merci de vous être inscrit. Pour activer votre compte, veuillez confirmer votre adresse email en cliquant sur le bouton ci-dessous :</p>
+            <a href="${verifyLink}" class="button">Confirmer mon email</a>
+            <p>Ou copiez ce lien : ${verifyLink}</p>
+            <p>Ce lien est valable 24 heures.</p>
+          </div>
+        </body>
+        </html>
+      `,
+    };
+
+    try {
+      const info = await this.transporter.sendMail(mailOptions);
+      console.log("📧 Verification email sent:", info.messageId);
+      if (process.env.SMTP_HOST === "smtp.ethereal.email") {
+        console.log("🔗 Preview:", nodemailer.getTestMessageUrl(info));
+      }
+    } catch (error) {
+      console.error("❌ Error sending verification email:", error);
+    }
+  }
+
   async sendPasswordResetEmail(email, token, firstName) {
     const resetLink = `${this.frontendUrl}/reset-password?token=${token}`;
 

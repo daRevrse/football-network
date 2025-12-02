@@ -202,6 +202,18 @@ class NotificationService {
     const sm = getSocketManager();
     return sm !== null;
   }
+
+  // Dans NotificationService.js (si manquant)
+  async notifyTeamRoleChange(userId, teamId, newRole) {
+    return this.createNotification({
+      userId,
+      type: "role_change",
+      title: "Changement de rôle",
+      message: `Votre rôle dans l'équipe a changé : vous êtes maintenant ${newRole}.`,
+      relatedId: teamId,
+      relatedType: "team",
+    });
+  }
 }
 
 module.exports = NotificationService;

@@ -2,9 +2,7 @@ import React, { useState, useEffect } from "react";
 import {
   Upload,
   X,
-  Star,
   Trash2,
-  MoreVertical,
   Grid,
   List,
   Image as ImageIcon,
@@ -16,8 +14,7 @@ import {
 import toast from "react-hot-toast";
 import axios from "axios";
 
-const API_BASE_URL =
-  process.env.REACT_APP_API_URL || "http://localhost:5000/api";
+const API_BASE_URL = process.env.REACT_APP_API_URL;
 
 const GalleryManager = ({ teamId, isCapta, onUpdate }) => {
   const [photos, setPhotos] = useState([]);
@@ -41,6 +38,7 @@ const GalleryManager = ({ teamId, isCapta, onUpdate }) => {
       const response = await axios.get(
         `${API_BASE_URL}/teams/${teamId}/media/gallery`
       );
+      console.log("first", response);
       setPhotos(response.data.items || []);
     } catch (error) {
       console.error("Erreur galerie");
@@ -159,7 +157,10 @@ const GalleryManager = ({ teamId, isCapta, onUpdate }) => {
               className="group relative aspect-square bg-gray-100 rounded-xl overflow-hidden cursor-pointer border border-gray-200"
             >
               <img
-                src={photo.url || photo.file_path}
+                src={
+                  API_BASE_URL.replace("/api", "/") +
+                  photo.file_path.replace("\\", "/")
+                }
                 alt=""
                 className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
               />
@@ -202,7 +203,10 @@ const GalleryManager = ({ teamId, isCapta, onUpdate }) => {
               className="flex items-center p-3 bg-white border border-gray-100 rounded-xl hover:shadow-sm transition"
             >
               <img
-                src={photo.url || photo.file_path}
+                src={
+                  API_BASE_URL.replace("/api", "/") +
+                  photo.file_path.replace("\\", "/")
+                }
                 alt=""
                 className="w-16 h-16 object-cover rounded-lg bg-gray-100"
               />
@@ -298,7 +302,10 @@ const GalleryManager = ({ teamId, isCapta, onUpdate }) => {
           </button>
 
           <img
-            src={photos[lightboxIndex]?.url || photos[lightboxIndex]?.file_path}
+            src={
+              API_BASE_URL.replace("/api", "/") +
+              photos[lightboxIndex]?.file_path.replace("\\", "/")
+            }
             alt=""
             className="max-h-[85vh] max-w-[90vw] object-contain shadow-2xl"
           />

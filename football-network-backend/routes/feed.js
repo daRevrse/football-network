@@ -214,6 +214,7 @@ router.post(
     body("type").isIn([
       "match_announcement",
       "match_result",
+      "recruitment",
       "team_search",
       "player_search",
       "media",
@@ -226,6 +227,13 @@ router.post(
     body("mediaType").optional().isIn(["image", "video"]),
     body("locationCity").optional().trim(),
     body("coordinates").optional().isObject(),
+    body("recruitmentPosition").optional().trim(),
+    body("recruitmentSkillLevel").optional().trim(),
+    body("recruitmentDescription").optional().trim(),
+    body("matchOpponent").optional().trim(),
+    body("matchScoreHome").optional().isInt(),
+    body("matchScoreAway").optional().isInt(),
+    body("matchDate").optional().isISO8601(),
   ],
   async (req, res) => {
     try {
@@ -243,6 +251,13 @@ router.post(
         mediaType,
         locationCity,
         coordinates,
+        recruitmentPosition,
+        recruitmentSkillLevel,
+        recruitmentDescription,
+        matchOpponent,
+        matchScoreHome,
+        matchScoreAway,
+        matchDate,
       } = req.body;
 
       // Vérifier que l'utilisateur a le droit de poster sur l'équipe si teamId fourni
@@ -261,8 +276,10 @@ router.post(
       const [result] = await db.execute(
         `INSERT INTO feed_posts (
           user_id, post_type, content, match_id, team_id,
-          media_url, media_type, location_city, location_lat, location_lng
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          media_url, media_type, location_city, location_lat, location_lng,
+          recruitment_position, recruitment_skill_level, recruitment_description,
+          match_opponent, match_score_home, match_score_away, match_date
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           req.user.id,
           type,
@@ -274,6 +291,13 @@ router.post(
           locationCity || null,
           coordinates?.lat || null,
           coordinates?.lng || null,
+          recruitmentPosition || null,
+          recruitmentSkillLevel || null,
+          recruitmentDescription || null,
+          matchOpponent || null,
+          matchScoreHome || null,
+          matchScoreAway || null,
+          matchDate || null,
         ]
       );
 

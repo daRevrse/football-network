@@ -3,7 +3,10 @@ const { body, validationResult } = require("express-validator");
 const db = require("../config/database");
 const { authenticateToken } = require("../middleware/auth");
 const NotificationService = require("../services/NotificationService");
-const { validateTeamPlayerCount, logTeamValidation } = require("../utils/teamValidation");
+const {
+  validateTeamPlayerCount,
+  logTeamValidation,
+} = require("../utils/teamValidation");
 const { createParticipationsForMatch } = require("../utils/matchParticipation");
 
 const router = express.Router();
@@ -21,7 +24,9 @@ router.post(
       .isInt(),
     body("venueId").optional({ nullable: true, checkFalsy: true }).isInt(),
     body("requiresReferee").optional().isBoolean(),
-    body("preferredRefereeId").optional({ nullable: true, checkFalsy: true }).isInt(),
+    body("preferredRefereeId")
+      .optional({ nullable: true, checkFalsy: true })
+      .isInt(),
     body("verifyPlayerAvailability").optional().isBoolean(),
     body("message")
       .optional({ nullable: true, checkFalsy: true })
@@ -48,14 +53,14 @@ router.post(
 
       // Vérifier que l'utilisateur est capitaine de l'équipe spécifiée (MODIFIÉ)
       const [senderTeamCheck] = await db.execute(
-        'SELECT team_id FROM team_members WHERE user_id = ? AND team_id = ? AND role = "captain" AND is_active = true',
+        'SELECT team_id FROM team_members WHERE user_id = ? AND team_id = ? AND role = "manager" AND is_active = true',
         [req.user.id, senderTeamId]
       );
 
       if (senderTeamCheck.length === 0) {
         return res
           .status(403)
-          .json({ error: "You are not the captain of this team" });
+          .json({ error: "You are not the manager of this team" });
       }
 
       // Si verifyPlayerAvailability = true, vérifier que l'équipe a minimum 6 joueurs
@@ -66,7 +71,7 @@ router.post(
             error: "Insufficient players",
             message: senderValidation.message,
             playersCount: senderValidation.playersCount,
-            minimumRequired: 6
+            minimumRequired: 6,
           });
         }
 
@@ -74,11 +79,11 @@ router.post(
         await logTeamValidation({
           teamId: senderTeamId,
           invitationId: null,
-          validationType: 'send_invitation',
+          validationType: "send_invitation",
           playersCount: senderValidation.playersCount,
           minimumRequired: 6,
           isValid: true,
-          validatedBy: req.user.id
+          validatedBy: req.user.id,
         });
       }
 
@@ -162,7 +167,7 @@ router.get("/invitations/received", authenticateToken, async (req, res) => {
 
     // Récupérer les équipes où l'utilisateur est capitaine
     const [captainTeams] = await db.execute(
-      'SELECT team_id FROM team_members WHERE user_id = ? AND role = "captain" AND is_active = true',
+      'SELECT team_id FROM team_members WHERE user_id = ? AND role = "manager" AND is_active = true',
       [req.user.id]
     );
 
@@ -233,7 +238,7 @@ router.get("/invitations/sent", authenticateToken, async (req, res) => {
 
     // Récupérer les équipes où l'utilisateur est capitaine
     const [captainTeams] = await db.execute(
-      'SELECT team_id FROM team_members WHERE user_id = ? AND role = "captain" AND is_active = true',
+      'SELECT team_id FROM team_members WHERE user_id = ? AND role = "manager" AND is_active = true',
       [req.user.id]
     );
 
@@ -376,14 +381,20 @@ router.patch(
       }
 
       // Vérifier que l'équipe receveuse a minimum 6 joueurs (si acceptation ET si verify_player_availability = true)
-      if (response === 'accepted' && invitation.verify_player_availability === 1) {
-        const receiverValidation = await validateTeamPlayerCount(invitation.receiver_team_id, 6);
+      if (
+        response === "accepted" &&
+        invitation.verify_player_availability === 1
+      ) {
+        const receiverValidation = await validateTeamPlayerCount(
+          invitation.receiver_team_id,
+          6
+        );
         if (!receiverValidation.isValid) {
           return res.status(400).json({
             error: "Insufficient players",
             message: receiverValidation.message,
             playersCount: receiverValidation.playersCount,
-            minimumRequired: 6
+            minimumRequired: 6,
           });
         }
 
@@ -391,11 +402,11 @@ router.patch(
         await logTeamValidation({
           teamId: invitation.receiver_team_id,
           invitationId: invitationId,
-          validationType: 'accept_invitation',
+          validationType: "accept_invitation",
           playersCount: receiverValidation.playersCount,
           minimumRequired: 6,
           isValid: true,
-          validatedBy: req.user.id
+          validatedBy: req.user.id,
         });
       }
 
@@ -420,19 +431,20 @@ router.patch(
                 "SELECT game_type FROM teams WHERE id = ?",
                 [invitation.sender_team_id]
               );
-              const gameType = senderTeamInfo[0]?.game_type || '11v11';
+              const gameType = senderTeamInfo[0]?.game_type || "11v11";
 
               // Calculer le prix (simplifié - on prend le prix de base)
-              const bookingDateStr = matchDate.toISOString().split('T')[0];
+              const bookingDateStr = matchDate.toISOString().split("T")[0];
               const dayOfWeek = matchDate.getDay();
-              const dayType = (dayOfWeek === 0 || dayOfWeek === 6) ? 'weekend' : 'weekday';
+              const dayType =
+                dayOfWeek === 0 || dayOfWeek === 6 ? "weekend" : "weekday";
 
               const hour = matchDate.getHours();
               let timeSlot;
-              if (hour >= 6 && hour < 12) timeSlot = 'morning';
-              else if (hour >= 12 && hour < 18) timeSlot = 'afternoon';
-              else if (hour >= 18 && hour < 22) timeSlot = 'evening';
-              else timeSlot = 'night';
+              if (hour >= 6 && hour < 12) timeSlot = "morning";
+              else if (hour >= 12 && hour < 18) timeSlot = "afternoon";
+              else if (hour >= 18 && hour < 22) timeSlot = "evening";
+              else timeSlot = "night";
 
               const [pricingResults] = await connection.execute(
                 `SELECT price FROM venue_pricing
@@ -447,7 +459,10 @@ router.patch(
                 [invitation.venue_id, gameType, dayType, timeSlot]
               );
 
-              const basePrice = pricingResults.length > 0 ? parseFloat(pricingResults[0].price) : 0;
+              const basePrice =
+                pricingResults.length > 0
+                  ? parseFloat(pricingResults[0].price)
+                  : 0;
 
               // Vérifier si réduction partenaire
               const [partnerCheck] = await connection.execute(
@@ -459,9 +474,11 @@ router.patch(
                 [invitation.venue_id]
               );
 
-              const discountApplied = partnerCheck.length > 0
-                ? basePrice * (parseFloat(partnerCheck[0].discount_percentage) / 100)
-                : 0;
+              const discountApplied =
+                partnerCheck.length > 0
+                  ? basePrice *
+                    (parseFloat(partnerCheck[0].discount_percentage) / 100)
+                  : 0;
               const finalPrice = basePrice - discountApplied;
 
               // Créer la réservation automatiquement
@@ -471,13 +488,26 @@ router.patch(
                   duration_minutes, game_type, base_price, discount_applied, final_price,
                   notes, status)
                  VALUES (?, ?, ?, ?, ?, ?, 90, ?, ?, ?, ?, 'Réservation automatique suite à acceptation invitation match', 'pending')`,
-                [invitation.venue_id, invitation.receiver_team_id, req.user.id, bookingDateStr,
-                 startTime, endTime, gameType, basePrice, discountApplied, finalPrice]
+                [
+                  invitation.venue_id,
+                  invitation.receiver_team_id,
+                  req.user.id,
+                  bookingDateStr,
+                  startTime,
+                  endTime,
+                  gameType,
+                  basePrice,
+                  discountApplied,
+                  finalPrice,
+                ]
               );
 
               venueBookingId = bookingResult.insertId;
             } catch (bookingError) {
-              console.error('Error creating automatic venue booking:', bookingError);
+              console.error(
+                "Error creating automatic venue booking:",
+                bookingError
+              );
               // Continuer sans réservation si erreur
             }
           }
@@ -485,7 +515,10 @@ router.patch(
           // Déterminer le statut du match selon verify_player_availability
           // Si verify_player_availability = true → 'confirmed' (validations faites)
           // Si verify_player_availability = false → 'pending' (attente confirmations joueurs)
-          const matchStatus = invitation.verify_player_availability === 1 ? 'confirmed' : 'pending';
+          const matchStatus =
+            invitation.verify_player_availability === 1
+              ? "confirmed"
+              : "pending";
 
           // Créer le match avec les infos venue et referee si fournis
           const [matchResult] = await connection.execute(
@@ -540,10 +573,11 @@ router.patch(
 
         // Créer les participations APRÈS la transaction (asynchrone, non-bloquant)
         if (response === "accepted") {
-          const matchIdCreated = await db.execute(
-            "SELECT match_id FROM match_invitations WHERE id = ?",
-            [invitationId]
-          ).then(([rows]) => rows[0]?.match_id);
+          const matchIdCreated = await db
+            .execute("SELECT match_id FROM match_invitations WHERE id = ?", [
+              invitationId,
+            ])
+            .then(([rows]) => rows[0]?.match_id);
 
           if (matchIdCreated) {
             // Créer participations en arrière-plan
@@ -551,8 +585,11 @@ router.patch(
               matchIdCreated,
               invitation.receiver_team_id,
               invitation.sender_team_id
-            ).catch(participationError => {
-              console.error('Error creating participations (background):', participationError);
+            ).catch((participationError) => {
+              console.error(
+                "Error creating participations (background):",
+                participationError
+              );
               // Erreur loggée mais n'affecte pas la réponse
             });
           }
@@ -2109,7 +2146,10 @@ router.post(
   [
     authenticateToken,
     body("venueId").isInt().withMessage("Venue ID is required"),
-    body("durationMinutes").optional().isInt({ min: 30, max: 180 }).withMessage("Duration must be between 30 and 180 minutes"),
+    body("durationMinutes")
+      .optional()
+      .isInt({ min: 30, max: 180 })
+      .withMessage("Duration must be between 30 and 180 minutes"),
   ],
   async (req, res) => {
     try {
@@ -2140,13 +2180,20 @@ router.post(
       const match = matches[0];
 
       // Vérifier que l'utilisateur est capitaine d'une des équipes
-      if (req.user.id !== match.home_captain_id && req.user.id !== match.away_captain_id) {
-        return res.status(403).json({ error: "Only team captains can book a venue for this match" });
+      if (
+        req.user.id !== match.home_captain_id &&
+        req.user.id !== match.away_captain_id
+      ) {
+        return res.status(403).json({
+          error: "Only team captains can book a venue for this match",
+        });
       }
 
       // Vérifier que le match n'a pas déjà une réservation
       if (match.venue_booking_id) {
-        return res.status(400).json({ error: "This match already has a venue booking" });
+        return res
+          .status(400)
+          .json({ error: "This match already has a venue booking" });
       }
 
       // Vérifier que le terrain existe
@@ -2161,22 +2208,23 @@ router.post(
 
       // Calculer les horaires
       const matchDate = new Date(match.match_date);
-      const bookingDateStr = matchDate.toISOString().split('T')[0];
+      const bookingDateStr = matchDate.toISOString().split("T")[0];
       const startTime = matchDate.toTimeString().substring(0, 5); // HH:MM
       const endDate = new Date(matchDate.getTime() + durationMinutes * 60000);
       const endTime = endDate.toTimeString().substring(0, 5);
 
       // Déterminer le type de jeu - par défaut 11v11 (la colonne game_type n'existe pas dans teams)
-      const gameType = '11v11';
+      const gameType = "11v11";
       const dayOfWeek = matchDate.getDay();
-      const dayType = (dayOfWeek === 0 || dayOfWeek === 6) ? 'weekend' : 'weekday';
+      const dayType =
+        dayOfWeek === 0 || dayOfWeek === 6 ? "weekend" : "weekday";
 
       const hour = matchDate.getHours();
       let timeSlot;
-      if (hour >= 6 && hour < 12) timeSlot = 'morning';
-      else if (hour >= 12 && hour < 18) timeSlot = 'afternoon';
-      else if (hour >= 18 && hour < 22) timeSlot = 'evening';
-      else timeSlot = 'night';
+      if (hour >= 6 && hour < 12) timeSlot = "morning";
+      else if (hour >= 12 && hour < 18) timeSlot = "afternoon";
+      else if (hour >= 18 && hour < 22) timeSlot = "evening";
+      else timeSlot = "night";
 
       // Récupérer le prix
       const [pricingResults] = await db.execute(
@@ -2192,7 +2240,8 @@ router.post(
         [venueId, gameType, durationMinutes, dayType, timeSlot]
       );
 
-      const basePrice = pricingResults.length > 0 ? parseFloat(pricingResults[0].price) : 0;
+      const basePrice =
+        pricingResults.length > 0 ? parseFloat(pricingResults[0].price) : 0;
 
       // Vérifier si réduction partenaire
       const [partnerCheck] = await db.execute(
@@ -2204,15 +2253,17 @@ router.post(
         [venueId]
       );
 
-      const discountApplied = partnerCheck.length > 0
-        ? basePrice * (parseFloat(partnerCheck[0].discount_percentage) / 100)
-        : 0;
+      const discountApplied =
+        partnerCheck.length > 0
+          ? basePrice * (parseFloat(partnerCheck[0].discount_percentage) / 100)
+          : 0;
       const finalPrice = basePrice - discountApplied;
 
       // Déterminer l'équipe qui réserve (celle du capitaine qui fait la demande)
-      const bookingTeamId = req.user.id === match.home_captain_id
-        ? match.home_team_id
-        : match.away_team_id;
+      const bookingTeamId =
+        req.user.id === match.home_captain_id
+          ? match.home_team_id
+          : match.away_team_id;
 
       // Créer la réservation
       const [bookingResult] = await db.execute(
@@ -2221,8 +2272,20 @@ router.post(
           duration_minutes, game_type, base_price, discount_applied, final_price,
           notes, status, match_id)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Réservation manuelle depuis match', 'pending', ?)`,
-        [venueId, bookingTeamId, req.user.id, bookingDateStr, startTime, endTime,
-         durationMinutes, gameType, basePrice, discountApplied, finalPrice, matchId]
+        [
+          venueId,
+          bookingTeamId,
+          req.user.id,
+          bookingDateStr,
+          startTime,
+          endTime,
+          durationMinutes,
+          gameType,
+          basePrice,
+          discountApplied,
+          finalPrice,
+          matchId,
+        ]
       );
 
       const venueBookingId = bookingResult.insertId;
@@ -2244,14 +2307,54 @@ router.post(
 
       res.status(201).json({
         message: "Venue booking created successfully",
-        booking: newBooking[0]
+        booking: newBooking[0],
       });
-
     } catch (error) {
       console.error("Error creating venue booking:", error);
       res.status(500).json({ error: "Internal server error" });
     }
   }
 );
+
+// GET /api/matches/trending - Matchs à venir populaires (Public)
+router.get("/trending", async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit) || 5;
+
+    // On récupère les prochains matchs confirmés
+    // Idéalement, on pourrait trier par "popularité" (ex: nombre de messages),
+    // mais pour l'instant on prend les plus proches dans le temps.
+    const [matches] = await db.execute(
+      `SELECT m.id, m.match_date, m.status,
+              ht.name as home_team, at.name as away_team,
+              l.city, l.name as location_name
+       FROM matches m
+       JOIN teams ht ON m.home_team_id = ht.id
+       LEFT JOIN teams at ON m.away_team_id = at.id
+       LEFT JOIN locations l ON m.location_id = l.id
+       WHERE m.match_date >= CURDATE() 
+       AND m.status = 'confirmed'
+       ORDER BY m.match_date ASC
+       LIMIT ?`,
+      [limit]
+    );
+
+    const formattedMatches = matches.map((m) => ({
+      id: m.id,
+      match_date: m.match_date,
+      status: m.status,
+      home_team: m.home_team,
+      away_team: m.away_team || "En attente",
+      location: m.location_name
+        ? `${m.location_name}, ${m.city}`
+        : "Lieu à définir",
+    }));
+
+    res.json({ matches: formattedMatches });
+  } catch (error) {
+    console.error("Get trending matches error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
 
 module.exports = router;
