@@ -49,7 +49,8 @@ const SendInvitationModal = ({
   const [loadingLocations, setLoadingLocations] = useState(false);
 
   // État pour la vérification de disponibilité des joueurs
-  const [verifyPlayerAvailability, setVerifyPlayerAvailability] = useState(true);
+  const [verifyPlayerAvailability, setVerifyPlayerAvailability] =
+    useState(true);
 
   const {
     register,
@@ -149,6 +150,8 @@ const SendInvitationModal = ({
         verifyPlayerAvailability: verifyPlayerAvailability,
         message: data.message,
       };
+
+      console.log("payload", payload);
 
       const token = localStorage.getItem("token");
       await axios.post(`${API_BASE_URL}/matches/invitations`, payload, {
@@ -394,7 +397,9 @@ const SendInvitationModal = ({
                 <input
                   type="checkbox"
                   checked={verifyPlayerAvailability}
-                  onChange={(e) => setVerifyPlayerAvailability(e.target.checked)}
+                  onChange={(e) =>
+                    setVerifyPlayerAvailability(e.target.checked)
+                  }
                   className="mt-1 w-5 h-5 text-blue-600 border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
                 />
                 <div className="flex-1">
@@ -407,13 +412,17 @@ const SendInvitationModal = ({
                   <p className="text-xs text-gray-600 mt-1">
                     {verifyPlayerAvailability ? (
                       <>
-                        <strong>Activé:</strong> Les deux équipes doivent avoir minimum 6 joueurs disponibles.
-                        Le match sera <strong>confirmé automatiquement</strong> dès l'acceptation de l'invitation.
+                        <strong>Activé:</strong> Les deux équipes doivent avoir
+                        minimum 6 joueurs disponibles. Le match sera{" "}
+                        <strong>confirmé automatiquement</strong> dès
+                        l'acceptation de l'invitation.
                       </>
                     ) : (
                       <>
-                        <strong>Désactivé:</strong> Pas de vérification immédiate.
-                        Le match restera en <strong>attente</strong> jusqu'à ce que les joueurs confirment leur participation.
+                        <strong>Désactivé:</strong> Pas de vérification
+                        immédiate. Le match restera en <strong>attente</strong>{" "}
+                        jusqu'à ce que les joueurs confirment leur
+                        participation.
                       </>
                     )}
                   </p>

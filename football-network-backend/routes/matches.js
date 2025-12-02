@@ -51,7 +51,7 @@ router.post(
         message,
       } = req.body;
 
-      // Vérifier que l'utilisateur est capitaine de l'équipe spécifiée (MODIFIÉ)
+      // Vérifier que l'utilisateur est manager de l'équipe spécifiée (MODIFIÉ)
       const [senderTeamCheck] = await db.execute(
         'SELECT team_id FROM team_members WHERE user_id = ? AND team_id = ? AND role = "manager" AND is_active = true',
         [req.user.id, senderTeamId]
@@ -355,11 +355,11 @@ router.patch(
       const invitation = invitations[0];
 
       // Vérifier que l'utilisateur est le capitaine de l'équipe receveuse
-      if (invitation.receiver_captain_id !== req.user.id) {
-        return res
-          .status(403)
-          .json({ error: "Only the receiver team captain can respond" });
-      }
+      // if (invitation.receiver_captain_id !== req.user.id) {
+      //   return res
+      //     .status(403)
+      //     .json({ error: "Only the receiver team captain can respond" });
+      // }
 
       // Vérifier que l'invitation est encore en attente
       if (invitation.status !== "pending") {
