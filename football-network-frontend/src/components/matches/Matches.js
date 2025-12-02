@@ -8,18 +8,22 @@ import {
   Plus,
   Search,
   Filter,
+  AlertCircle,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import toast from "react-hot-toast";
 import axios from "axios";
+import { useAuth } from "../../contexts/AuthContext";
 
-const API_BASE_URL =
-  process.env.REACT_APP_API_URL || "http://localhost:5000/api";
+const API_BASE_URL = process.env.REACT_APP_API_URL;
 
 const Matches = () => {
+  const { token } = useAuth();
   const [matches, setMatches] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeFilter, setActiveFilter] = useState("upcoming"); // upcoming, completed, all
+  const [searchQuery, setSearchQuery] = useState("");
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     loadMatches();
@@ -28,6 +32,7 @@ const Matches = () => {
   const loadMatches = async () => {
     try {
       setLoading(true);
+      setError(null);
       const params = new URLSearchParams();
       if (activeFilter === "upcoming") {
         params.append("upcoming", "true");
@@ -36,14 +41,35 @@ const Matches = () => {
       if (activeFilter === "completed") params.append("status", "completed");
       params.append("limit", "50");
 
-      const response = await axios.get(`${API_BASE_URL}/matches?${params}`);
+      const config = token
+        ? { headers: { Authorization: `Bearer ${token}` } }
+        : {};
+
+      const response = await axios.get(
+        `${API_BASE_URL}/matches?${params}`,
+        config
+      );
       setMatches(response.data);
     } catch (error) {
+      console.error("Error loading matches:", error);
+      setError("Erreur lors du chargement des matchs");
       toast.error("Erreur chargement matchs");
     } finally {
       setLoading(false);
     }
   };
+
+  // Filtrer les matchs selon la recherche
+  const filteredMatches = matches.filter((match) => {
+    if (!searchQuery) return true;
+    const query = searchQuery.toLowerCase();
+    return (
+      match.home_team?.toLowerCase().includes(query) ||
+      match.away_team?.toLowerCase().includes(query) ||
+      match.homeTeam?.name?.toLowerCase().includes(query) ||
+      match.awayTeam?.name?.toLowerCase().includes(query)
+    );
+  });
 
   return (
     <div className="max-w-7xl mx-auto pb-12">
@@ -92,17 +118,35 @@ const Matches = () => {
           <input
             type="text"
             placeholder="Rechercher une équipe..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-sm"
           />
         </div>
       </div>
+
+      {/* Error State */}
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-6 flex items-center">
+          <AlertCircle className="w-5 h-5 text-red-500 mr-3" />
+          <div>
+            <p className="text-red-800 font-medium">{error}</p>
+            <button
+              onClick={loadMatches}
+              className="text-red-600 text-sm underline hover:text-red-700 mt-1"
+            >
+              Réessayer
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Matches Grid */}
       {loading ? (
         <div className="flex justify-center py-12">
           <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-indigo-500"></div>
         </div>
-      ) : matches.length === 0 ? (
+      ) : filteredMatches.length === 0 ? (
         <div className="text-center py-16 bg-white rounded-3xl border-2 border-dashed border-gray-200">
           <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-4 text-gray-400">
             <Calendar className="w-8 h-8" />
@@ -111,12 +155,14 @@ const Matches = () => {
             Aucun match trouvé
           </h3>
           <p className="text-gray-500">
-            Vous n'avez aucun match prévu pour le moment.
+            {searchQuery
+              ? "Aucun match ne correspond à votre recherche."
+              : "Vous n'avez aucun match prévu pour le moment."}
           </p>
         </div>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {matches.map((match) => (
+          {filteredMatches.map((match) => (
             <MatchListItem key={match.id} match={match} />
           ))}
         </div>
@@ -126,8 +172,22 @@ const Matches = () => {
 };
 
 const MatchListItem = ({ match }) => {
-  const date = new Date(match.matchDate);
+  // Gérer les différents formats de date possibles
+  const date = new Date(match.match_date || match.matchDate);
   const isCompleted = match.status === "completed";
+
+  // Gérer les différents formats de noms d'équipe
+  const homeTeamName = match.home_team || match.homeTeam?.name || "Équipe domicile";
+  const awayTeamName = match.away_team || match.awayTeam?.name || "Équipe extérieure";
+  const homeTeamLogo = match.home_team_logo || match.homeTeam?.logo_url || match.homeTeam?.logoUrl;
+  const awayTeamLogo = match.away_team_logo || match.awayTeam?.logo_url || match.awayTeam?.logoUrl;
+
+  // Gérer les scores
+  const homeScore = match.home_score ?? match.score?.home ?? match.team_score;
+  const awayScore = match.away_score ?? match.score?.away ?? match.opponent_score;
+
+  // Gérer la localisation
+  const locationName = match.location_name || match.location?.name || match.location || "Lieu à déterminer";
 
   return (
     <Link
@@ -144,28 +204,29 @@ const MatchListItem = ({ match }) => {
       <div className="p-6 flex items-center justify-between">
         {/* Home */}
         <div className="flex flex-col items-center w-1/3">
-          <div className="w-12 h-12 md:w-16 md:h-16 rounded-full bg-gray-50 mb-2 flex items-center justify-center border border-gray-100">
-            {match.homeTeam.logoUrl ? (
+          <div className="w-12 h-12 md:w-16 md:h-16 rounded-full bg-gray-50 mb-2 flex items-center justify-center border border-gray-100 overflow-hidden">
+            {homeTeamLogo ? (
               <img
-                src={match.homeTeam.logoUrl}
-                className="w-full h-full object-cover rounded-full"
+                src={homeTeamLogo.startsWith('http') ? homeTeamLogo : `${API_BASE_URL.replace('/api', '')}${homeTeamLogo}`}
+                alt={homeTeamName}
+                className="w-full h-full object-cover"
               />
             ) : (
               <span className="font-bold text-gray-400">
-                {match.homeTeam.name[0]}
+                {homeTeamName[0]}
               </span>
             )}
           </div>
           <span className="font-bold text-gray-900 text-center text-sm line-clamp-1">
-            {match.homeTeam.name}
+            {homeTeamName}
           </span>
         </div>
 
         {/* Center Info */}
         <div className="flex flex-col items-center w-1/3">
-          {isCompleted ? (
+          {isCompleted && homeScore !== null && homeScore !== undefined ? (
             <div className="text-2xl md:text-3xl font-black text-gray-900 mb-1">
-              {match.score?.home} - {match.score?.away}
+              {homeScore} - {awayScore ?? 0}
             </div>
           ) : (
             <div className="px-3 py-1 bg-gray-100 rounded text-xs font-bold text-gray-500 mb-2">
@@ -180,30 +241,32 @@ const MatchListItem = ({ match }) => {
             {date.toLocaleDateString("fr-FR", {
               day: "numeric",
               month: "short",
+              year: "numeric",
             })}
           </div>
 
           <div className="flex items-center text-xs text-gray-400">
-            <MapPin className="w-3 h-3 mr-1" /> {match.location?.name || "TBD"}
+            <MapPin className="w-3 h-3 mr-1" /> {locationName}
           </div>
         </div>
 
         {/* Away */}
         <div className="flex flex-col items-center w-1/3">
-          <div className="w-12 h-12 md:w-16 md:h-16 rounded-full bg-gray-50 mb-2 flex items-center justify-center border border-gray-100">
-            {match.awayTeam?.logoUrl ? (
+          <div className="w-12 h-12 md:w-16 md:h-16 rounded-full bg-gray-50 mb-2 flex items-center justify-center border border-gray-100 overflow-hidden">
+            {awayTeamLogo ? (
               <img
-                src={match.awayTeam.logoUrl}
-                className="w-full h-full object-cover rounded-full"
+                src={awayTeamLogo.startsWith('http') ? awayTeamLogo : `${API_BASE_URL.replace('/api', '')}${awayTeamLogo}`}
+                alt={awayTeamName}
+                className="w-full h-full object-cover"
               />
             ) : (
               <span className="font-bold text-gray-400">
-                {match.awayTeam?.name?.[0] || "?"}
+                {awayTeamName?.[0] || "?"}
               </span>
             )}
           </div>
           <span className="font-bold text-gray-900 text-center text-sm line-clamp-1">
-            {match.awayTeam?.name || "En attente"}
+            {awayTeamName}
           </span>
         </div>
       </div>

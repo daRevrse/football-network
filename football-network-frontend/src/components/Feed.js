@@ -1,25 +1,23 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import axios from "axios";
 import { Link } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import {
-  Heart,
-  MessageCircle,
-  Share2,
   Users,
   Calendar,
   Trophy,
   PlusCircle,
   Loader2,
-  Search,
   MapPin,
   ArrowRight,
   Star,
-  Image as ImageIcon,
   Send,
   LogIn,
   UserPlus,
+  Plus,
 } from "lucide-react";
+import PostCard from "./feed/PostCard";
+import CreatePostModal from "./feed/CreatePostModal";
 
 const API_BASE_URL = process.env.REACT_APP_API_URL;
 
@@ -55,34 +53,6 @@ const PostSkeleton = () => (
   </div>
 );
 
-// --- CONFIGURATION TYPES POST ---
-const POST_TYPES = {
-  match_announcement: {
-    label: "Match",
-    color: "text-green-600",
-    bg: "bg-green-50",
-    icon: Calendar,
-  },
-  match_result: {
-    label: "Résultat",
-    color: "text-blue-600",
-    bg: "bg-blue-50",
-    icon: Trophy,
-  },
-  recruitment: {
-    label: "Recrutement",
-    color: "text-purple-600",
-    bg: "bg-purple-50",
-    icon: Users,
-  },
-  general: {
-    label: "Discussion",
-    color: "text-gray-600",
-    bg: "bg-gray-50",
-    icon: MessageCircle,
-  },
-};
-
 const Feed = () => {
   const { token, user } = useAuth();
   const isAuthenticated = !!user; // Booléen pour vérifier l'état
@@ -91,19 +61,16 @@ const Feed = () => {
   const [posts, setPosts] = useState([]);
   const [suggestedTeams, setSuggestedTeams] = useState([]);
   const [trendingMatches, setTrendingMatches] = useState([]);
+  const [followingTeams, setFollowingTeams] = useState(new Set());
 
   // États d'UI
   const [loadingFeed, setLoadingFeed] = useState(true);
   const [loadingSidebar, setLoadingSidebar] = useState(true);
-  const [createContent, setCreateContent] = useState("");
-  const [createType, setCreateType] = useState("general");
-  const [isCreating, setIsCreating] = useState(false);
   const [activeFilter, setActiveFilter] = useState("all");
+  const [showCreateModal, setShowCreateModal] = useState(false);
 
-  // Pagination
+  // Pagination (désactivée pour l'instant)
   const [page, setPage] = useState(0);
-  const [hasMore, setHasMore] = useState(true);
-  const observer = useRef();
 
   // --- Chargement des données ---
 
@@ -114,8 +81,7 @@ const Feed = () => {
   useEffect(() => {
     setPage(0);
     setPosts([]);
-    setHasMore(true);
-    loadFeed(0, true);
+    loadFeed();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeFilter, isAuthenticated]);
 
@@ -159,74 +125,76 @@ const Feed = () => {
     }
   };
 
-  const loadFeed = async (pageNum, reset = false) => {
+  const loadFeed = async () => {
     try {
       setLoadingFeed(true);
-      const offset = pageNum * 10;
-      const typeQuery = activeFilter !== "all" ? `&type=${activeFilter}` : "";
 
       // Configuration headers conditionnelle
       const config = token
         ? { headers: { Authorization: `Bearer ${token}` } }
         : {};
 
-      const res = await axios.get(
-        `${API_BASE_URL}/feed?limit=10&offset=${offset}${typeQuery}`,
-        config
-      );
-
-      setPosts((prev) =>
-        reset ? res.data.posts : [...prev, ...res.data.posts]
-      );
-      setHasMore(res.data.posts.length === 10);
+      // Charger les posts depuis le nouveau endpoint feed
+      const res = await axios.get(`${API_BASE_URL}/feed?limit=50`, config);
+      setPosts(res.data.posts || []);
     } catch (err) {
       console.error("Feed load error:", err);
+      setPosts([]);
     } finally {
       setLoadingFeed(false);
     }
   };
 
-  // Scroll infini
+  // Scroll infini (désactivé pour l'instant car pas de pagination)
   const lastPostRef = useCallback(
     (node) => {
-      if (loadingFeed) return;
-      if (observer.current) observer.current.disconnect();
-      observer.current = new IntersectionObserver((entries) => {
-        if (entries[0].isIntersecting && hasMore) {
-          setPage((prev) => {
-            const nextPage = prev + 1;
-            loadFeed(nextPage);
-            return nextPage;
-          });
-        }
-      });
-      if (node) observer.current.observe(node);
+      // Pas de pagination pour le moment
+      if (node) {
+        // Observer maintenu pour compatibilité mais ne fait rien
+      }
     },
-    [loadingFeed, hasMore]
+    []
   );
 
   // --- Actions ---
 
-  const handleCreatePost = async () => {
-    if (!createContent.trim() || !isAuthenticated) return;
-    setIsCreating(true);
+  const handleFollowTeam = async (teamId) => {
+    if (!isAuthenticated) {
+      alert("Connectez-vous pour suivre une équipe !");
+      return;
+    }
+
     try {
-      const res = await axios.post(
-        `${API_BASE_URL}/feed`,
-        { content: createContent, type: createType },
+      // Optimistic update
+      setFollowingTeams((prev) => new Set(prev).add(teamId));
+
+      await axios.post(
+        `${API_BASE_URL}/teams/${teamId}/follow`,
+        {},
         { headers: { Authorization: `Bearer ${token}` } }
       );
-      setPosts([res.data.post, ...posts]);
-      setCreateContent("");
-      setCreateType("general");
     } catch (error) {
-      alert("Erreur lors de la publication");
-    } finally {
-      setIsCreating(false);
+      // Rollback on error
+      setFollowingTeams((prev) => {
+        const newSet = new Set(prev);
+        newSet.delete(teamId);
+        return newSet;
+      });
+
+      if (error.response?.status === 400) {
+        alert("Vous suivez déjà cette équipe");
+      } else {
+        alert("Erreur lors du suivi de l'équipe");
+      }
     }
   };
 
-  const handleLike = async (postId, liked) => {
+  const handlePostCreated = (newPost) => {
+    setPosts([newPost, ...posts]);
+    setShowCreateModal(false);
+  };
+
+  const handleLike = async (postId, currentlyLiked) => {
     if (!isAuthenticated) {
       alert("Connectez-vous pour aimer ce post !");
       return;
@@ -238,19 +206,28 @@ const Feed = () => {
         p.id === postId
           ? {
               ...p,
-              userLiked: !liked,
-              stats: { ...p.stats, likes: p.stats.likes + (liked ? -1 : 1) },
+              userLiked: !currentlyLiked,
+              stats: {
+                ...p.stats,
+                likes: (p.stats?.likes || 0) + (currentlyLiked ? -1 : 1),
+              },
             }
           : p
       )
     );
 
     try {
-      await axios({
-        method: liked ? "DELETE" : "POST",
-        url: `${API_BASE_URL}/feed/${postId}/like`,
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      if (currentlyLiked) {
+        await axios.delete(`${API_BASE_URL}/feed/${postId}/like`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+      } else {
+        await axios.post(
+          `${API_BASE_URL}/feed/${postId}/like`,
+          {},
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+      }
     } catch (error) {
       // Rollback
       setPosts((prev) =>
@@ -258,8 +235,11 @@ const Feed = () => {
           p.id === postId
             ? {
                 ...p,
-                userLiked: liked,
-                stats: { ...p.stats, likes: p.stats.likes + (liked ? 1 : -1) },
+                userLiked: currentlyLiked,
+                stats: {
+                  ...p.stats,
+                  likes: (p.stats?.likes || 0) + (currentlyLiked ? 1 : -1),
+                },
               }
             : p
         )
@@ -293,131 +273,51 @@ const Feed = () => {
     </div>
   );
 
-  const TeamSuggestion = ({ team }) => (
-    <div className="flex items-center justify-between py-3 border-b border-gray-50 last:border-0">
-      <div className="flex items-center space-x-3 overflow-hidden">
-        <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-gray-100 to-gray-200 flex-shrink-0 flex items-center justify-center text-gray-500 font-bold border border-gray-200">
-          {team.logo_url ? (
-            <img
-              src={team.logo_url}
-              alt={team.name}
-              className="w-full h-full object-cover rounded-lg"
-            />
-          ) : (
-            team.name[0]
-          )}
-        </div>
-        <div className="min-w-0">
-          <p className="text-sm font-semibold text-gray-900 truncate">
-            {team.name}
-          </p>
-          <p className="text-xs text-gray-500 flex items-center truncate">
-            <MapPin className="w-3 h-3 mr-0.5" /> {team.city || "Local"}
-          </p>
-        </div>
-      </div>
-      <button className="p-1.5 text-green-600 hover:bg-green-50 rounded-full transition">
-        <PlusCircle className="w-5 h-5" />
-      </button>
-    </div>
-  );
-
-  const PostCard = ({ post, isLast }) => {
-    const typeConfig = POST_TYPES[post.type] || POST_TYPES.general;
-    const Icon = typeConfig.icon;
+  const TeamSuggestion = ({ team }) => {
+    const isFollowing = followingTeams.has(team.id);
 
     return (
-      <div
-        ref={isLast ? lastPostRef : null}
-        className="bg-white rounded-xl shadow-sm mb-5 overflow-hidden border border-gray-100"
-      >
-        <div className="p-4 flex justify-between items-start">
-          <div className="flex items-center space-x-3">
-            <Link
-              to={isAuthenticated ? `/profile/${post.author?.id}` : "#"}
-              className="block"
-            >
-              <div className="w-10 h-10 rounded-full bg-gradient-to-r from-green-400 to-blue-500 flex items-center justify-center text-white font-bold shadow-sm">
-                {post.author?.profilePicture ? (
-                  <img
-                    src={post.author.profilePicture}
-                    alt=""
-                    className="w-full h-full rounded-full object-cover"
-                  />
-                ) : (
-                  post.author?.firstName?.[0]
-                )}
-              </div>
-            </Link>
-            <div>
-              <div className="flex items-center">
-                <span className="font-bold text-gray-900 hover:underline cursor-pointer mr-2">
-                  {post.author?.firstName} {post.author?.lastName}
-                </span>
-                {post.location && (
-                  <span className="text-xs text-gray-400 flex items-center">
-                    <MapPin className="w-3 h-3 mr-0.5" />
-                    {post.location.city}
-                  </span>
-                )}
-              </div>
-              <div className="flex items-center space-x-2 text-xs">
-                <span
-                  className={`flex items-center px-2 py-0.5 rounded-full ${typeConfig.bg} ${typeConfig.color} font-medium`}
-                >
-                  <Icon className="w-3 h-3 mr-1" /> {typeConfig.label}
-                </span>
-                <span className="text-gray-400">
-                  • {new Date(post.createdAt).toLocaleDateString()}
-                </span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="px-4 pb-2">
-          <p className="text-gray-800 whitespace-pre-line leading-relaxed">
-            {post.content}
-          </p>
-        </div>
-
-        {post.media && (
-          <div className="mt-2 mb-4 bg-black">
-            <img
-              src={post.media.url}
-              alt="Post media"
-              className="w-full max-h-[500px] object-contain"
-            />
-          </div>
-        )}
-
-        <div className="px-4 py-3 border-t border-gray-50 flex items-center justify-between mt-2">
-          <div className="flex space-x-6">
-            <button
-              onClick={() => handleLike(post.id, post.userLiked)}
-              className={`flex items-center space-x-1.5 text-sm font-medium transition ${
-                post.userLiked
-                  ? "text-red-500"
-                  : "text-gray-500 hover:text-red-500"
-              }`}
-            >
-              <Heart
-                className={`w-5 h-5 ${post.userLiked ? "fill-current" : ""}`}
+      <div className="flex items-center justify-between py-3 border-b border-gray-50 last:border-0">
+        <Link
+          to={`/teams/${team.id}/public`}
+          className="flex items-center space-x-3 overflow-hidden flex-1 hover:bg-gray-50 -m-2 p-2 rounded-lg transition"
+        >
+          <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-gray-100 to-gray-200 flex-shrink-0 flex items-center justify-center text-gray-500 font-bold border border-gray-200">
+            {team.logo_url ? (
+              <img
+                src={`${API_BASE_URL.replace("/api", "")}${team.logo_url}`}
+                alt={team.name}
+                className="w-full h-full object-cover rounded-lg"
               />
-              <span>{post.stats?.likes || 0}</span>
-            </button>
-            <button className="flex items-center space-x-1.5 text-sm font-medium text-gray-500 hover:text-blue-500 transition">
-              <MessageCircle className="w-5 h-5" />
-              <span>{post.stats?.comments || 0}</span>
-            </button>
+            ) : (
+              team.name[0]
+            )}
           </div>
-          <button className="text-gray-400 hover:text-gray-600">
-            <Share2 className="w-5 h-5" />
-          </button>
-        </div>
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-gray-900 truncate">
+              {team.name}
+            </p>
+            <p className="text-xs text-gray-500 flex items-center truncate">
+              <MapPin className="w-3 h-3 mr-0.5" /> {team.city || "Local"}
+            </p>
+          </div>
+        </Link>
+        <button
+          onClick={() => handleFollowTeam(team.id)}
+          disabled={isFollowing}
+          className={`p-1.5 rounded-full transition ${
+            isFollowing
+              ? "text-gray-400 bg-gray-100 cursor-not-allowed"
+              : "text-green-600 hover:bg-green-50"
+          }`}
+          title={isFollowing ? "Déjà suivi" : "Suivre cette équipe"}
+        >
+          <PlusCircle className="w-5 h-5" />
+        </button>
       </div>
     );
   };
+
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -520,54 +420,18 @@ const Feed = () => {
             {/* Zone de création OU Bannière de bienvenue */}
             {isAuthenticated ? (
               <div className="bg-white rounded-xl shadow-sm p-4 mb-6">
-                <div className="flex space-x-3">
+                <button
+                  onClick={() => setShowCreateModal(true)}
+                  className="w-full flex items-center space-x-3 p-3 hover:bg-gray-50 rounded-lg transition group"
+                >
                   <div className="w-10 h-10 rounded-full bg-green-100 flex-shrink-0 flex items-center justify-center text-green-700 font-bold">
                     {user?.firstName?.[0]}
                   </div>
-                  <div className="flex-1">
-                    <textarea
-                      value={createContent}
-                      onChange={(e) => setCreateContent(e.target.value)}
-                      placeholder="Quoi de neuf sur le terrain ?"
-                      className="w-full border-none resize-none focus:ring-0 text-gray-700 text-lg h-16 placeholder-gray-400"
-                    />
-                    <div className="flex flex-wrap gap-2 mt-2 pb-2 border-b border-gray-50">
-                      {Object.entries(POST_TYPES).map(([key, conf]) => (
-                        <button
-                          key={key}
-                          onClick={() => setCreateType(key)}
-                          className={`text-xs px-3 py-1 rounded-full transition flex items-center ${
-                            createType === key
-                              ? `${conf.bg} ${conf.color} ring-1 ring-current`
-                              : "bg-gray-50 text-gray-500 hover:bg-gray-100"
-                          }`}
-                        >
-                          <conf.icon className="w-3 h-3 mr-1" /> {conf.label}
-                        </button>
-                      ))}
-                    </div>
-                    <div className="flex justify-between items-center mt-3">
-                      <div className="flex space-x-2">
-                        <button className="p-2 text-gray-400 hover:bg-gray-100 rounded-full transition">
-                          <ImageIcon className="w-5 h-5" />
-                        </button>
-                        <button className="p-2 text-gray-400 hover:bg-gray-100 rounded-full transition">
-                          <MapPin className="w-5 h-5" />
-                        </button>
-                      </div>
-                      <button
-                        onClick={handleCreatePost}
-                        disabled={isCreating || !createContent.trim()}
-                        className="bg-green-600 text-white px-6 py-2 rounded-full font-medium shadow-md hover:bg-green-700 transition disabled:opacity-50 flex items-center"
-                      >
-                        {isCreating && (
-                          <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                        )}
-                        Publier
-                      </button>
-                    </div>
+                  <div className="flex-1 text-left text-gray-500 group-hover:text-gray-700 transition">
+                    Quoi de neuf sur le terrain ?
                   </div>
-                </div>
+                  <Plus className="w-5 h-5 text-green-600" />
+                </button>
               </div>
             ) : (
               <div className="bg-gradient-to-r from-green-600 to-teal-600 rounded-2xl shadow-lg p-8 mb-8 text-white relative overflow-hidden">
@@ -657,6 +521,8 @@ const Feed = () => {
                     key={post.id}
                     post={post}
                     isLast={idx === posts.length - 1}
+                    onLike={handleLike}
+                    isAuthenticated={isAuthenticated}
                   />
                 ))
               )}
@@ -745,6 +611,14 @@ const Feed = () => {
           </aside>
         </div>
       </div>
+
+      {/* Create Post Modal */}
+      <CreatePostModal
+        isOpen={showCreateModal}
+        onClose={() => setShowCreateModal(false)}
+        onPostCreated={handlePostCreated}
+        token={token}
+      />
     </div>
   );
 };

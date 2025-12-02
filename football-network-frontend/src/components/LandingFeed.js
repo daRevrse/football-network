@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import axios from "axios";
 import { Link } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
@@ -91,6 +91,7 @@ const LandingFeed = () => {
   const [posts, setPosts] = useState([]);
   const [suggestedTeams, setSuggestedTeams] = useState([]);
   const [trendingMatches, setTrendingMatches] = useState([]);
+  const [followingTeams, setFollowingTeams] = useState(new Set());
 
   // États d'UI
   const [loadingFeed, setLoadingFeed] = useState(true);
@@ -100,10 +101,8 @@ const LandingFeed = () => {
   const [isCreating, setIsCreating] = useState(false);
   const [activeFilter, setActiveFilter] = useState("all");
 
-  // Pagination
+  // Pagination (désactivée pour l'instant)
   const [page, setPage] = useState(0);
-  const [hasMore, setHasMore] = useState(true);
-  const observer = useRef();
 
   // --- Chargement des données ---
 
@@ -114,8 +113,7 @@ const LandingFeed = () => {
   useEffect(() => {
     setPage(0);
     setPosts([]);
-    setHasMore(true);
-    loadFeed(0, true);
+    loadFeed();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeFilter, isAuthenticated]);
 
@@ -159,53 +157,123 @@ const LandingFeed = () => {
     }
   };
 
-  const loadFeed = async (pageNum, reset = false) => {
+  const loadFeed = async () => {
     try {
       setLoadingFeed(true);
-      const offset = pageNum * 10;
-      const typeQuery = activeFilter !== "all" ? `&type=${activeFilter}` : "";
 
       // Configuration headers conditionnelle
       const config = token
         ? { headers: { Authorization: `Bearer ${token}` } }
         : {};
 
-      const res = await axios.get(
-        `${API_BASE_URL}/feed?limit=10&offset=${offset}${typeQuery}`,
-        config
-      );
+      // Pour les utilisateurs connectés, charger les activités des équipes suivies
+      if (isAuthenticated) {
+        const res = await axios.get(
+          `${API_BASE_URL}/teams/feed/activities?limit=20`,
+          config
+        );
 
-      setPosts((prev) =>
-        reset ? res.data.posts : [...prev, ...res.data.posts]
-      );
-      setHasMore(res.data.posts.length === 10);
+        // Transformer les activités en posts pour l'affichage
+        const transformedPosts = res.data.activities.map((activity) => {
+          if (activity.type === "match") {
+            return {
+              id: `match-${activity.id}`,
+              type: "match_result",
+              content: `${activity.team.name} ${activity.match.result === "win" ? "a gagné" : activity.match.result === "loss" ? "a perdu" : "a fait match nul"} contre ${activity.match.opponent} (${activity.match.teamScore}-${activity.match.opponentScore})`,
+              author: {
+                id: activity.team.id,
+                isTeam: true,
+                firstName: activity.team.name,
+                lastName: "",
+                profilePicture: activity.team.logoUrl
+                  ? `${API_BASE_URL.replace("/api", "")}${activity.team.logoUrl}`
+                  : null,
+              },
+              createdAt: activity.date,
+              stats: { likes: 0, comments: 0 },
+              userLiked: false,
+              location: activity.match.location
+                ? { city: activity.match.location }
+                : null,
+            };
+          } else if (activity.type === "new_member") {
+            return {
+              id: `member-${activity.id}`,
+              type: "general",
+              content: `${activity.member.firstName} ${activity.member.lastName} a rejoint l'équipe !`,
+              author: {
+                id: activity.team.id,
+                isTeam: true,
+                firstName: activity.team.name,
+                lastName: "",
+                profilePicture: activity.team.logoUrl
+                  ? `${API_BASE_URL.replace("/api", "")}${activity.team.logoUrl}`
+                  : null,
+              },
+              createdAt: activity.date,
+              stats: { likes: 0, comments: 0 },
+              userLiked: false,
+            };
+          }
+          return null;
+        }).filter(Boolean);
+
+        setPosts(transformedPosts);
+      } else {
+        // Pour les invités, afficher un feed vide ou des posts publics génériques
+        setPosts([]);
+      }
     } catch (err) {
       console.error("Feed load error:", err);
+      setPosts([]);
     } finally {
       setLoadingFeed(false);
     }
   };
 
-  // Scroll infini
+  // Scroll infini (désactivé pour l'instant car pas de pagination)
   const lastPostRef = useCallback(
     (node) => {
-      if (loadingFeed) return;
-      if (observer.current) observer.current.disconnect();
-      observer.current = new IntersectionObserver((entries) => {
-        if (entries[0].isIntersecting && hasMore) {
-          setPage((prev) => {
-            const nextPage = prev + 1;
-            loadFeed(nextPage);
-            return nextPage;
-          });
-        }
-      });
-      if (node) observer.current.observe(node);
+      // Pas de pagination pour le moment
+      if (node) {
+        // Observer maintenu pour compatibilité mais ne fait rien
+      }
     },
-    [loadingFeed, hasMore]
+    []
   );
 
   // --- Actions ---
+
+  const handleFollowTeam = async (teamId) => {
+    if (!isAuthenticated) {
+      alert("Connectez-vous pour suivre une équipe !");
+      return;
+    }
+
+    try {
+      // Optimistic update
+      setFollowingTeams((prev) => new Set(prev).add(teamId));
+
+      await axios.post(
+        `${API_BASE_URL}/teams/${teamId}/follow`,
+        {},
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+    } catch (error) {
+      // Rollback on error
+      setFollowingTeams((prev) => {
+        const newSet = new Set(prev);
+        newSet.delete(teamId);
+        return newSet;
+      });
+
+      if (error.response?.status === 400) {
+        alert("Vous suivez déjà cette équipe");
+      } else {
+        alert("Erreur lors du suivi de l'équipe");
+      }
+    }
+  };
 
   const handleCreatePost = async () => {
     if (!createContent.trim() || !isAuthenticated) return;
@@ -293,34 +361,50 @@ const LandingFeed = () => {
     </div>
   );
 
-  const TeamSuggestion = ({ team }) => (
-    <div className="flex items-center justify-between py-3 border-b border-gray-50 last:border-0">
-      <div className="flex items-center space-x-3 overflow-hidden">
-        <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-gray-100 to-gray-200 flex-shrink-0 flex items-center justify-center text-gray-500 font-bold border border-gray-200">
-          {team.logo_url ? (
-            <img
-              src={team.logo_url}
-              alt={team.name}
-              className="w-full h-full object-cover rounded-lg"
-            />
-          ) : (
-            team.name[0]
-          )}
-        </div>
-        <div className="min-w-0">
-          <p className="text-sm font-semibold text-gray-900 truncate">
-            {team.name}
-          </p>
-          <p className="text-xs text-gray-500 flex items-center truncate">
-            <MapPin className="w-3 h-3 mr-0.5" /> {team.city || "Local"}
-          </p>
-        </div>
+  const TeamSuggestion = ({ team }) => {
+    const isFollowing = followingTeams.has(team.id);
+
+    return (
+      <div className="flex items-center justify-between py-3 border-b border-gray-50 last:border-0">
+        <Link
+          to={`/teams/${team.id}/public`}
+          className="flex items-center space-x-3 overflow-hidden flex-1 hover:bg-gray-50 -m-2 p-2 rounded-lg transition"
+        >
+          <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-gray-100 to-gray-200 flex-shrink-0 flex items-center justify-center text-gray-500 font-bold border border-gray-200">
+            {team.logo_url ? (
+              <img
+                src={`${API_BASE_URL.replace("/api", "")}${team.logo_url}`}
+                alt={team.name}
+                className="w-full h-full object-cover rounded-lg"
+              />
+            ) : (
+              team.name[0]
+            )}
+          </div>
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-gray-900 truncate">
+              {team.name}
+            </p>
+            <p className="text-xs text-gray-500 flex items-center truncate">
+              <MapPin className="w-3 h-3 mr-0.5" /> {team.city || "Local"}
+            </p>
+          </div>
+        </Link>
+        <button
+          onClick={() => handleFollowTeam(team.id)}
+          disabled={isFollowing}
+          className={`p-1.5 rounded-full transition ${
+            isFollowing
+              ? "text-gray-400 bg-gray-100 cursor-not-allowed"
+              : "text-green-600 hover:bg-green-50"
+          }`}
+          title={isFollowing ? "Déjà suivi" : "Suivre cette équipe"}
+        >
+          <PlusCircle className="w-5 h-5" />
+        </button>
       </div>
-      <button className="p-1.5 text-green-600 hover:bg-green-50 rounded-full transition">
-        <PlusCircle className="w-5 h-5" />
-      </button>
-    </div>
-  );
+    );
+  };
 
   const PostCard = ({ post, isLast }) => {
     const typeConfig = POST_TYPES[post.type] || POST_TYPES.general;
@@ -334,7 +418,13 @@ const LandingFeed = () => {
         <div className="p-4 flex justify-between items-start">
           <div className="flex items-center space-x-3">
             <Link
-              to={isAuthenticated ? `/profile/${post.author?.id}` : "#"}
+              to={
+                isAuthenticated
+                  ? post.author?.isTeam
+                    ? `/teams/${post.author.id}/public`
+                    : `/users/${post.author?.id}`
+                  : "#"
+              }
               className="block"
             >
               <div className="w-10 h-10 rounded-full bg-gradient-to-r from-green-400 to-blue-500 flex items-center justify-center text-white font-bold shadow-sm">
@@ -351,9 +441,18 @@ const LandingFeed = () => {
             </Link>
             <div>
               <div className="flex items-center">
-                <span className="font-bold text-gray-900 hover:underline cursor-pointer mr-2">
+                <Link
+                  to={
+                    isAuthenticated
+                      ? post.author?.isTeam
+                        ? `/teams/${post.author.id}/public`
+                        : `/users/${post.author?.id}`
+                      : "#"
+                  }
+                  className="font-bold text-gray-900 hover:underline mr-2"
+                >
                   {post.author?.firstName} {post.author?.lastName}
-                </span>
+                </Link>
                 {post.location && (
                   <span className="text-xs text-gray-400 flex items-center">
                     <MapPin className="w-3 h-3 mr-0.5" />

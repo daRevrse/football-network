@@ -22,12 +22,13 @@ const SetCaptainModal = ({ team, onClose, onCaptainSet }) => {
     try {
       setSetting(true);
       await axios.post(`${API_BASE_URL}/teams/${team.id}/set-captain`, {
-        playerId: selectedPlayerId,
+        newCaptainId: selectedPlayerId,
       });
 
       toast.success("Capitaine désigné avec succès");
       onCaptainSet();
     } catch (error) {
+      console.error("Set captain error:", error);
       toast.error(
         error.response?.data?.error || "Erreur lors de la désignation"
       );

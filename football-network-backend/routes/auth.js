@@ -78,7 +78,6 @@ router.post(
       const hashedPassword = await bcrypt.hash(password, 12);
 
       // 3. Génération du token de vérification
-      // Utilisation de node:crypto qui est maintenant sûr
       const verificationToken = crypto.randomBytes(32).toString("hex");
       const tokenExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24h
 
@@ -87,7 +86,8 @@ router.post(
       const dbSkillLevel =
         userType === "manager" ? null : skillLevel || "amateur";
 
-      // 4. Créer l'utilisateur (is_verified = false par défaut)
+      // 4. Créer l'utilisateur
+      // Note: userType est bien inséré ici ('manager' ou 'player')
       const [result] = await db.execute(
         `INSERT INTO users 
         (email, password, first_name, last_name, phone, birth_date, user_type, position, skill_level, location_city, verification_token, verification_token_expires_at, is_verified) 
@@ -120,8 +120,9 @@ router.post(
 
         const newTeamId = teamResult.insertId;
 
+        // CORRECTION ICI : Rôle 'manager' au lieu de 'captain'
         await db.execute(
-          "INSERT INTO team_members (team_id, user_id, role) VALUES (?, ?, 'captain')",
+          "INSERT INTO team_members (team_id, user_id, role) VALUES (?, ?, 'manager')",
           [newTeamId, newUserId]
         );
 
@@ -139,10 +140,9 @@ router.post(
         );
       } catch (emailError) {
         console.error("Failed to send verification email:", emailError);
-        // On ne bloque pas l'inscription, mais le user devra demander un renvoi
       }
 
-      // 6. Réponse (Sans Token JWT car email non vérifié)
+      // 6. Réponse
       res.status(201).json({
         message:
           "Registration successful. Please check your email to verify your account.",
@@ -172,7 +172,7 @@ router.post(
 
       const { email, password } = req.body;
 
-      // Trouver l'utilisateur + vérifier is_verified
+      // Trouver l'utilisateur
       const [users] = await db.execute(
         "SELECT id, email, password, first_name, last_name, user_type, position, skill_level, is_active, is_verified, verification_token FROM users WHERE email = ?",
         [email]
@@ -188,22 +188,19 @@ router.post(
         return res.status(401).json({ error: "Account is deactivated" });
       }
 
-      // Vérifier le mot de passe
       const isValidPassword = await bcrypt.compare(password, user.password);
       if (!isValidPassword) {
         return res.status(401).json({ error: "Invalid credentials" });
       }
 
-      // [NOUVEAU] Vérifier si l'email est confirmé
       if (!user.is_verified) {
         return res.status(403).json({
           error: "Email not verified",
           message: "Please verify your email address to login.",
-          requiresVerification: true, // Flag pour le frontend
+          requiresVerification: true,
         });
       }
 
-      // Générer le token JWT
       const token = jwt.sign(
         { userId: user.id, email: user.email, userType: user.user_type },
         process.env.JWT_SECRET,
@@ -252,13 +249,11 @@ router.get("/verify-email", async (req, res) => {
 
     const user = users[0];
 
-    // Valider le compte
     await db.execute(
       "UPDATE users SET is_verified = true, verification_token = NULL, verification_token_expires_at = NULL WHERE id = ?",
       [user.id]
     );
 
-    // Email de bienvenue
     try {
       await EmailService.sendWelcomeEmail(user.email, user.first_name);
     } catch (e) {
@@ -272,7 +267,7 @@ router.get("/verify-email", async (req, res) => {
   }
 });
 
-// --- RENVOI EMAIL CONFIRMATION ---
+// --- RENVOI EMAIL ---
 router.post(
   "/resend-verification",
   [body("email").isEmail()],
@@ -312,11 +307,9 @@ router.post(
   }
 );
 
-// Vérification du token (Session)
 router.get("/verify", authenticateToken, (req, res) => {
   res.json({
     valid: true,
-
     user: {
       id: req.user.id,
       email: req.user.email,
