@@ -74,9 +74,21 @@ const requireManager = requireRole('manager');
  */
 const requirePlayer = requireRole('player');
 
+/**
+ * Middleware pour vérifier que l'utilisateur est un arbitre
+ */
+const requireReferee = requireRole('referee');
+
+/**
+ * Middleware pour vérifier que l'utilisateur est un superadmin
+ */
+const requireAdmin = requireRole('superadmin');
+
 module.exports = {
   authenticateToken,
   requireRole,
   requireManager,
-  requirePlayer
+  requirePlayer,
+  requireReferee,
+  requireAdmin
 };

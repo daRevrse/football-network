@@ -1,5 +1,5 @@
 import React from "react";
-import { MapPin, Trophy, Navigation } from "lucide-react";
+import { MapPin, Trophy, Navigation, UserCheck } from "lucide-react";
 
 const SearchFilters = ({ filters, onFilterChange }) => {
   const handleChange = (key, value) => {
@@ -92,6 +92,29 @@ const SearchFilters = ({ filters, onFilterChange }) => {
             </label>
           ))}
         </div>
+      </div>
+
+      <hr className="border-gray-100" />
+
+      {/* Mercato */}
+      <div className="space-y-3">
+        <label className="text-sm font-bold text-gray-700 uppercase tracking-wider flex items-center">
+          <UserCheck className="w-4 h-4 mr-2 text-green-500" /> Recrutement
+        </label>
+        <label className="flex items-center cursor-pointer group">
+          <input
+            type="checkbox"
+            checked={filters.mercatoOpen || false}
+            onChange={(e) => handleChange("mercatoOpen", e.target.checked)}
+            className="w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500"
+          />
+          <span className="ml-3 text-sm text-gray-600 group-hover:text-green-600 transition-colors">
+            Mercato ouvert uniquement
+          </span>
+        </label>
+        <p className="text-xs text-gray-500 italic">
+          Afficher seulement les équipes qui acceptent de nouveaux joueurs
+        </p>
       </div>
     </div>
   );

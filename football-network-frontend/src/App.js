@@ -44,6 +44,8 @@ import VenueSearch from "./components/venues/VenueSearch";
 import VenueDetails from "./components/venues/VenueDetails";
 import RefereeSearch from "./components/referees/RefereeSearch";
 import RefereeProfile from "./components/referees/RefereeProfile";
+import RefereeMatches from "./components/referee/RefereeMatches";
+import RefereeReports from "./components/referee/RefereeReports";
 
 // Composants Admin & Venue Owner
 import AdminDashboard from "./components/admin/AdminDashboard";
@@ -113,6 +115,19 @@ const PublicRoute = ({ children }) => {
     if (user.userType === "superadmin") return <Navigate to="/admin" />;
     if (user.userType === "venue_owner") return <Navigate to="/venue-owner" />;
     return <Navigate to="/dashboard" />;
+  }
+  return children;
+};
+
+// OptionalAuthRoute - Permet l'accès aux utilisateurs connectés ET non connectés
+const OptionalAuthRoute = ({ children }) => {
+  const { loading } = useAuth();
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center h-screen">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600"></div>
+      </div>
+    );
   }
   return children;
 };
@@ -252,9 +267,9 @@ function App() {
                 <Route
                   path="/users/:userId"
                   element={
-                    <ProtectedRoute>
+                    <OptionalAuthRoute>
                       <PublicProfile />
-                    </ProtectedRoute>
+                    </OptionalAuthRoute>
                   }
                 />
                 <Route
@@ -302,9 +317,9 @@ function App() {
                 <Route
                   path="/teams/:teamId/public"
                   element={
-                    <ProtectedRoute>
+                    <OptionalAuthRoute>
                       <PublicTeamProfile />
-                    </ProtectedRoute>
+                    </OptionalAuthRoute>
                   }
                 />
                 <Route
@@ -344,9 +359,9 @@ function App() {
                 <Route
                   path="/matches/:matchId"
                   element={
-                    <ProtectedRoute>
+                    <OptionalAuthRoute>
                       <MatchDetails />
-                    </ProtectedRoute>
+                    </OptionalAuthRoute>
                   }
                 />
                 <Route
@@ -430,6 +445,24 @@ function App() {
                   element={
                     <ProtectedRoute>
                       <VenueDetails />
+                    </ProtectedRoute>
+                  }
+                />
+
+                {/* Routes Arbitre */}
+                <Route
+                  path="/referee/matches"
+                  element={
+                    <ProtectedRoute>
+                      <RefereeMatches />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/referee/reports"
+                  element={
+                    <ProtectedRoute>
+                      <RefereeReports />
                     </ProtectedRoute>
                   }
                 />

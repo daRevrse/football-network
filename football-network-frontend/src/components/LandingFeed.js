@@ -220,8 +220,13 @@ const LandingFeed = () => {
 
         setPosts(transformedPosts);
       } else {
-        // Pour les invités, afficher un feed vide ou des posts publics génériques
-        setPosts([]);
+        // Pour les invités, charger les posts publics depuis /api/feed
+        const res = await axios.get(
+          `${API_BASE_URL}/feed?limit=20&type=${activeFilter === "all" ? "all" : activeFilter}`,
+          config
+        );
+
+        setPosts(res.data.posts || []);
       }
     } catch (err) {
       console.error("Feed load error:", err);

@@ -42,6 +42,10 @@ const MatchDetails = () => {
   const [showVenueModal, setShowVenueModal] = useState(false);
   const [selectedVenue, setSelectedVenue] = useState(null);
   const [venues, setVenues] = useState([]);
+  const [showRefereeModal, setShowRefereeModal] = useState(false);
+  const [referees, setReferees] = useState([]);
+  const [loadingReferees, setLoadingReferees] = useState(false);
+  const [assigningReferee, setAssigningReferee] = useState(false);
 
   // Modals state (simplifié pour la démo)
   const [isEditing, setIsEditing] = useState(false);
@@ -141,11 +145,57 @@ const MatchDetails = () => {
     }
   };
 
+  const loadReferees = async () => {
+    try {
+      setLoadingReferees(true);
+      const token = localStorage.getItem("token");
+      const response = await axios.get(`${API_BASE_URL}/referees`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      console.log("first", response.data.referees);
+      setReferees(response.data.referees || []);
+    } catch (error) {
+      console.error("Error loading referees:", error);
+      toast.error("Impossible de charger la liste des arbitres");
+      setReferees([]);
+    } finally {
+      setLoadingReferees(false);
+    }
+  };
+
+  const handleAssignReferee = async (refereeId) => {
+    try {
+      setAssigningReferee(true);
+      const token = localStorage.getItem("token");
+      await axios.patch(
+        `${API_BASE_URL}/matches/${matchId}/assign-referee`,
+        { refereeId },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      toast.success("Arbitre assigné avec succès !");
+      setShowRefereeModal(false);
+      loadMatch(); // Recharger le match
+    } catch (error) {
+      console.error("Error assigning referee:", error);
+      toast.error(
+        error.response?.data?.message || "Erreur lors de l'assignation"
+      );
+    } finally {
+      setAssigningReferee(false);
+    }
+  };
+
+  const handleOpenRefereeModal = () => {
+    setShowRefereeModal(true);
+    loadReferees();
+  };
+
   const isUserInvolved =
     match?.userTeamId &&
     (match?.homeTeam?.id === match.userTeamId ||
       match?.awayTeam?.id === match.userTeamId);
-  const canManage = match?.homeTeam?.captain?.id === user?.id;
+  const canManage = match?.userRole === "manager";
 
   if (loading)
     return (
@@ -165,7 +215,7 @@ const MatchDetails = () => {
         {/* Background Image with Overlay */}
         <div className="absolute inset-0">
           <img
-            src="https://images.unsplash.com/photo-1522778119026-d647f0565c6a?q=80&w=2070&auto=format&fit=crop"
+            src="https://www.agn-avocats.fr/wp-content/uploads/2020/02/football-stadium-shiny-lights-view-from-field-PWS5ZD9-scaled.jpg"
             alt="Stadium"
             className="w-full h-full object-cover opacity-40"
           />
@@ -459,19 +509,49 @@ const MatchDetails = () => {
         <div className="space-y-6">
           {/* Arbitre */}
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-            <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider mb-4">
-              Officiels
-            </h3>
-            <div className="flex items-center">
-              <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center text-gray-500 mr-3">
-                <User className="w-5 h-5" />
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider">
+                Officiels
+              </h3>
+              {canManage && !match.referee_id && (
+                <button
+                  onClick={handleOpenRefereeModal}
+                  className="text-xs bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg font-medium transition-colors"
+                >
+                  Assigner
+                </button>
+              )}
+            </div>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center flex-1">
+                <div
+                  className={`w-10 h-10 rounded-full flex items-center justify-center mr-3 ${
+                    match.refereeId ? "bg-blue-100" : "bg-gray-100"
+                  }`}
+                >
+                  <User
+                    className={`w-5 h-5 ${
+                      match.refereeId ? "text-blue-600" : "text-gray-500"
+                    }`}
+                  />
+                </div>
+                <div>
+                  <p className="text-sm font-bold text-gray-900">
+                    {match.referee_name ||
+                      match.refereeId ||
+                      "Arbitre à désigner"}
+                  </p>
+                  <p className="text-xs text-gray-500">Arbitre principal</p>
+                </div>
               </div>
-              <div>
-                <p className="text-sm font-bold text-gray-900">
-                  {match.refereeContact || "Arbitre à désigner"}
-                </p>
-                <p className="text-xs text-gray-500">Arbitre principal</p>
-              </div>
+              {canManage && match.refereeId && (
+                <button
+                  onClick={handleOpenRefereeModal}
+                  className="text-xs text-blue-600 hover:text-blue-700 font-medium"
+                >
+                  Changer
+                </button>
+              )}
             </div>
           </div>
 
@@ -496,6 +576,13 @@ const MatchDetails = () => {
                 Zone Capitaine
               </h3>
               <div className="space-y-2">
+                <button
+                  onClick={() => navigate(`/matches/${matchId}/participations`)}
+                  className="w-full text-left px-4 py-2 rounded-lg hover:bg-gray-50 text-sm text-gray-700 font-medium flex items-center"
+                >
+                  <CheckCircle className="w-4 h-4 mr-2 text-green-500" /> Voir
+                  les confirmations
+                </button>
                 <button
                   onClick={() => navigate(`/matches/${matchId}/validate`)}
                   className="w-full text-left px-4 py-2 rounded-lg hover:bg-gray-50 text-sm text-gray-700 font-medium flex items-center"
@@ -620,6 +707,106 @@ const MatchDetails = () => {
                     Confirmer la réservation
                   </>
                 )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal d'assignation d'arbitre */}
+      {showRefereeModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[80vh] overflow-hidden">
+            <div className="p-6 border-b border-gray-100">
+              <div className="flex items-center justify-between">
+                <h2 className="text-2xl font-bold text-gray-900">
+                  Assigner un arbitre
+                </h2>
+                <button
+                  onClick={() => setShowRefereeModal(false)}
+                  className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+                >
+                  <XCircle className="w-6 h-6 text-gray-500" />
+                </button>
+              </div>
+              <p className="text-gray-600 mt-2">
+                Sélectionnez un arbitre qualifié pour officier ce match
+              </p>
+            </div>
+
+            <div className="p-6 overflow-y-auto max-h-[60vh]">
+              {loadingReferees ? (
+                <div className="flex justify-center items-center py-12">
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+                </div>
+              ) : referees?.length === 0 ? (
+                <div className="text-center py-12">
+                  <User className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                  <p className="text-gray-600">Aucun arbitre disponible</p>
+                </div>
+              ) : (
+                <div className="grid gap-4">
+                  {referees.map((referee) => (
+                    <div
+                      key={referee.id}
+                      className={`border-2 rounded-xl p-4 hover:border-blue-500 transition-all cursor-pointer ${
+                        match.referee_id === referee.id
+                          ? "border-blue-500 bg-blue-50"
+                          : "border-gray-200"
+                      }`}
+                      onClick={() => handleAssignReferee(referee.id)}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-4">
+                          <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
+                            <User className="w-6 h-6 text-blue-600" />
+                          </div>
+                          <div>
+                            <h3 className="font-bold text-gray-900">
+                              {referee.firstName} {referee.lastName}
+                            </h3>
+                            <div className="flex items-center space-x-3 text-sm text-gray-600 mt-1">
+                              {referee.license.level && (
+                                <span className="px-2 py-0.5 bg-gray-100 rounded text-xs font-medium">
+                                  {referee.license.level === "international"
+                                    ? "International"
+                                    : referee.license.level === "national"
+                                    ? "National"
+                                    : referee.license.level === "regional"
+                                    ? "Régional"
+                                    : "Stagiaire"}
+                                </span>
+                              )}
+                              {referee.experienceYears && (
+                                <span className="text-xs">
+                                  {referee.experienceYears} ans d'expérience
+                                </span>
+                              )}
+                              {referee.location.city && (
+                                <span className="flex items-center text-xs">
+                                  <MapPin className="w-3 h-3 mr-1" />
+                                  {referee.location.city}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                        {match.referee_id === referee.id && (
+                          <CheckCircle className="w-6 h-6 text-blue-600" />
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="p-6 border-t border-gray-100 bg-gray-50">
+              <button
+                onClick={() => setShowRefereeModal(false)}
+                className="w-full py-3 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-xl font-medium transition-colors"
+              >
+                Annuler
               </button>
             </div>
           </div>

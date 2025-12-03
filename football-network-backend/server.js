@@ -8,6 +8,7 @@ const socketIo = require("socket.io");
 
 const socketManager = require("./services/SocketManager");
 const NotificationService = require("./services/NotificationService");
+const MatchStatusService = require("./services/MatchStatusService");
 const path = require("path");
 
 // Import des routes
@@ -26,6 +27,7 @@ const venueRoutes = require("./routes/venues");
 const bookingRoutes = require("./routes/bookings");
 const refereeRoutes = require("./routes/referees");
 const refereeAssignmentRoutes = require("./routes/referee-assignments");
+const refereeMatchManagementRoutes = require("./routes/referee-match-management");
 // Phase 4 - Routes admin
 const adminRoutes = require("./routes/admin");
 // Phase 5 - Routes participations
@@ -105,6 +107,7 @@ app.use("/api/venues", venueRoutes);
 app.use("/api/bookings", bookingRoutes);
 app.use("/api/referees", refereeRoutes);
 app.use("/api/referee-assignments", refereeAssignmentRoutes);
+app.use("/api/referee/matches", refereeMatchManagementRoutes);
 // Phase 4 - Routes admin
 app.use("/api/admin", adminRoutes);
 // Phase 5 - Routes participations
@@ -234,6 +237,7 @@ io.on("connection", (socket) => {
 // Gérer l'arrêt propre du serveur
 process.on("SIGTERM", () => {
   console.log("🛑 SIGTERM received, shutting down gracefully");
+  MatchStatusService.stop();
   server.close(() => {
     console.log("✅ Process terminated");
   });
@@ -241,6 +245,7 @@ process.on("SIGTERM", () => {
 
 process.on("SIGINT", () => {
   console.log("🛑 SIGINT received, shutting down gracefully");
+  MatchStatusService.stop();
   server.close(() => {
     console.log("✅ Process terminated");
   });
@@ -252,4 +257,9 @@ server.listen(PORT, () => {
   console.log(`📊 Environment: ${process.env.NODE_ENV || "development"}`);
   console.log(`🔌 Socket.IO initialized`);
   console.log(`📬 Notification service ready`);
+
+  // Démarrer le service de gestion automatique des statuts de match
+  // Vérification toutes les minutes
+  MatchStatusService.start(1);
+  console.log(`⚽ Match status automation service started`);
 });

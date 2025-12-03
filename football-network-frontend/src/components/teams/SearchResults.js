@@ -1,5 +1,5 @@
 import React from "react";
-import { Users, MapPin, Award, UserPlus, Frown } from "lucide-react";
+import { Users, MapPin, Award, UserPlus, Frown, UserCheck, UserX } from "lucide-react";
 
 const API_BASE_URL =
   process.env.REACT_APP_API_URL || "http://localhost:5000/api";
@@ -105,15 +105,37 @@ const SearchResults = ({ teams, loading, onJoinTeam, onLoadMore, hasMore }) => {
                   <Users className="w-3 h-3 mr-1" /> {team.currentPlayers}/
                   {team.maxPlayers}
                 </span>
+                {/* Badge Mercato */}
+                {team.mercatoActif ? (
+                  <span className="px-2 py-1 bg-green-50 text-green-700 rounded-md text-xs font-semibold flex items-center">
+                    <UserCheck className="w-3 h-3 mr-1" /> Recrute
+                  </span>
+                ) : (
+                  <span className="px-2 py-1 bg-red-50 text-red-600 rounded-md text-xs font-semibold flex items-center">
+                    <UserX className="w-3 h-3 mr-1" /> Fermé
+                  </span>
+                )}
               </div>
 
               <div className="mt-auto pt-4 border-t border-gray-100">
-                <button
-                  onClick={() => onJoinTeam(team.id, team.name)}
-                  className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-medium transition-all flex items-center justify-center shadow-lg shadow-indigo-200"
-                >
-                  <UserPlus className="w-4 h-4 mr-2" /> Rejoindre
-                </button>
+                <div className="relative group">
+                  <button
+                    onClick={() => onJoinTeam(team.id, team.name)}
+                    disabled={!team.mercatoActif}
+                    className={`w-full py-2.5 rounded-xl font-medium transition-all flex items-center justify-center ${
+                      team.mercatoActif
+                        ? "bg-indigo-600 hover:bg-indigo-700 text-white shadow-lg shadow-indigo-200"
+                        : "bg-gray-200 text-gray-400 cursor-not-allowed"
+                    }`}
+                  >
+                    <UserPlus className="w-4 h-4 mr-2" /> Rejoindre
+                  </button>
+                  {!team.mercatoActif && (
+                    <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-10">
+                      Mercato fermé - Les demandes ne sont pas acceptées
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           </div>

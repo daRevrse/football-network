@@ -1,10 +1,19 @@
-import React, { useState, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
-import axios from 'axios';
-import { CheckCircle, XCircle, HelpCircle, Clock, Users, AlertTriangle, RefreshCw } from 'lucide-react';
-import toast from 'react-hot-toast';
+import React, { useState, useEffect } from "react";
+import { useParams } from "react-router-dom";
+import axios from "axios";
+import {
+  CheckCircle,
+  XCircle,
+  HelpCircle,
+  Clock,
+  Users,
+  AlertTriangle,
+  RefreshCw,
+} from "lucide-react";
+import toast from "react-hot-toast";
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+const API_BASE_URL =
+  process.env.REACT_APP_API_URL || "http://localhost:5000/api";
 
 const MatchParticipations = () => {
   const { matchId } = useParams();
@@ -21,17 +30,22 @@ const MatchParticipations = () => {
   const loadParticipations = async () => {
     try {
       setLoading(true);
-      const token = localStorage.getItem('token');
-      const response = await axios.get(`${API_BASE_URL}/participations/match/${matchId}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const token = localStorage.getItem("token");
+      const response = await axios.get(
+        `${API_BASE_URL}/participations/match/${matchId}`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+
+      console.log("response", response);
 
       setMatch(response.data.match);
       setParticipations(response.data.participations);
       setSummary(response.data.summary);
     } catch (error) {
-      console.error('Error loading participations:', error);
-      toast.error('Erreur lors du chargement des confirmations');
+      console.error("Error loading participations:", error);
+      toast.error("Erreur lors du chargement des confirmations");
     } finally {
       setLoading(false);
     }
@@ -40,18 +54,20 @@ const MatchParticipations = () => {
   const handleValidate = async () => {
     try {
       setUpdating(true);
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem("token");
       await axios.post(
         `${API_BASE_URL}/participations/match/${matchId}/validate`,
         {},
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
-      toast.success('Validation du match effectuée');
+      toast.success("Validation du match effectuée");
       loadParticipations();
     } catch (error) {
-      console.error('Error validating match:', error);
-      toast.error(error.response?.data?.error || 'Erreur lors de la validation');
+      console.error("Error validating match:", error);
+      toast.error(
+        error.response?.data?.error || "Erreur lors de la validation"
+      );
     } finally {
       setUpdating(false);
     }
@@ -65,16 +81,20 @@ const MatchParticipations = () => {
     );
   }
 
-  const homeTeamParticipations = participations.filter(p => p.team_id === match.homeTeamId);
-  const awayTeamParticipations = participations.filter(p => p.team_id === match.awayTeamId);
+  const homeTeamParticipations = participations.filter(
+    (p) => p.team_id === match.homeTeamId
+  );
+  const awayTeamParticipations = participations.filter(
+    (p) => p.team_id === match.awayTeamId
+  );
 
   const getStatusIcon = (status) => {
     switch (status) {
-      case 'confirmed':
+      case "confirmed":
         return <CheckCircle className="w-5 h-5 text-green-500" />;
-      case 'declined':
+      case "declined":
         return <XCircle className="w-5 h-5 text-red-500" />;
-      case 'maybe':
+      case "maybe":
         return <HelpCircle className="w-5 h-5 text-yellow-500" />;
       default:
         return <Clock className="w-5 h-5 text-gray-400" />;
@@ -83,21 +103,23 @@ const MatchParticipations = () => {
 
   const getStatusBadge = (status) => {
     const classes = {
-      confirmed: 'bg-green-100 text-green-800',
-      declined: 'bg-red-100 text-red-800',
-      maybe: 'bg-yellow-100 text-yellow-800',
-      pending: 'bg-gray-100 text-gray-800'
+      confirmed: "bg-green-100 text-green-800",
+      declined: "bg-red-100 text-red-800",
+      maybe: "bg-yellow-100 text-yellow-800",
+      pending: "bg-gray-100 text-gray-800",
     };
 
     const labels = {
-      confirmed: 'Confirmé',
-      declined: 'Absent',
-      maybe: 'Peut-être',
-      pending: 'En attente'
+      confirmed: "Confirmé",
+      declined: "Absent",
+      maybe: "Peut-être",
+      pending: "En attente",
     };
 
     return (
-      <span className={`px-2 py-1 rounded-full text-xs font-semibold ${classes[status]}`}>
+      <span
+        className={`px-2 py-1 rounded-full text-xs font-semibold ${classes[status]}`}
+      >
         {labels[status]}
       </span>
     );
@@ -111,7 +133,8 @@ const MatchParticipations = () => {
           <div className="flex-1">
             <h3 className="font-bold text-green-900">Match Validé</h3>
             <p className="text-sm text-green-700">
-              Les deux équipes ont suffisamment de joueurs confirmés (minimum 6 par équipe).
+              Les deux équipes ont suffisamment de joueurs confirmés (minimum 6
+              par équipe).
             </p>
           </div>
         </div>
@@ -123,7 +146,8 @@ const MatchParticipations = () => {
           <div className="flex-1">
             <h3 className="font-bold text-yellow-900">Attention</h3>
             <p className="text-sm text-yellow-700">
-              Pas encore assez de confirmations. Il faut au moins 6 joueurs par équipe.
+              Pas encore assez de confirmations. Il faut au moins 6 joueurs par
+              équipe.
             </p>
           </div>
         </div>
@@ -135,7 +159,8 @@ const MatchParticipations = () => {
           <div className="flex-1">
             <h3 className="font-bold text-red-900">Critique</h3>
             <p className="text-sm text-red-700">
-              Nombre insuffisant de confirmations. Contactez les joueurs pour confirmer leur présence.
+              Nombre insuffisant de confirmations. Contactez les joueurs pour
+              confirmer leur présence.
             </p>
           </div>
         </div>
@@ -151,21 +176,20 @@ const MatchParticipations = () => {
           Confirmations de Participation
         </h1>
         <p className="text-gray-600">
-          Match du {new Date(match.matchDate).toLocaleDateString('fr-FR', {
-            weekday: 'long',
-            year: 'numeric',
-            month: 'long',
-            day: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit'
+          Match du{" "}
+          {new Date(match.matchDate).toLocaleDateString("fr-FR", {
+            weekday: "long",
+            year: "numeric",
+            month: "long",
+            day: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
           })}
         </p>
       </div>
 
       {/* Status de validation */}
-      <div className="mb-8">
-        {getValidationStatus()}
-      </div>
+      <div className="mb-8">{getValidationStatus()}</div>
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
@@ -177,15 +201,21 @@ const MatchParticipations = () => {
           <div className="text-center">
             <p className="text-4xl font-bold text-gray-900 mb-1">
               {summary.homeConfirmed}
-              <span className="text-lg text-gray-500">/{summary.homeTotal}</span>
+              <span className="text-lg text-gray-500">
+                /{summary.homeTotal}
+              </span>
             </p>
             <p className="text-sm text-gray-600">Joueurs confirmés</p>
           </div>
           <div className="mt-4 pt-4 border-t border-gray-200">
-            <div className={`text-center font-semibold ${
-              summary.homeConfirmed >= 6 ? 'text-green-600' : 'text-red-600'
-            }`}>
-              {summary.homeConfirmed >= 6 ? '✓ Validé' : `Manque ${6 - summary.homeConfirmed}`}
+            <div
+              className={`text-center font-semibold ${
+                summary.homeConfirmed >= 6 ? "text-green-600" : "text-red-600"
+              }`}
+            >
+              {summary.homeConfirmed >= 6
+                ? "✓ Validé"
+                : `Manque ${6 - summary.homeConfirmed}`}
             </div>
           </div>
         </div>
@@ -198,15 +228,21 @@ const MatchParticipations = () => {
           <div className="text-center">
             <p className="text-4xl font-bold text-gray-900 mb-1">
               {summary.awayConfirmed}
-              <span className="text-lg text-gray-500">/{summary.awayTotal}</span>
+              <span className="text-lg text-gray-500">
+                /{summary.awayTotal}
+              </span>
             </p>
             <p className="text-sm text-gray-600">Joueurs confirmés</p>
           </div>
           <div className="mt-4 pt-4 border-t border-gray-200">
-            <div className={`text-center font-semibold ${
-              summary.awayConfirmed >= 6 ? 'text-green-600' : 'text-red-600'
-            }`}>
-              {summary.awayConfirmed >= 6 ? '✓ Validé' : `Manque ${6 - summary.awayConfirmed}`}
+            <div
+              className={`text-center font-semibold ${
+                summary.awayConfirmed >= 6 ? "text-green-600" : "text-red-600"
+              }`}
+            >
+              {summary.awayConfirmed >= 6
+                ? "✓ Validé"
+                : `Manque ${6 - summary.awayConfirmed}`}
             </div>
           </div>
         </div>
@@ -222,7 +258,7 @@ const MatchParticipations = () => {
               disabled={updating}
               className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 transition-colors"
             >
-              {updating ? 'Validation...' : 'Revalider le match'}
+              {updating ? "Validation..." : "Revalider le match"}
             </button>
             <button
               onClick={loadParticipations}
@@ -255,7 +291,9 @@ const MatchParticipations = () => {
                       {participation.first_name} {participation.last_name}
                     </p>
                     {participation.preferred_position && (
-                      <p className="text-xs text-gray-500">{participation.preferred_position}</p>
+                      <p className="text-xs text-gray-500">
+                        {participation.preferred_position}
+                      </p>
                     )}
                   </div>
                 </div>
@@ -283,7 +321,9 @@ const MatchParticipations = () => {
                       {participation.first_name} {participation.last_name}
                     </p>
                     {participation.preferred_position && (
-                      <p className="text-xs text-gray-500">{participation.preferred_position}</p>
+                      <p className="text-xs text-gray-500">
+                        {participation.preferred_position}
+                      </p>
                     )}
                   </div>
                 </div>

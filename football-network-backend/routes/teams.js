@@ -347,6 +347,7 @@ router.get("/", authenticateToken, async (req, res) => {
       lng,
       radius = 50,
       search,
+      mercatoOpen,
       limit = 20,
       offset = 0,
     } = req.query;
@@ -354,11 +355,11 @@ router.get("/", authenticateToken, async (req, res) => {
     let query = `
       SELECT t.id, t.name, t.description, t.skill_level, t.max_players,
              t.location_city, t.location_lat, t.location_lng, t.created_at,
-             t.logo_id, t.banner_id,
+             t.logo_id, t.banner_id, t.mercato_actif,
              u.first_name as captain_first_name, u.last_name as captain_last_name,
-             
+
              COUNT(CASE WHEN u_mem.user_type = 'player' THEN 1 END) as current_players,
-             
+
              ts.matches_played, ts.matches_won, ts.average_rating,
              logo_up.stored_filename as logo_filename,
              banner_up.stored_filename as banner_filename, banner_up.variants as banner_variants,
@@ -374,7 +375,7 @@ router.get("/", authenticateToken, async (req, res) => {
       FROM teams t
       LEFT JOIN users u ON t.captain_id = u.id
       LEFT JOIN team_members tm ON t.id = tm.team_id AND tm.is_active = true
-      LEFT JOIN users u_mem ON tm.user_id = u_mem.id  
+      LEFT JOIN users u_mem ON tm.user_id = u_mem.id
       LEFT JOIN team_stats ts ON t.id = ts.team_id
       LEFT JOIN uploads logo_up ON t.logo_id = logo_up.id AND logo_up.is_active = true
       LEFT JOIN uploads banner_up ON t.banner_id = banner_up.id AND banner_up.is_active = true
@@ -400,6 +401,10 @@ router.get("/", authenticateToken, async (req, res) => {
     if (search) {
       query += " AND (t.name LIKE ? OR t.description LIKE ?)";
       queryParams.push(`%${search}%`, `%${search}%`);
+    }
+
+    if (mercatoOpen === "true") {
+      query += " AND t.mercato_actif = true";
     }
 
     query +=
@@ -435,6 +440,7 @@ router.get("/", authenticateToken, async (req, res) => {
         maxPlayers: team.max_players,
         currentPlayers: team.current_players,
         locationCity: team.location_city,
+        mercatoActif: team.mercato_actif || false,
         logoUrl: team.logo_filename
           ? `/uploads/teams/${team.logo_filename}`
           : null,
@@ -532,7 +538,7 @@ router.get("/:id", authenticateToken, async (req, res) => {
     const [teams] = await db.execute(
       `SELECT t.id, t.name, t.description, t.skill_level, t.max_players,
               t.location_city, t.location_lat, t.location_lng, t.created_at,
-              t.logo_id, t.banner_id, t.banner_position,
+              t.logo_id, t.banner_id, t.banner_position, t.mercato_actif,
               u.id as captain_id, u.first_name as captain_first_name,
               u.last_name as captain_last_name, u.email as captain_email,
               ts.matches_played, ts.matches_won, ts.matches_drawn, ts.matches_lost,
@@ -633,6 +639,7 @@ router.get("/:id", authenticateToken, async (req, res) => {
         goalsConceded: team.goals_conceded || 0,
         averageRating: team.average_rating || 0,
       },
+      mercatoActif: team.mercato_actif || false,
       userRole: userMembership?.role || null,
       createdAt: team.created_at,
     });
@@ -647,17 +654,24 @@ router.post("/:id/join", authenticateToken, async (req, res) => {
   try {
     const teamId = req.params.id;
     const [teams] = await db.execute(
-      `SELECT t.max_players, COUNT(CASE WHEN u.user_type = 'player' THEN 1 END) as current_players, t.name
+      `SELECT t.max_players, t.mercato_actif, COUNT(CASE WHEN u.user_type = 'player' THEN 1 END) as current_players, t.name
        FROM teams t
        LEFT JOIN team_members tm ON t.id = tm.team_id AND tm.is_active = true
        LEFT JOIN users u ON tm.user_id = u.id
        WHERE t.id = ? AND t.is_active = true
-       GROUP BY t.id, t.max_players, t.name`,
+       GROUP BY t.id, t.max_players, t.mercato_actif, t.name`,
       [teamId]
     );
 
     if (teams.length === 0)
       return res.status(404).json({ error: "Team not found" });
+
+    // Vérifier si le mercato est activé
+    if (!teams[0].mercato_actif)
+      return res.status(403).json({
+        error: "Le mercato de cette équipe est fermé. Les demandes d'adhésion ne sont pas acceptées actuellement."
+      });
+
     if (teams[0].current_players >= teams[0].max_players)
       return res.status(400).json({ error: "Team is full" });
 
@@ -726,6 +740,49 @@ router.delete("/:id/leave", authenticateToken, async (req, res) => {
     res.json({ message: "Successfully left team" });
   } catch (error) {
     console.error("Leave team error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// PATCH /api/teams/:id/mercato - Activer/Désactiver le mercato
+router.patch("/:id/mercato", authenticateToken, async (req, res) => {
+  try {
+    const teamId = req.params.id;
+    const { mercato_actif } = req.body;
+
+    // Vérifier que la valeur est un booléen
+    if (typeof mercato_actif !== "boolean") {
+      return res.status(400).json({
+        error: "mercato_actif doit être true ou false"
+      });
+    }
+
+    // Vérifier que l'utilisateur est manager de l'équipe
+    const [membership] = await db.execute(
+      "SELECT role FROM team_members WHERE team_id = ? AND user_id = ? AND role = 'manager' AND is_active = true",
+      [teamId, req.user.id]
+    );
+
+    if (membership.length === 0) {
+      return res.status(403).json({
+        error: "Seuls les managers peuvent gérer le statut du mercato"
+      });
+    }
+
+    // Mettre à jour le statut du mercato
+    await db.execute(
+      "UPDATE teams SET mercato_actif = ? WHERE id = ?",
+      [mercato_actif, teamId]
+    );
+
+    res.json({
+      message: mercato_actif
+        ? "Mercato activé - Les joueurs peuvent maintenant demander à rejoindre l'équipe"
+        : "Mercato désactivé - Les demandes d'adhésion sont suspendues",
+      mercato_actif
+    });
+  } catch (error) {
+    console.error("Toggle mercato error:", error);
     res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -1023,6 +1080,63 @@ router.post(
     }
   }
 );
+
+// GET /api/teams/:id/matches - Récupérer les matchs d'une équipe (pour la création de post)
+router.get("/:id/matches", authenticateToken, async (req, res) => {
+  try {
+    const teamId = req.params.id;
+
+    // 1. Vérifier que l'utilisateur est membre de l'équipe
+    const [membership] = await db.execute(
+      "SELECT id FROM team_members WHERE team_id = ? AND user_id = ? AND is_active = true",
+      [teamId, req.user.id]
+    );
+
+    if (membership.length === 0) {
+      return res
+        .status(403)
+        .json({ error: "Vous n'êtes pas membre de cette équipe" });
+    }
+
+    // 2. Récupérer tous les matchs (futurs et passés)
+    const [matches] = await db.execute(
+      `SELECT 
+        m.id, 
+        m.match_date, 
+        m.status, 
+        m.home_score, 
+        m.away_score,
+        m.home_team_id,
+        ht.name as home_team_name,
+        at.name as away_team_name
+       FROM matches m
+       JOIN teams ht ON m.home_team_id = ht.id
+       LEFT JOIN teams at ON m.away_team_id = at.id
+       WHERE (m.home_team_id = ? OR m.away_team_id = ?)
+       ORDER BY m.match_date DESC`,
+      [teamId, teamId]
+    );
+
+    // 3. Formater les données pour le frontend
+    const formattedMatches = matches.map((match) => {
+      const isHome = match.home_team_id === parseInt(teamId);
+
+      // Déterminer le nom de l'adversaire et les scores relatifs à NOTRE équipe
+      return {
+        id: match.id,
+        match_date: match.match_date,
+        opponent_name: isHome ? match.away_team_name : match.home_team_name,
+        team_score: isHome ? match.home_score : match.away_score,
+        opponent_score: isHome ? match.away_score : match.home_score,
+      };
+    });
+
+    res.json(formattedMatches);
+  } catch (error) {
+    console.error("Get team matches error:", error);
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
 
 // GET /api/teams/:id/invitations (CORRIGÉ : Support Manager)
 router.get("/:id/invitations", authenticateToken, async (req, res) => {

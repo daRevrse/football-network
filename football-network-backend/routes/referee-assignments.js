@@ -30,13 +30,9 @@ router.post(
 
       const { matchId, refereeId, role = 'main', fee, notes } = req.body;
 
-      // Vérifier que le match existe et que l'utilisateur est capitaine
+      // Vérifier que le match existe
       const [matches] = await db.execute(
-        `SELECT m.*, ht.captain_id as home_captain_id, at.captain_id as away_captain_id
-         FROM matches m
-         JOIN teams ht ON m.home_team_id = ht.id
-         LEFT JOIN teams at ON m.away_team_id = at.id
-         WHERE m.id = ?`,
+        `SELECT m.* FROM matches m WHERE m.id = ?`,
         [matchId]
       );
 
@@ -46,8 +42,15 @@ router.post(
 
       const match = matches[0];
 
-      if (match.home_captain_id !== req.user.id && match.away_captain_id !== req.user.id) {
-        return res.status(403).json({ error: "Only team captains can assign referees" });
+      // Vérifier que l'utilisateur est manager d'une des deux équipes
+      const [membership] = await db.execute(
+        `SELECT team_id, role FROM team_members
+         WHERE user_id = ? AND (team_id = ? OR team_id = ?) AND role = 'manager' AND is_active = true`,
+        [req.user.id, match.home_team_id, match.away_team_id]
+      );
+
+      if (membership.length === 0) {
+        return res.status(403).json({ error: "Only team managers can assign referees" });
       }
 
       // Vérifier que l'arbitre existe et est disponible
@@ -304,35 +307,51 @@ router.patch("/:id/confirm", authenticateToken, async (req, res) => {
       [assignmentId]
     );
 
-    // Notifier les capitaines
+    // Notifier les managers
     const [match] = await db.execute(
-      `SELECT m.id, ht.captain_id as home_captain_id, at.captain_id as away_captain_id
-       FROM matches m
-       JOIN teams ht ON m.home_team_id = ht.id
-       LEFT JOIN teams at ON m.away_team_id = at.id
-       WHERE m.id = ?`,
+      `SELECT m.id, m.home_team_id, m.away_team_id FROM matches m WHERE m.id = ?`,
       [assignment.match_id]
     );
 
     if (match.length > 0) {
-      await NotificationService.createNotification({
-        userId: match[0].home_captain_id,
-        type: "referee_confirmed",
-        title: "Arbitre confirmé",
-        message: "L'arbitre a confirmé sa présence pour le match",
-        relatedId: assignment.match_id,
-        relatedType: "match"
-      });
+      // Notifier le manager de l'équipe domicile
+      const [homeManagers] = await db.execute(
+        `SELECT user_id FROM team_members
+         WHERE team_id = ? AND role = 'manager' AND is_active = true
+         LIMIT 1`,
+        [match[0].home_team_id]
+      );
 
-      if (match[0].away_captain_id) {
+      if (homeManagers.length > 0) {
         await NotificationService.createNotification({
-          userId: match[0].away_captain_id,
+          userId: homeManagers[0].user_id,
           type: "referee_confirmed",
           title: "Arbitre confirmé",
           message: "L'arbitre a confirmé sa présence pour le match",
           relatedId: assignment.match_id,
           relatedType: "match"
         });
+      }
+
+      // Notifier le manager de l'équipe extérieure
+      if (match[0].away_team_id) {
+        const [awayManagers] = await db.execute(
+          `SELECT user_id FROM team_members
+           WHERE team_id = ? AND role = 'manager' AND is_active = true
+           LIMIT 1`,
+          [match[0].away_team_id]
+        );
+
+        if (awayManagers.length > 0) {
+          await NotificationService.createNotification({
+            userId: awayManagers[0].user_id,
+            type: "referee_confirmed",
+            title: "Arbitre confirmé",
+            message: "L'arbitre a confirmé sa présence pour le match",
+            relatedId: assignment.match_id,
+            relatedType: "match"
+          });
+        }
       }
     }
 
@@ -411,35 +430,53 @@ router.patch(
         );
       }
 
-      // Notifier les capitaines
+      // Notifier les managers
       const [match] = await db.execute(
-        `SELECT m.id, ht.captain_id as home_captain_id, at.captain_id as away_captain_id
+        `SELECT m.id, m.home_team_id, m.away_team_id
          FROM matches m
-         JOIN teams ht ON m.home_team_id = ht.id
-         LEFT JOIN teams at ON m.away_team_id = at.id
          WHERE m.id = ?`,
         [assignment.match_id]
       );
 
       if (match.length > 0) {
-        await NotificationService.createNotification({
-          userId: match[0].home_captain_id,
-          type: "referee_declined",
-          title: "Arbitre indisponible",
-          message: `L'arbitre a décliné l'assignation. Raison: ${reason}`,
-          relatedId: assignment.match_id,
-          relatedType: "match"
-        });
+        // Notifier le manager de l'équipe domicile
+        const [homeManagers] = await db.execute(
+          `SELECT user_id FROM team_members
+           WHERE team_id = ? AND role = 'manager' AND is_active = true
+           LIMIT 1`,
+          [match[0].home_team_id]
+        );
 
-        if (match[0].away_captain_id) {
+        if (homeManagers.length > 0) {
           await NotificationService.createNotification({
-            userId: match[0].away_captain_id,
+            userId: homeManagers[0].user_id,
             type: "referee_declined",
             title: "Arbitre indisponible",
             message: `L'arbitre a décliné l'assignation. Raison: ${reason}`,
             relatedId: assignment.match_id,
             relatedType: "match"
           });
+        }
+
+        // Notifier le manager de l'équipe extérieure si elle existe
+        if (match[0].away_team_id) {
+          const [awayManagers] = await db.execute(
+            `SELECT user_id FROM team_members
+             WHERE team_id = ? AND role = 'manager' AND is_active = true
+             LIMIT 1`,
+            [match[0].away_team_id]
+          );
+
+          if (awayManagers.length > 0) {
+            await NotificationService.createNotification({
+              userId: awayManagers[0].user_id,
+              type: "referee_declined",
+              title: "Arbitre indisponible",
+              message: `L'arbitre a décliné l'assignation. Raison: ${reason}`,
+              relatedId: assignment.match_id,
+              relatedType: "match"
+            });
+          }
         }
       }
 
@@ -487,11 +524,9 @@ router.post(
 
       // Vérifier que l'assignation existe et est terminée
       const [assignments] = await db.execute(
-        `SELECT mra.*, m.home_team_id, m.away_team_id, ht.captain_id as home_captain_id, at.captain_id as away_captain_id
+        `SELECT mra.*, m.home_team_id, m.away_team_id
          FROM match_referee_assignments mra
          JOIN matches m ON mra.match_id = m.id
-         JOIN teams ht ON m.home_team_id = ht.id
-         LEFT JOIN teams at ON m.away_team_id = at.id
          WHERE mra.id = ?`,
         [assignmentId]
       );
@@ -506,15 +541,22 @@ router.post(
         return res.status(400).json({ error: "Can only rate completed assignments" });
       }
 
-      // Vérifier que l'utilisateur est capitaine d'une des équipes
-      const isHomeCaptain = assignment.home_captain_id === req.user.id;
-      const isAwayCaptain = assignment.away_captain_id === req.user.id;
+      // Vérifier que l'utilisateur est manager d'une des équipes
+      const [membership] = await db.execute(
+        `SELECT team_id, role
+         FROM team_members
+         WHERE user_id = ?
+         AND (team_id = ? OR team_id = ?)
+         AND role = 'manager'
+         AND is_active = true`,
+        [req.user.id, assignment.home_team_id, assignment.away_team_id || 0]
+      );
 
-      if (!isHomeCaptain && !isAwayCaptain) {
-        return res.status(403).json({ error: "Only team captains can rate referees" });
+      if (membership.length === 0) {
+        return res.status(403).json({ error: "Only team managers can rate referees" });
       }
 
-      const teamId = isHomeCaptain ? assignment.home_team_id : assignment.away_team_id;
+      const teamId = membership[0].team_id;
 
       // Vérifier si déjà noté
       const [existing] = await db.execute(

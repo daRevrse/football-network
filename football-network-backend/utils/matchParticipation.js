@@ -1,4 +1,4 @@
-const db = require('../config/database');
+const db = require("../config/database");
 
 /**
  * Crée automatiquement les participations pour tous les joueurs actifs des deux équipes
@@ -47,10 +47,10 @@ async function createParticipationsForMatch(matchId, homeTeamId, awayTeamId) {
     return {
       success: true,
       homeCount: homeTeamPlayers.length,
-      awayCount: awayTeamPlayers.length
+      awayCount: awayTeamPlayers.length,
     };
   } catch (error) {
-    console.error('Error creating match participations:', error);
+    console.error("Error creating match participations:", error);
     throw error;
   }
 }
@@ -64,12 +64,12 @@ async function getMatchParticipationStatus(matchId) {
   try {
     // Récupérer les IDs des équipes
     const [matchInfo] = await db.execute(
-      'SELECT home_team_id, away_team_id FROM matches WHERE id = ?',
+      "SELECT home_team_id, away_team_id FROM matches WHERE id = ?",
       [matchId]
     );
 
     if (matchInfo.length === 0) {
-      throw new Error('Match not found');
+      throw new Error("Match not found");
     }
 
     const { home_team_id, away_team_id } = matchInfo[0];
@@ -109,10 +109,10 @@ async function getMatchParticipationStatus(matchId) {
       awayTotal,
       isValid,
       homeTeamId: home_team_id,
-      awayTeamId: away_team_id
+      awayTeamId: away_team_id,
     };
   } catch (error) {
-    console.error('Error checking participation status:', error);
+    console.error("Error checking participation status:", error);
     throw error;
   }
 }
@@ -127,11 +127,11 @@ async function validateMatchParticipation(matchId) {
     const status = await getMatchParticipationStatus(matchId);
 
     // Déterminer le statut de validation
-    let validationStatus = 'critical';
+    let validationStatus = "critical";
     if (status.homeConfirmed >= 6 && status.awayConfirmed >= 6) {
-      validationStatus = 'validated';
+      validationStatus = "validated";
     } else if (status.homeConfirmed >= 4 && status.awayConfirmed >= 4) {
-      validationStatus = 'warning';
+      validationStatus = "warning";
     }
 
     // Enregistrer l'historique de validation
@@ -139,14 +139,20 @@ async function validateMatchParticipation(matchId) {
       `INSERT INTO match_validation_history
        (match_id, validation_type, home_team_confirmed, away_team_confirmed, is_valid, validation_status)
        VALUES (?, 'auto_check', ?, ?, ?, ?)`,
-      [matchId, status.homeConfirmed, status.awayConfirmed, status.isValid, validationStatus]
+      [
+        matchId,
+        status.homeConfirmed,
+        status.awayConfirmed,
+        status.isValid,
+        validationStatus,
+      ]
     );
 
     // Si validation réussie (6+ joueurs par équipe)
     if (status.isValid) {
       // Récupérer les infos du match pour vérifier le statut actuel et la réservation
       const [matchInfo] = await db.execute(
-        'SELECT status, venue_booking_id FROM matches WHERE id = ?',
+        "SELECT status, venue_booking_id FROM matches WHERE id = ?",
         [matchId]
       );
 
@@ -155,7 +161,7 @@ async function validateMatchParticipation(matchId) {
         const venueBookingId = matchInfo[0].venue_booking_id;
 
         // Si le match est en 'pending', le passer à 'confirmed'
-        if (currentMatchStatus === 'pending') {
+        if (currentMatchStatus === "pending") {
           await db.execute(
             `UPDATE matches
              SET status = 'confirmed',
@@ -165,7 +171,9 @@ async function validateMatchParticipation(matchId) {
             [matchId]
           );
 
-          console.log(`Match ${matchId} status updated from 'pending' to 'confirmed' (6+ confirmations per team)`);
+          console.log(
+            `Match ${matchId} status updated from 'pending' to 'confirmed' (6+ confirmations per team)`
+          );
 
           // Si une réservation de terrain existe, la confirmer aussi
           if (venueBookingId) {
@@ -176,7 +184,9 @@ async function validateMatchParticipation(matchId) {
               [venueBookingId]
             );
 
-            console.log(`Venue booking ${venueBookingId} auto-confirmed for match ${matchId}`);
+            console.log(
+              `Venue booking ${venueBookingId} auto-confirmed for match ${matchId}`
+            );
           }
         } else {
           // Match déjà confirmé, juste mettre à jour participation_validated
@@ -197,7 +207,7 @@ async function validateMatchParticipation(matchId) {
              last_validation_check = CURRENT_TIMESTAMP,
              validation_warnings = validation_warnings + ?
          WHERE id = ?`,
-        [false, validationStatus === 'warning' ? 1 : 0, matchId]
+        [false, validationStatus === "warning" ? 1 : 0, matchId]
       );
     }
 
@@ -205,11 +215,11 @@ async function validateMatchParticipation(matchId) {
       validated: status.isValid,
       status: {
         ...status,
-        validationStatus
-      }
+        validationStatus,
+      },
     };
   } catch (error) {
-    console.error('Error validating match participation:', error);
+    console.error("Error validating match participation:", error);
     throw error;
   }
 }
@@ -227,7 +237,6 @@ async function getMatchParticipations(matchId) {
         u.first_name,
         u.last_name,
         u.email,
-        u.preferred_position,
         t.name as team_name
        FROM match_participations mp
        JOIN users u ON mp.user_id = u.id
@@ -239,7 +248,7 @@ async function getMatchParticipations(matchId) {
 
     return participations;
   } catch (error) {
-    console.error('Error fetching match participations:', error);
+    console.error("Error fetching match participations:", error);
     throw error;
   }
 }
@@ -264,7 +273,7 @@ async function updateParticipation(participationId, status, note = null) {
 
     // Récupérer le match_id pour déclencher la validation
     const [participation] = await db.execute(
-      'SELECT match_id FROM match_participations WHERE id = ?',
+      "SELECT match_id FROM match_participations WHERE id = ?",
       [participationId]
     );
 
@@ -275,7 +284,7 @@ async function updateParticipation(participationId, status, note = null) {
 
     return true;
   } catch (error) {
-    console.error('Error updating participation:', error);
+    console.error("Error updating participation:", error);
     throw error;
   }
 }
@@ -314,7 +323,7 @@ async function getPendingParticipationsForUser(userId) {
 
     return participations;
   } catch (error) {
-    console.error('Error fetching pending participations:', error);
+    console.error("Error fetching pending participations:", error);
     throw error;
   }
 }
@@ -325,5 +334,5 @@ module.exports = {
   validateMatchParticipation,
   getMatchParticipations,
   updateParticipation,
-  getPendingParticipationsForUser
+  getPendingParticipationsForUser,
 };

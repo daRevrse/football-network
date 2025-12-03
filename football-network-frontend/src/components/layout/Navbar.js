@@ -15,6 +15,8 @@ import {
   Settings,
   Search,
   Shield,
+  ShieldUser,
+  FileText,
 } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
 import { useNotifications } from "../../hooks/useNotifications";
@@ -39,7 +41,8 @@ const Navbar = () => {
   const hideNavbarRoutes = ["/login", "/signup"];
   const isHidden = hideNavbarRoutes.includes(location.pathname);
 
-  const isManager = user?.user_type === "manager";
+  const isManager = user?.userType === "manager";
+  const isReferee = user?.userType === "referee";
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -95,32 +98,43 @@ const Navbar = () => {
 
   // Configuration dynamique du menu selon le rôle
   const getNavItems = () => {
-    const items = [
-      { path: "/dashboard", icon: Home, label: "Dashboard" },
-      {
-        path: "/teams",
-        icon: Shield,
-        label: isManager ? "Gestion" : "Mes Équipes",
-      },
-      { path: "/feed", icon: Hash, label: "Le Terrain" },
-      { path: "/invitations", icon: MessageSquare, label: "Matchs" },
-    ];
+    const items = [{ path: "/dashboard", icon: Home, label: "Dashboard" }];
 
-    if (isManager) {
-      // MODIFICATION ICI : Redirection vers la nouvelle page de recrutement
-      items.push({
-        path: "/recruitment",
-        icon: Search,
-        label: "Recruter",
-      });
+    // Navigation spécifique pour Arbitre
+    if (isReferee) {
+      items.push(
+        { path: "/referee/matches", icon: ShieldUser, label: "Mes Matchs" },
+        { path: "/referee/reports", icon: FileText, label: "Rapports" },
+        { path: "/feed", icon: Hash, label: "Le Terrain" }
+      );
     } else {
-      // Pour le Joueur : Lien pour voir ses invitations
-      items.push({
-        path: "/player-invitations",
-        icon: UserPlus,
-        label: "Invitations",
-        badge: pendingPlayerInvitations > 0 ? pendingPlayerInvitations : null,
-      });
+      // Navigation pour Manager et Joueur
+      items.push(
+        {
+          path: "/teams",
+          icon: Shield,
+          label: isManager ? "Gestion" : "Mes Équipes",
+        },
+        { path: "/feed", icon: Hash, label: "Le Terrain" },
+        { path: "/invitations", icon: MessageSquare, label: "Matchs" }
+      );
+
+      if (isManager) {
+        // MODIFICATION ICI : Redirection vers la nouvelle page de recrutement
+        items.push({
+          path: "/recruitment",
+          icon: Search,
+          label: "Recruter",
+        });
+      } else {
+        // Pour le Joueur : Lien pour voir ses invitations
+        items.push({
+          path: "/player-invitations",
+          icon: UserPlus,
+          label: "Invitations",
+          badge: pendingPlayerInvitations > 0 ? pendingPlayerInvitations : null,
+        });
+      }
     }
 
     return items;

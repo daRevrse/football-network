@@ -27,6 +27,7 @@ const SearchTeams = () => {
     city: "",
     radius: 50,
     useLocation: false,
+    mercatoOpen: false,
     userLat: null,
     userLng: null,
     limit: 12,
@@ -73,6 +74,7 @@ const SearchTeams = () => {
     filters.city,
     filters.useLocation,
     filters.radius,
+    filters.mercatoOpen,
   ]);
 
   const searchTeams = async (searchFilters = filters, resetResults = false) => {
@@ -84,6 +86,7 @@ const SearchTeams = () => {
       if (searchFilters.skillLevel)
         params.append("skillLevel", searchFilters.skillLevel);
       if (searchFilters.city) params.append("city", searchFilters.city);
+      if (searchFilters.mercatoOpen) params.append("mercatoOpen", "true");
       if (searchFilters.useLocation && searchFilters.userLat) {
         params.append("lat", searchFilters.userLat);
         params.append("lng", searchFilters.userLng);
@@ -200,6 +203,7 @@ const SearchTeams = () => {
                     skillLevel: "",
                     city: "",
                     useLocation: false,
+                    mercatoOpen: false,
                   })
                 }
                 className="text-xs text-indigo-600 hover:underline font-medium"

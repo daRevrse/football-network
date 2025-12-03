@@ -74,37 +74,57 @@ router.post(
         }
       }
 
-      const [result] = await db.execute(
-        `INSERT INTO referees
-         (user_id, first_name, last_name, email, phone, license_number, license_level,
-          experience_years, bio, specializations, languages, location_city, location_lat,
-          location_lng, max_travel_distance, hourly_rate)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [
-          req.user.id,
-          firstName,
-          lastName,
-          email,
-          phone || null,
-          licenseNumber || null,
-          licenseLevel || 'regional',
-          experienceYears || 0,
-          bio || null,
-          specializations ? JSON.stringify(specializations) : null,
-          languages ? JSON.stringify(languages) : null,
-          locationCity || null,
-          locationLat || null,
-          locationLng || null,
-          maxTravelDistance || 50,
-          hourlyRate || null
-        ]
-      );
+      // Utiliser une transaction pour créer l'arbitre ET mettre à jour le type utilisateur
+      const connection = await db.getConnection();
+      await connection.beginTransaction();
 
-      res.status(201).json({
-        success: true,
-        message: "Referee registered successfully",
-        refereeId: result.insertId
-      });
+      try {
+        // Créer le profil arbitre
+        const [result] = await connection.execute(
+          `INSERT INTO referees
+           (user_id, first_name, last_name, email, phone, license_number, license_level,
+            experience_years, bio, specializations, languages, location_city, location_lat,
+            location_lng, max_travel_distance, hourly_rate)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            req.user.id,
+            firstName,
+            lastName,
+            email,
+            phone || null,
+            licenseNumber || null,
+            licenseLevel || 'regional',
+            experienceYears || 0,
+            bio || null,
+            specializations ? JSON.stringify(specializations) : null,
+            languages ? JSON.stringify(languages) : null,
+            locationCity || null,
+            locationLat || null,
+            locationLng || null,
+            maxTravelDistance || 50,
+            hourlyRate || null
+          ]
+        );
+
+        // Mettre à jour le type d'utilisateur en 'referee'
+        await connection.execute(
+          `UPDATE users SET user_type = 'referee' WHERE id = ?`,
+          [req.user.id]
+        );
+
+        await connection.commit();
+        connection.release();
+
+        res.status(201).json({
+          success: true,
+          message: "Referee registered successfully",
+          refereeId: result.insertId
+        });
+      } catch (error) {
+        await connection.rollback();
+        connection.release();
+        throw error;
+      }
     } catch (error) {
       console.error("Register referee error:", error);
       res.status(500).json({ error: "Internal server error" });

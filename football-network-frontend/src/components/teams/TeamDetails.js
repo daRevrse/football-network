@@ -18,6 +18,8 @@ import {
   Image,
   Swords, // Icone pour Défier
   LogIn, // Icone pour Rejoindre
+  UserCheck, // Icone pour Mercato
+  UserX, // Icone pour Mercato fermé
 } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
 import toast from "react-hot-toast";
@@ -120,6 +122,30 @@ const TeamDetails = () => {
       loadTeamData();
     } catch (error) {
       toast.error("Erreur suppression");
+    }
+  };
+
+  const handleToggleMercato = async () => {
+    const newStatus = !team.mercatoActif;
+    const message = newStatus
+      ? "Activer le mercato ? Les joueurs pourront demander à rejoindre l'équipe."
+      : "Fermer le mercato ? Les joueurs ne pourront plus demander à rejoindre l'équipe.";
+
+    if (!window.confirm(message)) return;
+
+    try {
+      const token = localStorage.getItem("token");
+      await axios.patch(
+        `${API_BASE_URL}/teams/${teamId}/mercato`,
+        { mercato_actif: newStatus },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      toast.success(
+        newStatus ? "Mercato activé avec succès !" : "Mercato fermé avec succès !"
+      );
+      loadTeamData();
+    } catch (error) {
+      toast.error(error.response?.data?.error || "Erreur lors de la modification");
     }
   };
 
@@ -231,6 +257,28 @@ const TeamDetails = () => {
                             Désigner capitaine
                           </button>
                         )}
+                        {/* Bouton Toggle Mercato - uniquement pour les managers */}
+                        {team?.userRole === "manager" && (
+                          <button
+                            onClick={() => {
+                              handleToggleMercato();
+                              setShowMenu(false);
+                            }}
+                            className="w-full px-4 py-3 hover:bg-gray-50 text-left flex items-center text-gray-700 text-sm font-medium"
+                          >
+                            {team.mercatoActif ? (
+                              <>
+                                <UserX className="w-4 h-4 mr-3 text-orange-500" />{" "}
+                                Fermer le mercato
+                              </>
+                            ) : (
+                              <>
+                                <UserCheck className="w-4 h-4 mr-3 text-green-500" />{" "}
+                                Ouvrir le mercato
+                              </>
+                            )}
+                          </button>
+                        )}
                         <div className="border-t border-gray-100 my-1"></div>
                         <button
                           onClick={() => {
@@ -300,6 +348,18 @@ const TeamDetails = () => {
                 <span className="px-2 py-0.5 rounded-md bg-gray-100 text-gray-600 border border-gray-200 text-xs uppercase tracking-wide">
                   {team.skillLevel}
                 </span>
+                {/* Badge Mercato */}
+                {team.mercatoActif ? (
+                  <span className="flex items-center px-2 py-0.5 rounded-md bg-green-100 text-green-700 border border-green-300 text-xs font-semibold">
+                    <UserCheck className="w-3.5 h-3.5 mr-1" />
+                    Mercato Ouvert
+                  </span>
+                ) : (
+                  <span className="flex items-center px-2 py-0.5 rounded-md bg-red-100 text-red-700 border border-red-300 text-xs font-semibold">
+                    <UserX className="w-3.5 h-3.5 mr-1" />
+                    Mercato Fermé
+                  </span>
+                )}
               </div>
             </div>
 
@@ -315,13 +375,25 @@ const TeamDetails = () => {
                     Défier
                   </button>
                 ) : (
-                  <button
-                    onClick={handleJoinTeam}
-                    className="flex items-center px-6 py-3 bg-green-600 text-white rounded-xl font-bold hover:bg-green-500 shadow-lg transition transform hover:-translate-y-0.5"
-                  >
-                    <LogIn className="w-5 h-5 mr-2" />
-                    Rejoindre
-                  </button>
+                  <div className="relative group">
+                    <button
+                      onClick={handleJoinTeam}
+                      disabled={!team.mercatoActif}
+                      className={`flex items-center px-6 py-3 rounded-xl font-bold shadow-lg transition transform ${
+                        team.mercatoActif
+                          ? "bg-green-600 text-white hover:bg-green-500 hover:-translate-y-0.5"
+                          : "bg-gray-300 text-gray-500 cursor-not-allowed"
+                      }`}
+                    >
+                      <LogIn className="w-5 h-5 mr-2" />
+                      Rejoindre
+                    </button>
+                    {!team.mercatoActif && (
+                      <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
+                        Mercato fermé - Les demandes ne sont pas acceptées
+                      </div>
+                    )}
+                  </div>
                 )}
               </div>
             )}

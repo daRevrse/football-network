@@ -16,8 +16,8 @@ router.post(
     // Validation du type d'utilisateur
     body("userType")
       .optional()
-      .isIn(["player", "manager"])
-      .withMessage("User type must be player or manager"),
+      .isIn(["player", "manager", "referee"])
+      .withMessage("User type must be player, manager or referee"),
 
     // Validation conditionnelle pour le nom de l'équipe (Manager uniquement)
     body("teamName")
@@ -62,6 +62,10 @@ router.post(
         position,
         skillLevel,
         locationCity,
+        // Champs arbitre
+        licenseNumber,
+        licenseLevel,
+        experienceYears,
       } = req.body;
 
       // 1. Vérifier si l'email existe déjà
@@ -113,7 +117,7 @@ router.post(
       // === LOGIQUE MANAGER : CRÉATION D'ÉQUIPE ===
       if (userType === "manager") {
         const [teamResult] = await db.execute(
-          `INSERT INTO teams (name, captain_id, skill_level, location_city, max_players) 
+          `INSERT INTO teams (name, captain_id, skill_level, location_city, max_players)
            VALUES (?, ?, 'amateur', ?, 15)`,
           [teamName, newUserId, locationCity || null]
         );
@@ -129,6 +133,33 @@ router.post(
         await db.execute("INSERT INTO team_stats (team_id) VALUES (?)", [
           newTeamId,
         ]);
+      }
+
+      // === LOGIQUE ARBITRE : CRÉATION DU PROFIL ARBITRE ===
+      if (userType === "referee") {
+        await db.execute(
+          `INSERT INTO referees
+           (user_id, first_name, last_name, email, phone, license_number, license_level,
+            experience_years, location_city)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            newUserId,
+            firstName,
+            lastName,
+            email,
+            phone || null,
+            licenseNumber || null,
+            licenseLevel || 'regional',
+            experienceYears || 0,
+            locationCity || null
+          ]
+        );
+
+        // Mettre à jour le user_type en 'referee'
+        await db.execute(
+          `UPDATE users SET user_type = 'referee' WHERE id = ?`,
+          [newUserId]
+        );
       }
 
       // 5. Envoyer l'email de confirmation

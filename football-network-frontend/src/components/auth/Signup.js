@@ -15,12 +15,13 @@ import {
   Loader2,
   Briefcase,
   Shield,
+  ShieldUser,
 } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
 
 // Schéma de validation conditionnel
 const schema = yup.object({
-  userType: yup.string().oneOf(["player", "manager"]).required(),
+  userType: yup.string().oneOf(["player", "manager", "referee"]).required(),
   email: yup.string().email("Email invalide").required("Email requis"),
   password: yup
     .string()
@@ -45,10 +46,10 @@ const schema = yup.object({
     otherwise: (schema) => schema.optional(),
   }),
 
-  // Validation conditionnelle pour Joueur (optionnels dans votre code d'origine, mais logique adaptée ici)
+  // Validation conditionnelle pour Joueur
   position: yup.string().when("userType", {
     is: "player",
-    then: (schema) => schema.optional(), // Ou .required("Position requise") selon votre besoin
+    then: (schema) => schema.optional(),
     otherwise: (schema) => schema.nullable(),
   }),
   skillLevel: yup.string().when("userType", {
@@ -56,6 +57,24 @@ const schema = yup.object({
     then: (schema) => schema.optional(),
     otherwise: (schema) => schema.nullable(),
   }),
+
+  // Validation conditionnelle pour Arbitre
+  licenseNumber: yup.string().when("userType", {
+    is: "referee",
+    then: (schema) => schema.optional(),
+    otherwise: (schema) => schema.nullable(),
+  }),
+  licenseLevel: yup.string().when("userType", {
+    is: "referee",
+    then: (schema) => schema.optional(),
+    otherwise: (schema) => schema.nullable(),
+  }),
+  experienceYears: yup.number().when("userType", {
+    is: "referee",
+    then: (schema) => schema.min(0, "Minimum 0 ans").optional(),
+    otherwise: (schema) => schema.nullable(),
+  }),
+
   locationCity: yup.string().required("Ville requise"), // Requis pour tous
 });
 
@@ -99,8 +118,18 @@ const Signup = () => {
     if (payload.userType === "manager") {
       delete payload.position;
       delete payload.skillLevel;
+      delete payload.licenseNumber;
+      delete payload.licenseLevel;
+      delete payload.experienceYears;
+    } else if (payload.userType === "referee") {
+      delete payload.position;
+      delete payload.skillLevel;
+      delete payload.teamName;
     } else {
       delete payload.teamName;
+      delete payload.licenseNumber;
+      delete payload.licenseLevel;
+      delete payload.experienceYears;
     }
 
     const result = await signup(payload);
@@ -168,7 +197,7 @@ const Signup = () => {
 
         <div className="bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl shadow-2xl p-8">
           {/* SÉLECTEUR DE RÔLE */}
-          <div className="grid grid-cols-2 gap-4 mb-8">
+          <div className="grid grid-cols-3 gap-3 mb-8">
             <button
               type="button"
               onClick={() => handleTypeChange("player")}
@@ -183,7 +212,7 @@ const Signup = () => {
                   userType === "player" ? "text-green-400" : "text-gray-500"
                 }`}
               />
-              <span className="font-bold">Je suis Joueur</span>
+              <span className="font-bold text-sm">Joueur</span>
             </button>
 
             <button
@@ -200,7 +229,24 @@ const Signup = () => {
                   userType === "manager" ? "text-green-400" : "text-gray-500"
                 }`}
               />
-              <span className="font-bold">Je suis Manager</span>
+              <span className="font-bold text-sm">Manager</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handleTypeChange("referee")}
+              className={`p-4 rounded-xl border-2 transition-all flex flex-col items-center justify-center gap-2 ${
+                userType === "referee"
+                  ? "bg-green-600/20 border-green-500 text-white"
+                  : "bg-black/20 border-transparent text-gray-400 hover:bg-black/40"
+              }`}
+            >
+              <ShieldUser
+                className={`w-8 h-8 ${
+                  userType === "referee" ? "text-green-400" : "text-gray-500"
+                }`}
+              />
+              <span className="font-bold text-sm">Arbitre</span>
             </button>
           </div>
 
@@ -329,6 +375,10 @@ const Signup = () => {
                   <>
                     <Shield className="w-4 h-4 mr-2" /> Votre Équipe
                   </>
+                ) : userType === "referee" ? (
+                  <>
+                    <ShieldUser className="w-4 h-4 mr-2" /> Profil Arbitre
+                  </>
                 ) : (
                   <>
                     <Trophy className="w-4 h-4 mr-2" /> Profil Joueur
@@ -412,6 +462,56 @@ const Signup = () => {
                   </>
                 )}
 
+                {/* Champs spécifiques ARBITRE */}
+                {userType === "referee" && (
+                  <>
+                    <div>
+                      <InputField
+                        icon={ShieldUser}
+                        name="licenseNumber"
+                        label="Numéro de licence"
+                        placeholder="REF-2024-001"
+                        error={errors.licenseNumber}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-300 mb-1.5">
+                        Niveau de licence
+                      </label>
+                      <select
+                        {...register("licenseLevel")}
+                        className="w-full py-3 px-4 bg-black/20 border border-white/10 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-green-500"
+                      >
+                        <option value="" className="bg-gray-800">
+                          Choisir...
+                        </option>
+                        <option value="trainee" className="bg-gray-800">
+                          Stagiaire
+                        </option>
+                        <option value="regional" className="bg-gray-800">
+                          Régional
+                        </option>
+                        <option value="national" className="bg-gray-800">
+                          National
+                        </option>
+                        <option value="international" className="bg-gray-800">
+                          International
+                        </option>
+                      </select>
+                    </div>
+                    <div>
+                      <InputField
+                        icon={Trophy}
+                        name="experienceYears"
+                        type="number"
+                        label="Années d'expérience"
+                        placeholder="5"
+                        error={errors.experienceYears}
+                      />
+                    </div>
+                  </>
+                )}
+
                 {/* Champ commun : Ville */}
                 <InputField
                   icon={MapPin}
@@ -435,6 +535,8 @@ const Signup = () => {
                 </>
               ) : userType === "manager" ? (
                 "Créer mon équipe"
+              ) : userType === "referee" ? (
+                "Devenir arbitre"
               ) : (
                 "S'inscrire et jouer"
               )}
