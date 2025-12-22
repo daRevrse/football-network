@@ -3,6 +3,7 @@ const { body, validationResult } = require("express-validator");
 const db = require("../config/database");
 const { authenticateToken } = require("../middleware/auth");
 const NotificationService = require("../services/NotificationService");
+const MatchValidationService = require("../services/MatchValidationService");
 const {
   validateTeamPlayerCount,
   logTeamValidation,
@@ -169,7 +170,7 @@ router.get("/invitations/received", authenticateToken, async (req, res) => {
   try {
     const { status = "pending", limit = 20, offset = 0 } = req.query;
 
-    // Récupérer les équipes où l'utilisateur est capitaine
+    // Récupérer les équipes où l'utilisateur est manager
     const [captainTeams] = await db.execute(
       'SELECT team_id FROM team_members WHERE user_id = ? AND role = "manager" AND is_active = true',
       [req.user.id]
@@ -240,7 +241,7 @@ router.get("/invitations/sent", authenticateToken, async (req, res) => {
   try {
     const { status, limit = 20, offset = 0 } = req.query;
 
-    // Récupérer les équipes où l'utilisateur est capitaine
+    // Récupérer les équipes où l'utilisateur est manager
     const [captainTeams] = await db.execute(
       'SELECT team_id FROM team_members WHERE user_id = ? AND role = "manager" AND is_active = true',
       [req.user.id]
@@ -358,7 +359,7 @@ router.patch(
 
       const invitation = invitations[0];
 
-      // Vérifier que l'utilisateur est le capitaine de l'équipe receveuse
+      // Vérifier que l'utilisateur est le manager de l'équipe receveuse
       // if (invitation.receiver_captain_id !== req.user.id) {
       //   return res
       //     .status(403)
@@ -842,6 +843,124 @@ router.get("/my-matches", authenticateToken, async (req, res) => {
   }
 });
 
+// GET /api/matches/trending - Récupérer les matchs tendances (doit être avant /:id)
+router.get("/trending", async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit) || 5;
+
+    // On récupère les prochains matchs confirmés
+    // Idéalement, on pourrait trier par "popularité" (ex: nombre de messages),
+    // mais pour l'instant on prend les plus proches dans le temps.
+    const [matches] = await db.execute(
+      `SELECT m.id, m.match_date, m.status,
+              ht.name as home_team, at.name as away_team,
+              l.city, l.name as location_name
+       FROM matches m
+       JOIN teams ht ON m.home_team_id = ht.id
+       LEFT JOIN teams at ON m.away_team_id = at.id
+       LEFT JOIN locations l ON m.location_id = l.id
+       WHERE m.match_date >= CURDATE()
+       AND m.status = 'confirmed'
+       ORDER BY m.match_date ASC
+       LIMIT ?`,
+      [limit]
+    );
+
+    const formattedMatches = matches.map((m) => ({
+      id: m.id,
+      match_date: m.match_date,
+      status: m.status,
+      home_team: m.home_team,
+      away_team: m.away_team || "En attente",
+      location: m.location_name
+        ? `${m.location_name}, ${m.city}`
+        : "Lieu à définir",
+    }));
+
+    res.json({ matches: formattedMatches });
+  } catch (error) {
+    console.error("Get trending matches error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// GET /api/matches/:id/public - Vue publique d'un match (pas d'auth requise)
+router.get("/:id/public", async (req, res) => {
+  try {
+    const matchId = req.params.id;
+
+    const [matches] = await db.execute(
+      `SELECT m.id, m.match_date, m.duration_minutes, m.match_type, m.status,
+              m.home_score, m.away_score, m.referee_id, m.created_at,
+              ht.id as home_team_id, ht.name as home_team_name,
+              ht.logo_url as home_team_logo,
+              at.id as away_team_id, at.name as away_team_name,
+              at.logo_url as away_team_logo,
+              l.id as location_id, l.name as location_name,
+              l.address as location_address, l.city as location_city,
+              l.field_type as location_field_type,
+              CONCAT(ref.first_name, ' ', ref.last_name) as referee_name
+       FROM matches m
+       JOIN teams ht ON m.home_team_id = ht.id
+       LEFT JOIN teams at ON m.away_team_id = at.id
+       LEFT JOIN locations l ON m.location_id = l.id
+       LEFT JOIN users ref ON m.referee_id = ref.id
+       WHERE m.id = ?`,
+      [matchId]
+    );
+
+    if (matches.length === 0) {
+      return res.status(404).json({ error: "Match non trouvé" });
+    }
+
+    const match = matches[0];
+
+    // Formater la réponse
+    const response = {
+      id: match.id,
+      matchDate: match.match_date,
+      duration: match.duration_minutes,
+      matchType: match.match_type,
+      status: match.status,
+      homeTeam: {
+        id: match.home_team_id,
+        name: match.home_team_name,
+        logoUrl: match.home_team_logo,
+      },
+      awayTeam: match.away_team_id
+        ? {
+            id: match.away_team_id,
+            name: match.away_team_name,
+            logoUrl: match.away_team_logo,
+          }
+        : null,
+      location: match.location_id
+        ? {
+            id: match.location_id,
+            name: match.location_name,
+            address: match.location_address,
+            city: match.location_city,
+            fieldType: match.location_field_type,
+          }
+        : null,
+      score:
+        match.status === "completed"
+          ? {
+              home: match.home_score,
+              away: match.away_score,
+            }
+          : null,
+      referee_name: match.referee_name,
+      createdAt: match.created_at,
+    };
+
+    res.json(response);
+  } catch (error) {
+    console.error("Get public match details error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 // GET /api/matches/:id - Récupérer les détails d'un match
 router.get("/:id", authenticateToken, async (req, res) => {
   try {
@@ -880,16 +999,27 @@ router.get("/:id", authenticateToken, async (req, res) => {
 
     const match = matches[0];
 
-    // Vérifier que l'utilisateur fait partie d'une des équipes
+    // Vérifier que l'utilisateur fait partie d'une des équipes OU est l'arbitre assigné
     const [membership] = await db.execute(
-      `SELECT tm.team_id, tm.role 
-       FROM team_members tm 
-       WHERE tm.user_id = ? AND tm.is_active = true 
+      `SELECT tm.team_id, tm.role
+       FROM team_members tm
+       WHERE tm.user_id = ? AND tm.is_active = true
        AND (tm.team_id = ? OR tm.team_id = ?)`,
       [req.user.id, match.home_team_id, match.away_team_id || 0]
     );
 
-    if (membership.length === 0) {
+    // Vérifier aussi si l'utilisateur est l'arbitre assigné
+    // On doit vérifier dans la table referees car referee_id est l'ID de la table referees, pas users
+    let isReferee = false;
+    if (match.referee_id) {
+      const [refereeCheck] = await db.execute(
+        `SELECT id FROM referees WHERE id = ? AND user_id = ?`,
+        [match.referee_id, req.user.id]
+      );
+      isReferee = refereeCheck.length > 0;
+    }
+
+    if (membership.length === 0 && !isReferee) {
       return res
         .status(403)
         .json({ error: "Not authorized to view this match" });
@@ -1101,8 +1231,9 @@ router.post(
 );
 
 /**
- * POST /api/matches/:id/score
- * Mettre à jour le score d'un match (MODIFIÉ avec validation)
+ * POST /api/matches/:id/validate-score
+ * Validation unifiée du score (managers seulement, arbitre utilise sa propre route)
+ * Système de consensus: au moins 2/3 des validateurs (home, away, referee) doivent être d'accord
  */
 router.post(
   "/:id/validate-score",
@@ -1114,6 +1245,7 @@ router.post(
     body("awayScore")
       .isInt({ min: 0 })
       .withMessage("Away score must be a positive integer"),
+    body("notes").optional().trim().isLength({ max: 500 })
   ],
   async (req, res) => {
     try {
@@ -1123,219 +1255,55 @@ router.post(
       }
 
       const matchId = req.params.id;
-      const { homeScore, awayScore } = req.body;
-
-      // Vérifier que le match existe et récupérer les infos
-      const [matches] = await db.execute(
-        `SELECT m.*,
-                ht.name as home_team_name,
-                at.name as away_team_name
-         FROM matches m
-         JOIN teams ht ON m.home_team_id = ht.id
-         LEFT JOIN teams at ON m.away_team_id = at.id
-         WHERE m.id = ?`,
-        [matchId]
-      );
-
-      if (matches.length === 0) {
-        return res.status(404).json({ error: "Match not found" });
-      }
-
-      const match = matches[0];
+      const { homeScore, awayScore, notes } = req.body;
 
       // Vérifier que l'utilisateur est manager d'une des équipes
       const permission = await isMatchTeamManager(req.user.id, matchId);
       if (!permission.isManager) {
         return res
           .status(403)
-          .json({ error: "Only team managers can update the score" });
+          .json({ error: "Only team managers can validate the score" });
       }
 
-      // Déterminer le rôle du validateur (basé sur l'équipe)
+      // Déterminer le rôle du validateur
       const isHomeManager = permission.teamType === 'home';
-      const validatorRole = isHomeManager ? "home_captain" : "away_captain";
+      const validatorRole = isHomeManager ? "home_manager" : "away_manager";
 
-      // Vérifier si c'est la première saisie ou une validation
-      const isFirstEntry =
-        match.home_score === null && match.away_score === null;
+      // Soumettre la validation via le service unifié
+      const result = await MatchValidationService.submitValidation({
+        matchId,
+        validatorId: req.user.id,
+        validatorRole,
+        homeScore,
+        awayScore,
+        notes
+      });
 
-      if (isFirstEntry) {
-        // Première saisie du score
-        await db.execute(
-          `UPDATE matches 
-           SET home_score = ?, 
-               away_score = ?, 
-               status = 'completed',
-               ${
-                 isHomeCaptain
-                   ? "home_captain_validated = 1, home_captain_validated_at = NOW()"
-                   : "away_captain_validated = 1, away_captain_validated_at = NOW()"
-               }
-           WHERE id = ?`,
-          [homeScore, awayScore, matchId]
-        );
-
-        // Enregistrer dans l'historique
-        try {
-          await db.execute(
-            `INSERT INTO match_validations 
-           (match_id, validator_id, validator_role, validation_type, home_score, away_score, status)
-           VALUES (?, ?, ?, 'score', ?, ?, 'approved')`,
-            [matchId, req.user.id, validatorRole, homeScore, awayScore]
-          );
-          console.log("✅ Validation inserted successfully");
-        } catch (error) {
-          console.error("❌ ERROR inserting validation:", error);
-        }
-
-        // Notifier le manager de l'autre équipe
-        const otherTeamId = isHomeManager ? match.away_team_id : match.home_team_id;
-        const otherTeamName = isHomeManager
-          ? match.away_team_name
-          : match.home_team_name;
-
-        if (otherTeamId) {
-          // Trouver le manager de l'autre équipe
-          const [otherManagers] = await db.execute(
-            `SELECT user_id FROM team_members
-             WHERE team_id = ? AND role = 'manager' AND is_active = true
-             LIMIT 1`,
-            [otherTeamId]
-          );
-
-          if (otherManagers.length > 0) {
-            await NotificationService.createNotification({
-              userId: otherManagers[0].user_id,
-              type: "match_validation_needed",
-              title: "Validation de score requise",
-              message: `Le score du match contre ${otherTeamName} a été saisi. Veuillez le valider.`,
-              relatedId: matchId,
-              relatedType: "match",
-            });
-          }
-        }
-
-        return res.json({
-          message:
-            "Score entered successfully. Waiting for opponent validation.",
-          match: {
-            id: matchId,
-            homeScore,
-            awayScore,
-            validatedBy: validatorRole,
-            needsValidation: true,
-          },
-        });
-      } else {
-        // Validation du score existant
-        const scoresMatch =
-          match.home_score === homeScore && match.away_score === awayScore;
-
-        if (scoresMatch) {
-          // Les scores correspondent - validation réussie
-          await db.execute(
-            `UPDATE matches
-             SET ${
-               isHomeManager
-                 ? "home_captain_validated = 1, home_captain_validated_at = NOW()"
-                 : "away_captain_validated = 1, away_captain_validated_at = NOW()"
-             }
-             WHERE id = ?`,
-            [matchId]
-          );
-
-          // Enregistrer la validation
-          try {
-            await db.execute(
-              `INSERT INTO match_validations 
-             (match_id, validator_id, validator_role, validation_type, home_score, away_score, status)
-             VALUES (?, ?, ?, 'score', ?, ?, 'approved')`,
-              [matchId, req.user.id, validatorRole, homeScore, awayScore]
-            );
-            console.log("✅ Validation inserted successfully");
-          } catch (error) {
-            console.error("❌ ERROR inserting validation:", error);
-          }
-
-          // Vérifier si les deux capitaines ont validé
-          const [updated] = await db.execute(
-            "SELECT home_captain_validated, away_captain_validated FROM matches WHERE id = ?",
-            [matchId]
-          );
-
-          const fullyValidated =
-            updated[0].home_captain_validated &&
-            updated[0].away_captain_validated;
-
-          if (fullyValidated) {
-            // Notifier les managers des deux équipes
-            const [homeManagers] = await db.execute(
-              `SELECT user_id FROM team_members
-               WHERE team_id = ? AND role = 'manager' AND is_active = true
-               LIMIT 1`,
-              [match.home_team_id]
-            );
-
-            const [awayManagers] = await db.execute(
-              `SELECT user_id FROM team_members
-               WHERE team_id = ? AND role = 'manager' AND is_active = true
-               LIMIT 1`,
-              [match.away_team_id]
-            );
-
-            if (homeManagers.length > 0) {
-              await NotificationService.createNotification({
-                userId: homeManagers[0].user_id,
-                type: "match_validated",
-                title: "Match validé",
-                message: `Le score du match a été confirmé par les deux équipes.`,
-                relatedId: matchId,
-                relatedType: "match",
-              });
-            }
-
-            if (awayManagers.length > 0) {
-              await NotificationService.createNotification({
-                userId: awayManagers[0].user_id,
-                type: "match_validated",
-                title: "Match validé",
-                message: `Le score du match a été confirmé par les deux équipes.`,
-                relatedId: matchId,
-                relatedType: "match",
-              });
-            }
-          }
-
-          return res.json({
-            message: fullyValidated
-              ? "Match fully validated!"
-              : "Score validated successfully",
-            match: {
-              id: matchId,
-              homeScore,
-              awayScore,
-              fullyValidated,
-            },
-          });
-        } else {
-          // Les scores ne correspondent pas - ouvrir une contestation
-          return res.status(409).json({
-            error: "Score mismatch",
-            message:
-              "The scores you entered do not match. Please review or open a dispute.",
-            existingScore: {
-              home: match.home_score,
-              away: match.away_score,
-            },
-            yourScore: {
-              home: homeScore,
-              away: awayScore,
-            },
-          });
-        }
+      if (!result.success) {
+        return res.status(400).json({ error: result.error });
       }
+
+      // Retourner le résultat avec info sur le consensus
+      const response = {
+        success: true,
+        message: result.consensus.hasConsensus
+          ? "Match validated with consensus!"
+          : result.consensus.hasDispute
+          ? "Your validation has been recorded. The match is disputed due to conflicting scores."
+          : "Your validation has been recorded. Waiting for other validators.",
+        validationId: result.validationId,
+        consensus: {
+          hasConsensus: result.consensus.hasConsensus,
+          hasDispute: result.consensus.hasDispute,
+          validationsCount: result.consensus.validationsCount,
+          agreedScore: result.consensus.agreedScore
+        }
+      };
+
+      res.json(response);
+
     } catch (error) {
-      console.error("Update score error:", error);
+      console.error("Validate score error:", error);
       res.status(500).json({ error: "Internal server error" });
     }
   }
@@ -1698,7 +1666,7 @@ router.put(
       const { matchDate, durationMinutes, locationId, refereeId, notes } =
         req.body;
 
-      // Vérifier que le match existe et que l'utilisateur est le capitaine domicile
+      // Vérifier que le match existe et que l'utilisateur est le manager domicile
       const [matches] = await db.execute(
         `SELECT m.*, ht.captain_id as home_captain_id
          FROM matches m
@@ -1713,7 +1681,7 @@ router.put(
 
       const match = matches[0];
 
-      // Vérifier que l'utilisateur peut gérer le match (manager ou capitaine de l'équipe domicile)
+      // Vérifier que l'utilisateur peut gérer le match (manager de l'équipe domicile)
       const permission = await canManageMatch(req.user.id, matchId);
       if (!permission.canManage) {
         return res.status(403).json({
@@ -1935,10 +1903,11 @@ router.patch(
         });
       }
 
-      // Ne pas permettre l'annulation d'un match déjà terminé
-      if (match.status === "completed") {
+      // Ne permettre l'annulation que AVANT le début du match
+      // Un match peut être annulé uniquement si status est 'pending' ou 'confirmed'
+      if (!["pending", "confirmed"].includes(match.status)) {
         return res.status(400).json({
-          error: "Cannot cancel a completed match",
+          error: "Cannot cancel a match that has already started or is completed",
         });
       }
 
@@ -2233,7 +2202,7 @@ async function updateTeamStats(teamId, goalsFor, goalsAgainst) {
 /**
  * POST /api/matches/:matchId/book-venue
  * Créer une réservation de terrain pour un match existant
- * Accessible uniquement aux capitaines des équipes du match
+ * Accessible uniquement aux managers des équipes du match
  */
 router.post(
   "/:matchId/book-venue",
@@ -2345,7 +2314,7 @@ router.post(
           : 0;
       const finalPrice = basePrice - discountApplied;
 
-      // Déterminer l'équipe qui réserve (celle du capitaine qui fait la demande)
+      // Déterminer l'équipe qui réserve (celle du manager qui fait la demande)
       const bookingTeamId =
         req.user.id === match.home_captain_id
           ? match.home_team_id
@@ -2402,47 +2371,6 @@ router.post(
   }
 );
 
-// GET /api/matches/trending - Matchs à venir populaires (Public)
-router.get("/trending", async (req, res) => {
-  try {
-    const limit = parseInt(req.query.limit) || 5;
-
-    // On récupère les prochains matchs confirmés
-    // Idéalement, on pourrait trier par "popularité" (ex: nombre de messages),
-    // mais pour l'instant on prend les plus proches dans le temps.
-    const [matches] = await db.execute(
-      `SELECT m.id, m.match_date, m.status,
-              ht.name as home_team, at.name as away_team,
-              l.city, l.name as location_name
-       FROM matches m
-       JOIN teams ht ON m.home_team_id = ht.id
-       LEFT JOIN teams at ON m.away_team_id = at.id
-       LEFT JOIN locations l ON m.location_id = l.id
-       WHERE m.match_date >= CURDATE()
-       AND m.status = 'confirmed'
-       ORDER BY m.match_date ASC
-       LIMIT ?`,
-      [limit]
-    );
-
-    const formattedMatches = matches.map((m) => ({
-      id: m.id,
-      match_date: m.match_date,
-      status: m.status,
-      home_team: m.home_team,
-      away_team: m.away_team || "En attente",
-      location: m.location_name
-        ? `${m.location_name}, ${m.city}`
-        : "Lieu à définir",
-    }));
-
-    res.json({ matches: formattedMatches });
-  } catch (error) {
-    console.error("Get trending matches error:", error);
-    res.status(500).json({ error: "Internal server error" });
-  }
-});
-
 // PATCH /api/matches/:id/assign-referee - Assigner un arbitre au match
 router.patch(
   "/:id/assign-referee",
@@ -2495,13 +2423,36 @@ router.patch(
 
       const referee = refereeRows[0];
 
-      // Assigner l'arbitre au match
+      // Vérifier s'il n'y a pas déjà une assignation active
+      const [existingAssignment] = await db.execute(
+        `SELECT id FROM match_referee_assignments
+         WHERE match_id = ? AND role = 'main' AND status IN ('pending', 'confirmed')`,
+        [matchId]
+      );
+
+      if (existingAssignment.length > 0) {
+        // Supprimer l'ancienne assignation
+        await db.execute(
+          "DELETE FROM match_referee_assignments WHERE id = ?",
+          [existingAssignment[0].id]
+        );
+      }
+
+      // Créer l'assignation dans match_referee_assignments
+      const [assignmentResult] = await db.execute(
+        `INSERT INTO match_referee_assignments
+         (match_id, referee_id, role, assigned_by, status)
+         VALUES (?, ?, 'main', ?, 'confirmed')`,
+        [matchId, refereeId, userId]
+      );
+
+      // Assigner l'arbitre au match (pour compatibilité)
       await db.execute(
         `UPDATE matches
-   SET referee_id = ?,
-       has_referee = 1,
-       updated_at = CURRENT_TIMESTAMP
-   WHERE id = ?`,
+         SET referee_id = ?,
+             has_referee = 1,
+             updated_at = CURRENT_TIMESTAMP
+         WHERE id = ?`,
         [refereeId, matchId]
       );
 
@@ -2511,7 +2462,7 @@ router.patch(
           userId: referee.user_id,
           type: "referee_assigned",
           title: "Nouveau match assigné",
-          message: `Vous avez été assigné comme arbitre pour un match`,
+          message: `Vous avez été assigné comme arbitre principal pour un match`,
           relatedEntityType: "match",
           relatedEntityId: matchId,
         });
@@ -2519,6 +2470,7 @@ router.patch(
 
       res.json({
         message: "Referee assigned successfully",
+        assignmentId: assignmentResult.insertId,
         referee: {
           id: referee.id,
           name: `${referee.first_name} ${referee.last_name}`,

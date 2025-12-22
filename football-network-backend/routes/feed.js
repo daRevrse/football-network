@@ -51,6 +51,7 @@ router.get(
           fp.*,
           u.first_name, u.last_name, u.profile_picture, u.skill_level,
           t.name AS team_name,
+          pp.stored_filename as profile_picture,
           m.home_team_id, m.away_team_id, m.status AS match_status,
           m.match_date AS match_date,
           ${
@@ -64,6 +65,7 @@ router.get(
         JOIN users u ON fp.user_id = u.id
         LEFT JOIN teams t ON fp.team_id = t.id
         LEFT JOIN matches m ON fp.match_id = m.id
+        LEFT JOIN uploads pp ON u.profile_picture_id = pp.id AND pp.is_active = true
         WHERE fp.is_active = TRUE 
           AND fp.visibility = 'public'
       `;
@@ -103,6 +105,9 @@ router.get(
           firstName: post.first_name,
           lastName: post.last_name,
           profilePicture: post.profile_picture,
+          profilePictureUrl: post.profile_picture
+            ? `/uploads/users/${post.profile_picture}`
+            : null,
           skillLevel: post.skill_level,
         },
         team: post.team_id

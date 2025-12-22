@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import PostCard from "./feed/PostCard";
 import CreatePostModal from "./feed/CreatePostModal";
+import { useUserProfile } from "../contexts/UserContext";
 
 const API_BASE_URL = process.env.REACT_APP_API_URL;
 
@@ -55,6 +56,7 @@ const PostSkeleton = () => (
 
 const Feed = () => {
   const { token, user } = useAuth();
+  const { profilePictureUrl } = useUserProfile();
   const isAuthenticated = !!user; // Booléen pour vérifier l'état
 
   // États des Données
@@ -72,6 +74,14 @@ const Feed = () => {
   // Pagination (désactivée pour l'instant)
   const [page, setPage] = useState(0);
 
+  const [stats, setStats] = useState({
+    teamsCount: 0,
+    matchesCount: 0,
+    winRate: 0,
+    goals: 0,
+    assists: 0,
+  });
+
   // --- Chargement des données ---
 
   useEffect(() => {
@@ -82,6 +92,7 @@ const Feed = () => {
     setPage(0);
     setPosts([]);
     loadFeed();
+    loadStats();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeFilter, isAuthenticated]);
 
@@ -145,16 +156,22 @@ const Feed = () => {
     }
   };
 
+  const loadStats = async () => {
+    try {
+      const response = await axios.get(`${API_BASE_URL}/users/stats`);
+      setStats((prev) => ({ ...prev, ...response.data }));
+    } catch (error) {
+      console.log("Stats non disponibles");
+    }
+  };
+
   // Scroll infini (désactivé pour l'instant car pas de pagination)
-  const lastPostRef = useCallback(
-    (node) => {
-      // Pas de pagination pour le moment
-      if (node) {
-        // Observer maintenu pour compatibilité mais ne fait rien
-      }
-    },
-    []
-  );
+  const lastPostRef = useCallback((node) => {
+    // Pas de pagination pour le moment
+    if (node) {
+      // Observer maintenu pour compatibilité mais ne fait rien
+    }
+  }, []);
 
   // --- Actions ---
 
@@ -249,29 +266,53 @@ const Feed = () => {
 
   // --- Sous-Composants ---
 
-  const MatchCard = ({ match }) => (
-    <div className="flex items-center justify-between py-3 border-b border-gray-50 last:border-0 hover:bg-gray-50 transition p-2 rounded-lg cursor-pointer">
-      <div className="flex flex-col min-w-0 flex-1 mr-2">
-        <div className="flex items-center justify-between text-xs text-gray-500 mb-1">
-          <span className="flex items-center">
-            <Calendar className="w-3 h-3 mr-1" />{" "}
-            {new Date(match.match_date).toLocaleDateString("fr-FR", {
-              day: "numeric",
-              month: "short",
-            })}
-          </span>
-          <span className="bg-gray-100 px-1.5 rounded text-gray-600">
-            {match.status || "Prévu"}
-          </span>
+  const MatchCard = ({ match }) => {
+    const getStatusDisplay = (status) => {
+      switch (status) {
+        case "pending":
+          return { label: "En attente", color: "bg-yellow-100 text-yellow-700" };
+        case "confirmed":
+          return { label: "Confirmé", color: "bg-green-100 text-green-700" };
+        case "in_progress":
+          return { label: "En cours", color: "bg-blue-100 text-blue-700" };
+        case "completed":
+          return { label: "Terminé", color: "bg-gray-100 text-gray-700" };
+        case "cancelled":
+          return { label: "Annulé", color: "bg-red-100 text-red-700" };
+        default:
+          return { label: "Prévu", color: "bg-gray-100 text-gray-600" };
+      }
+    };
+
+    const statusDisplay = getStatusDisplay(match.status);
+
+    return (
+      <Link
+        to={`/matches/${match.id}/public`}
+        className="flex items-center justify-between py-3 border-b border-gray-50 last:border-0 hover:bg-gray-50 transition p-2 rounded-lg cursor-pointer"
+      >
+        <div className="flex flex-col min-w-0 flex-1 mr-2">
+          <div className="flex items-center justify-between text-xs text-gray-500 mb-1">
+            <span className="flex items-center">
+              <Calendar className="w-3 h-3 mr-1" />{" "}
+              {new Date(match.match_date).toLocaleDateString("fr-FR", {
+                day: "numeric",
+                month: "short",
+              })}
+            </span>
+            <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${statusDisplay.color}`}>
+              {statusDisplay.label}
+            </span>
+          </div>
+          <div className="flex items-center justify-between font-semibold text-gray-800 text-sm">
+            <span className="truncate">{match.home_team}</span>
+            <span className="mx-2 text-gray-400">vs</span>
+            <span className="truncate">{match.away_team}</span>
+          </div>
         </div>
-        <div className="flex items-center justify-between font-semibold text-gray-800 text-sm">
-          <span className="truncate">{match.home_team}</span>
-          <span className="mx-2 text-gray-400">vs</span>
-          <span className="truncate">{match.away_team}</span>
-        </div>
-      </div>
-    </div>
-  );
+      </Link>
+    );
+  };
 
   const TeamSuggestion = ({ team }) => {
     const isFollowing = followingTeams.has(team.id);
@@ -318,7 +359,6 @@ const Feed = () => {
     );
   };
 
-
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
@@ -329,9 +369,9 @@ const Feed = () => {
               // VERSION CONNECTÉE
               <div className="bg-white rounded-xl shadow-sm p-6 text-center sticky top-24">
                 <div className="w-20 h-20 mx-auto rounded-full bg-gray-100 mb-3 overflow-hidden">
-                  {user?.profilePicture ? (
+                  {profilePictureUrl ? (
                     <img
-                      src={user.profilePicture}
+                      src={profilePictureUrl}
                       alt=""
                       className="w-full h-full object-cover"
                     />
@@ -347,11 +387,15 @@ const Feed = () => {
                 </p>
                 <div className="flex justify-center space-x-4 text-sm border-t pt-4">
                   <div>
-                    <div className="font-bold text-gray-900">12</div>
+                    <div className="font-bold text-gray-900">
+                      {stats.matchesCount}
+                    </div>
                     <div className="text-gray-400 text-xs">Matchs</div>
                   </div>
                   <div>
-                    <div className="font-bold text-gray-900">3</div>
+                    <div className="font-bold text-gray-900">
+                      {stats.teamsCount}
+                    </div>
                     <div className="text-gray-400 text-xs">Équipes</div>
                   </div>
                 </div>

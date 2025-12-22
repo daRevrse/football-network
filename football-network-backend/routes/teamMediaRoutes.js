@@ -234,7 +234,7 @@ router.patch(
 
       if (teams[0].captain_id !== req.user.id) {
         return res.status(403).json({
-          error: "Seul le capitaine peut modifier la bannière",
+          error: "Seul le manager peut modifier la bannière",
         });
       }
 
@@ -507,7 +507,7 @@ router.delete(
 
       if (teams[0].captain_id !== req.user.id) {
         return res.status(403).json({
-          error: "Seul le capitaine peut supprimer des photos",
+          error: "Seul le manager peut supprimer des photos",
         });
       }
 
@@ -554,7 +554,7 @@ router.post(
 
       if (teams[0].captain_id !== req.user.id) {
         return res.status(403).json({
-          error: "Seul le capitaine peut réorganiser les photos",
+          error: "Seul le manager peut réorganiser les photos",
         });
       }
 
@@ -602,7 +602,7 @@ router.post(
 
       if (teams[0].captain_id !== req.user.id) {
         return res.status(403).json({
-          error: "Seul le capitaine peut définir une photo en avant",
+          error: "Seul le manager peut définir une photo en avant",
         });
       }
 

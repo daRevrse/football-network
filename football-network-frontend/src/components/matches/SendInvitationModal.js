@@ -31,7 +31,7 @@ const sendInvitationSchema = yup.object({
 });
 
 const SendInvitationModal = ({
-  teams, // Liste de mes équipes (où je suis capitaine)
+  teams, // Liste de mes équipes (où je suis manager)
   targetTeam, // (Optionnel) Équipe adverse pré-sélectionnée
   onClose,
   onSuccess, // Callback appelé après succès
@@ -447,7 +447,7 @@ const SendInvitationModal = ({
             </div>
             <div className="flex justify-between mt-1">
               <p className="text-xs text-gray-500">
-                Visible par le capitaine adverse
+                Visible par le manager adverse
               </p>
               <p className="text-xs text-gray-400">{errors.message?.message}</p>
             </div>

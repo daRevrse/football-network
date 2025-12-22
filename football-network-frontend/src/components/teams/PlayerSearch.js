@@ -229,7 +229,7 @@ const PlayerSearch = () => {
               {myTeams.length === 0 ? (
                 <div className="text-center py-4">
                   <p className="text-red-600 mb-4">
-                    Vous devez être capitaine d'une équipe pour recruter.
+                    Vous devez être manager d'une équipe pour recruter.
                   </p>
                   <button
                     onClick={() => setSelectedPlayer(null)}

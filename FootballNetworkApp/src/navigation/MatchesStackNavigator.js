@@ -1,16 +1,23 @@
 // ====== src/navigation/MatchesStackNavigator.js - MISE À JOUR ======
 import React from 'react';
 import { createStackNavigator } from '@react-navigation/stack';
+import { useSelector } from 'react-redux';
 import {
   MatchesScreen,
   CreateMatchScreen,
   MatchDetailScreen,
+  PublicMatchDetailScreen,
   InvitationsScreen,
 } from '../screens/matches';
+import { RefereeMatchesScreen } from '../screens/matches/RefereeMatchesScreen';
 
 const Stack = createStackNavigator();
 
 export const MatchesStackNavigator = () => {
+  // Récupérer le type d'utilisateur depuis Redux
+  const userType = useSelector(state => state.auth?.user?.userType);
+  const isReferee = userType === 'referee';
+
   return (
     <Stack.Navigator
       screenOptions={{
@@ -33,11 +40,12 @@ export const MatchesStackNavigator = () => {
         },
       }}
     >
+      {/* Afficher le dashboard arbitre si l'utilisateur est arbitre, sinon l'écran normal */}
       <Stack.Screen
         name="Matches"
-        component={MatchesScreen}
+        component={isReferee ? RefereeMatchesScreen : MatchesScreen}
         options={{
-          title: 'Mes Matchs',
+          title: isReferee ? 'Dashboard Arbitre' : 'Mes Matchs',
         }}
       />
 
@@ -55,6 +63,14 @@ export const MatchesStackNavigator = () => {
         component={MatchDetailScreen}
         options={{
           title: 'Détail du match',
+        }}
+      />
+
+      <Stack.Screen
+        name="PublicMatchDetail"
+        component={PublicMatchDetailScreen}
+        options={{
+          title: 'Match',
         }}
       />
 

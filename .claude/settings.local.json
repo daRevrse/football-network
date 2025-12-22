@@ -3,7 +3,20 @@
     "allow": [
       "Bash(npm install:*)",
       "Bash(node scripts/createPasswordResetTable.js:*)",
-      "Bash(node -e:*)"
+      "Bash(node -e:*)",
+      "Bash(mkdir:*)",
+      "Bash(find:*)",
+      "Bash(cat:*)",
+      "Bash(pkill:*)",
+      "Bash(npm start)",
+      "Bash(netstat:*)",
+      "Bash(findstr:*)",
+      "Bash(mysql:*)",
+      "Bash(node scripts/createTeamFollowersTable.js:*)",
+      "Bash(node:*)",
+      "Bash(taskkill:*)",
+      "Bash(npx kill-port:*)",
+      "Bash(timeout 3 sleep:*)"
     ],
     "deny": [],
     "ask": []

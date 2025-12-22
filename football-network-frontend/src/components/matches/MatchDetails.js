@@ -232,10 +232,35 @@ const MatchDetails = () => {
           </button>
 
           <div className="flex items-center gap-3">
+            {/* Badge de statut */}
+            {match.status === "pending" && (
+              <div className="px-3 py-1 rounded-full bg-yellow-500/20 border border-yellow-500/50 text-yellow-400 text-sm font-bold flex items-center backdrop-blur-md">
+                <Clock className="w-3 h-3 mr-2" />
+                EN ATTENTE
+              </div>
+            )}
             {match.status === "confirmed" && (
               <div className="px-3 py-1 rounded-full bg-green-500/20 border border-green-500/50 text-green-400 text-sm font-bold flex items-center backdrop-blur-md">
-                <div className="w-2 h-2 rounded-full bg-green-500 mr-2 animate-pulse"></div>
+                <CheckCircle className="w-3 h-3 mr-2" />
                 CONFIRMÉ
+              </div>
+            )}
+            {match.status === "in_progress" && (
+              <div className="px-3 py-1 rounded-full bg-blue-500/20 border border-blue-500/50 text-blue-400 text-sm font-bold flex items-center backdrop-blur-md">
+                <div className="w-2 h-2 rounded-full bg-blue-500 mr-2 animate-pulse"></div>
+                EN COURS
+              </div>
+            )}
+            {match.status === "completed" && (
+              <div className="px-3 py-1 rounded-full bg-gray-500/20 border border-gray-500/50 text-gray-300 text-sm font-bold flex items-center backdrop-blur-md">
+                <CheckCircle className="w-3 h-3 mr-2" />
+                TERMINÉ
+              </div>
+            )}
+            {match.status === "cancelled" && (
+              <div className="px-3 py-1 rounded-full bg-red-500/20 border border-red-500/50 text-red-400 text-sm font-bold flex items-center backdrop-blur-md">
+                <XCircle className="w-3 h-3 mr-2" />
+                ANNULÉ
               </div>
             )}
             {canManage && (
@@ -253,7 +278,8 @@ const MatchDetails = () => {
                       onClick={() => setShowMenu(false)}
                     ></div>
                     <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-xl py-2 z-20 animate-in fade-in zoom-in-95">
-                      {match.status === "pending" && (
+                      {/* Confirmer - Uniquement si pending ET adversaire assigné */}
+                      {match.status === "pending" && match.awayTeam && (
                         <button
                           onClick={() => handleStatusChange("confirmed")}
                           className="w-full px-4 py-2.5 text-left text-sm text-green-600 hover:bg-green-50 flex items-center"
@@ -261,30 +287,46 @@ const MatchDetails = () => {
                           <CheckCircle className="w-4 h-4 mr-2" /> Confirmer
                         </button>
                       )}
-                      <button
-                        onClick={() => navigate(`/matches/${matchId}/edit`)}
-                        className="w-full px-4 py-2.5 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center"
-                      >
-                        <Edit className="w-4 h-4 mr-2" /> Modifier
-                      </button>
-                      <button
-                        onClick={() =>
-                          handleStatusChange(
-                            "cancelled",
-                            "Annulé par le capitaine"
-                          )
-                        }
-                        className="w-full px-4 py-2.5 text-left text-sm text-orange-600 hover:bg-orange-50 flex items-center"
-                      >
-                        <XCircle className="w-4 h-4 mr-2" /> Annuler
-                      </button>
-                      <div className="border-t my-1"></div>
-                      <button
-                        onClick={handleDelete}
-                        className="w-full px-4 py-2.5 text-left text-sm text-red-600 hover:bg-red-50 flex items-center"
-                      >
-                        <Trash2 className="w-4 h-4 mr-2" /> Supprimer
-                      </button>
+                      {match.status === "pending" && !match.awayTeam && (
+                        <div className="px-4 py-2.5 text-xs text-gray-500 italic">
+                          Attendez l'adversaire pour confirmer
+                        </div>
+                      )}
+                      {/* Modifier - Uniquement si pas en cours ou terminé */}
+                      {!["in_progress", "completed"].includes(match.status) && (
+                        <button
+                          onClick={() => navigate(`/matches/${matchId}/edit`)}
+                          className="w-full px-4 py-2.5 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center"
+                        >
+                          <Edit className="w-4 h-4 mr-2" /> Modifier
+                        </button>
+                      )}
+                      {/* Annuler - Uniquement avant le début (pending ou confirmed) */}
+                      {["pending", "confirmed"].includes(match.status) && (
+                        <button
+                          onClick={() =>
+                            handleStatusChange(
+                              "cancelled",
+                              "Annulé par le manager"
+                            )
+                          }
+                          className="w-full px-4 py-2.5 text-left text-sm text-orange-600 hover:bg-orange-50 flex items-center"
+                        >
+                          <XCircle className="w-4 h-4 mr-2" /> Annuler
+                        </button>
+                      )}
+                      {/* Supprimer - Uniquement si pending ou cancelled */}
+                      {["pending", "cancelled"].includes(match.status) && (
+                        <>
+                          <div className="border-t my-1"></div>
+                          <button
+                            onClick={handleDelete}
+                            className="w-full px-4 py-2.5 text-left text-sm text-red-600 hover:bg-red-50 flex items-center"
+                          >
+                            <Trash2 className="w-4 h-4 mr-2" /> Supprimer
+                          </button>
+                        </>
+                      )}
                     </div>
                   </>
                 )}
@@ -400,16 +442,19 @@ const MatchDetails = () => {
             >
               Informations
             </button>
-            <button
-              onClick={() => setActiveTab("chat")}
-              className={`pb-3 px-2 text-sm font-bold border-b-2 transition ${
-                activeTab === "chat"
-                  ? "border-indigo-600 text-indigo-600"
-                  : "border-transparent text-gray-500 hover:text-gray-700"
-              }`}
-            >
-              Discussion d'avant-match
-            </button>
+            {/* Chat disponible uniquement si match confirmé ou en cours */}
+            {["confirmed", "in_progress"].includes(match.status) && (
+              <button
+                onClick={() => setActiveTab("chat")}
+                className={`pb-3 px-2 text-sm font-bold border-b-2 transition ${
+                  activeTab === "chat"
+                    ? "border-indigo-600 text-indigo-600"
+                    : "border-transparent text-gray-500 hover:text-gray-700"
+                }`}
+              >
+                Discussion d'avant-match
+              </button>
+            )}
           </div>
 
           {activeTab === "info" && (
@@ -421,7 +466,8 @@ const MatchDetails = () => {
                     <MapPin className="w-5 h-5 mr-2 text-indigo-500" /> Détails
                     du terrain
                   </span>
-                  {canManage && match.status !== "cancelled" && (
+                  {/* Réservation terrain - Uniquement avant le début du match */}
+                  {canManage && ["pending", "confirmed"].includes(match.status) && (
                     <>
                       {match.venue_booking_id ? (
                         <div className="flex items-center px-4 py-2 bg-green-50 border border-green-200 rounded-lg">
@@ -434,7 +480,6 @@ const MatchDetails = () => {
                         <button
                           onClick={() => {
                             loadVenues();
-                            // Pré-sélectionner le terrain du match s'il existe
                             if (match.location?.id) {
                               setSelectedVenue(match.location.id);
                             }
@@ -449,6 +494,15 @@ const MatchDetails = () => {
                         </button>
                       )}
                     </>
+                  )}
+                  {/* Afficher l'info si match déjà commencé ou terminé */}
+                  {match.venue_booking_id && !["pending", "confirmed"].includes(match.status) && (
+                    <div className="flex items-center px-4 py-2 bg-green-50 border border-green-200 rounded-lg">
+                      <CheckCircle className="w-4 h-4 text-green-600 mr-2" />
+                      <span className="text-sm font-semibold text-green-700">
+                        Terrain réservé
+                      </span>
+                    </div>
                   )}
                 </h3>
                 <div className="flex items-start p-4 bg-gray-50 rounded-xl">
@@ -481,7 +535,7 @@ const MatchDetails = () => {
                 <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
                   <h3 className="text-lg font-bold text-gray-900 mb-3 flex items-center">
                     <Info className="w-5 h-5 mr-2 text-gray-400" /> Notes du
-                    capitaine
+                    manager
                   </h3>
                   <p className="text-gray-600 text-sm leading-relaxed">
                     {match.notes}
@@ -509,11 +563,21 @@ const MatchDetails = () => {
         <div className="space-y-6">
           {/* Arbitre */}
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+            {/* Alerte si match confirmé sans arbitre */}
+            {match.status === "confirmed" && !match.referee_id && (
+              <div className="mb-4 p-3 bg-orange-50 border border-orange-200 rounded-lg flex items-start">
+                <AlertTriangle className="w-4 h-4 text-orange-600 mt-0.5 mr-2 flex-shrink-0" />
+                <p className="text-xs text-orange-800">
+                  <span className="font-semibold">Attention:</span> Aucun arbitre assigné pour ce match confirmé
+                </p>
+              </div>
+            )}
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider">
                 Officiels
               </h3>
-              {canManage && !match.referee_id && (
+              {/* Assigner arbitre - Uniquement avant le début du match */}
+              {canManage && !match.referee_id && ["pending", "confirmed"].includes(match.status) && (
                 <button
                   onClick={handleOpenRefereeModal}
                   className="text-xs bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg font-medium transition-colors"
@@ -544,7 +608,8 @@ const MatchDetails = () => {
                   <p className="text-xs text-gray-500">Arbitre principal</p>
                 </div>
               </div>
-              {canManage && match.refereeId && (
+              {/* Changer arbitre - Uniquement avant le début du match */}
+              {canManage && match.refereeId && ["pending", "confirmed"].includes(match.status) && (
                 <button
                   onClick={handleOpenRefereeModal}
                   className="text-xs text-blue-600 hover:text-blue-700 font-medium"
@@ -564,36 +629,53 @@ const MatchDetails = () => {
               Partagez le lien du match pour que vos amis puissent suivre le
               score.
             </p>
-            <button className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-sm flex items-center justify-center transition shadow-lg shadow-indigo-200">
+            <button
+              onClick={() => {
+                navigator.clipboard.writeText(window.location.href);
+                toast.success("Lien copié dans le presse-papier !");
+              }}
+              className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-sm flex items-center justify-center transition shadow-lg shadow-indigo-200">
               <Share2 className="w-4 h-4 mr-2" /> Partager le match
             </button>
           </div>
 
-          {/* Quick Actions for Captains */}
+          {/* Quick Actions for Managers */}
           {canManage && (
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
               <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3 pl-2">
-                Zone Capitaine
+                Zone Manager
               </h3>
               <div className="space-y-2">
-                <button
-                  onClick={() => navigate(`/matches/${matchId}/participations`)}
-                  className="w-full text-left px-4 py-2 rounded-lg hover:bg-gray-50 text-sm text-gray-700 font-medium flex items-center"
-                >
-                  <CheckCircle className="w-4 h-4 mr-2 text-green-500" /> Voir
-                  les confirmations
-                </button>
-                <button
-                  onClick={() => navigate(`/matches/${matchId}/validate`)}
-                  className="w-full text-left px-4 py-2 rounded-lg hover:bg-gray-50 text-sm text-gray-700 font-medium flex items-center"
-                >
-                  <Trophy className="w-4 h-4 mr-2 text-yellow-500" /> Saisir le
-                  score
-                </button>
-                <button className="w-full text-left px-4 py-2 rounded-lg hover:bg-gray-50 text-sm text-gray-700 font-medium flex items-center">
-                  <Users className="w-4 h-4 mr-2 text-blue-500" /> Gérer la
-                  compo
-                </button>
+                {/* Voir les confirmations - Uniquement pour matchs confirmés ou en cours */}
+                {["confirmed", "in_progress"].includes(match.status) && (
+                  <button
+                    onClick={() => navigate(`/matches/${matchId}/participations`)}
+                    className="w-full text-left px-4 py-2 rounded-lg hover:bg-gray-50 text-sm text-gray-700 font-medium flex items-center"
+                  >
+                    <CheckCircle className="w-4 h-4 mr-2 text-green-500" /> Voir
+                    les confirmations
+                  </button>
+                )}
+                {/* Saisir le score - Uniquement si le match est terminé */}
+                {match.status === "completed" && (
+                  <button
+                    onClick={() => navigate(`/matches/${matchId}/validate`)}
+                    className="w-full text-left px-4 py-2 rounded-lg hover:bg-gray-50 text-sm text-gray-700 font-medium flex items-center"
+                  >
+                    <Trophy className="w-4 h-4 mr-2 text-yellow-500" /> Valider le
+                    score
+                  </button>
+                )}
+                {/* Gérer la compo - Uniquement avant le match ou pendant */}
+                {["pending", "confirmed", "in_progress"].includes(match.status) && match.awayTeam && (
+                  <button
+                    onClick={() => navigate(`/matches/${matchId}/lineup`)}
+                    className="w-full text-left px-4 py-2 rounded-lg hover:bg-gray-50 text-sm text-gray-700 font-medium flex items-center"
+                  >
+                    <Users className="w-4 h-4 mr-2 text-blue-500" /> Gérer la
+                    compo
+                  </button>
+                )}
               </div>
             </div>
           )}

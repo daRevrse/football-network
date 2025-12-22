@@ -150,6 +150,29 @@ const Login = () => {
             </button>
           </form>
 
+          {/* Divider avec OU */}
+          <div className="flex items-center my-6">
+            <div className="flex-1 h-px bg-white/20"></div>
+            <span className="px-4 text-sm text-gray-400 font-semibold">OU</span>
+            <div className="flex-1 h-px bg-white/20"></div>
+          </div>
+
+          {/* Bouton Google Sign-In */}
+          <button
+            type="button"
+            onClick={() => {
+              alert('Cette fonctionnalité sera bientôt disponible');
+            }}
+            className="w-full bg-white/10 backdrop-blur-sm border border-white/20 text-white py-3 px-4 rounded-xl font-semibold hover:bg-white/15 focus:ring-4 focus:ring-white/20 transition-all flex items-center justify-center space-x-3"
+          >
+            <img
+              src="https://www.google.com/images/branding/googleg/1x/googleg_standard_color_128dp.png"
+              alt="Google"
+              className="w-5 h-5"
+            />
+            <span>Continuer avec Google</span>
+          </button>
+
           <div className="mt-8 text-center border-t border-white/10 pt-6">
             <p className="text-gray-400">
               Pas encore de compte ?{" "}

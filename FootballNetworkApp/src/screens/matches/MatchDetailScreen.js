@@ -13,10 +13,12 @@ import {
   Modal,
   TextInput,
   Image,
+  Share,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import LinearGradient from 'react-native-linear-gradient';
 import { useFocusEffect } from '@react-navigation/native';
+import { useSelector } from 'react-redux';
 import { matchesApi } from '../../services/api';
 import { API_CONFIG } from '../../utils/constants/api';
 
@@ -41,6 +43,7 @@ const StatRow = ({ label, value, icon }) => (
 
 export const MatchDetailScreen = ({ route, navigation }) => {
   const { matchId } = route.params;
+  const { user } = useSelector(state => state.auth);
   const [match, setMatch] = useState(null);
   const [loading, setLoading] = useState(true);
   const [scoreModal, setScoreModal] = useState(false);
@@ -56,15 +59,30 @@ export const MatchDetailScreen = ({ route, navigation }) => {
     try {
       setLoading(true);
       const res = await matchesApi.getMatchById(matchId);
-      if (res.success) setMatch(res.data);
+      if (res.success) {
+        setMatch(res.data);
+        // Initialiser les scores s'ils existent
+        if (res.data.score) {
+          setScores({
+            home: res.data.score.home?.toString() || '',
+            away: res.data.score.away?.toString() || '',
+          });
+        }
+      }
     } catch (e) {
-      Alert.alert('Erreur', 'Chargement impossible');
+      console.error('Load match error:', e);
+      Alert.alert('Erreur', 'Impossible de charger le match');
     } finally {
       setLoading(false);
     }
   };
 
   const handleUpdateScore = async () => {
+    if (!scores.home || !scores.away) {
+      Alert.alert('Erreur', 'Veuillez saisir les deux scores');
+      return;
+    }
+
     const res = await matchesApi.updateMatchScore(
       matchId,
       parseInt(scores.home),
@@ -72,18 +90,43 @@ export const MatchDetailScreen = ({ route, navigation }) => {
     );
     if (res.success) {
       setScoreModal(false);
+      Alert.alert('Succès', 'Score mis à jour');
       loadMatch();
-    } else Alert.alert('Erreur', res.error);
+    } else {
+      Alert.alert('Erreur', res.error || 'Impossible de mettre à jour le score');
+    }
+  };
+
+  const handleShare = async () => {
+    try {
+      const message = `Match: ${match.homeTeam.name} vs ${match.awayTeam?.name || 'À confirmer'}\n` +
+        `Date: ${new Date(match.matchDate).toLocaleDateString('fr-FR')}\n` +
+        `Lieu: ${match.location?.name || 'Non défini'}`;
+
+      await Share.share({
+        message,
+        title: 'Partager le match',
+      });
+    } catch (error) {
+      console.error('Share error:', error);
+    }
   };
 
   if (loading || !match)
     return (
       <View style={styles.center}>
-        <ActivityIndicator color={THEME.ACCENT} />
+        <ActivityIndicator color={THEME.ACCENT} size="large" />
       </View>
     );
 
-  const isOwner = match.is_organizer;
+  // Déterminer les permissions
+  const userType = user?.userType;
+  const isOrganizer = match.organizer_id === user?.id;
+  const isHomeManager = match.homeTeam?.manager_id === user?.id;
+  const isAwayManager = match.awayTeam?.manager_id === user?.id;
+  const isManager = userType === 'manager' && (isHomeManager || isAwayManager || isOrganizer);
+  const isReferee = userType === 'referee' && match.referee_id === user?.id;
+  const canManage = isManager || isOrganizer;
 
   return (
     <View style={styles.container}>
@@ -129,7 +172,11 @@ export const MatchDetailScreen = ({ route, navigation }) => {
                   ? 'EN COURS'
                   : match.status === 'completed'
                   ? 'TERMINE'
-                  : 'PREVU'}
+                  : match.status === 'confirmed'
+                  ? 'CONFIRME'
+                  : match.status === 'cancelled'
+                  ? 'ANNULE'
+                  : 'EN ATTENTE'}
               </Text>
             </View>
           </View>
@@ -141,45 +188,85 @@ export const MatchDetailScreen = ({ route, navigation }) => {
                 { backgroundColor: '#3B82F620', borderColor: '#3B82F650' },
               ]}
             >
-              {match.awayTeam.logoUrl ? (
+              {match.awayTeam?.logoUrl ? (
                 <Image
                   source={{
                     uri: `${API_CONFIG.BASE_URL.replace('/api', '')}${match.awayTeam.logoUrl}`,
                   }}
                   style={styles.logoImage}
                 />
-              ) : (
+              ) : match.awayTeam ? (
                 <Text style={[styles.logoText, { color: '#3B82F6' }]}>
                   {match.awayTeam.name[0]}
                 </Text>
+              ) : (
+                <Icon name="help-circle" size={24} color="#94A3B8" />
               )}
             </View>
             <Text style={styles.teamName} numberOfLines={2}>
-              {match.awayTeam.name}
+              {match.awayTeam?.name || 'En attente...'}
             </Text>
           </View>
         </View>
       </View>
 
       <ScrollView contentContainerStyle={styles.content}>
-        {/* ACTIONS */}
-        {isOwner && (
-          <View style={styles.actionsRow}>
-            <TouchableOpacity
-              style={styles.actionBtn}
-              onPress={() => setScoreModal(true)}
-            >
-              <Icon name="edit-2" size={20} color={THEME.ACCENT} />
-              <Text style={styles.actionText}>Score</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.actionBtn}>
-              <Icon name="share-2" size={20} color={THEME.TEXT} />
-              <Text style={[styles.actionText, { color: THEME.TEXT }]}>
-                Partager
-              </Text>
-            </TouchableOpacity>
+        {/* ALERTE SI MATCH CONFIRMÉ SANS ARBITRE */}
+        {match.status === 'confirmed' && !match.referee_id && canManage && (
+          <View style={styles.warningBox}>
+            <Icon name="alert-triangle" size={16} color="#F59E0B" />
+            <Text style={styles.warningText}>
+              Attention: Aucun arbitre assigné pour ce match confirmé
+            </Text>
           </View>
         )}
+
+        {/* ALERTE SI MATCH EN ATTENTE D'ÉQUIPE ADVERSE */}
+        {!match.awayTeam && canManage && (
+          <View style={styles.infoBox}>
+            <Icon name="info" size={16} color="#3B82F6" />
+            <Text style={styles.infoText}>
+              Match en attente d'une équipe adverse
+            </Text>
+          </View>
+        )}
+
+        {/* ACTIONS - Accessibles aux managers et organisateurs */}
+        <View style={styles.actionsRow}>
+          {/* Éditer - Manager uniquement avant le match */}
+          {canManage && ['pending', 'confirmed'].includes(match.status) && (
+            <TouchableOpacity
+              style={styles.actionBtn}
+              onPress={() => {
+                // TODO: Navigation vers l'écran d'édition
+                Alert.alert('Info', 'Édition de match à venir');
+              }}
+            >
+              <Icon name="edit" size={20} color="#3B82F6" />
+              <Text style={[styles.actionText, { color: '#3B82F6' }]}>Éditer</Text>
+            </TouchableOpacity>
+          )}
+
+          {/* Mettre à jour le score - Manager ou Arbitre pendant ou après le match */}
+          {(canManage || isReferee) &&
+            ['in_progress', 'completed'].includes(match.status) && (
+              <TouchableOpacity
+                style={styles.actionBtn}
+                onPress={() => setScoreModal(true)}
+              >
+                <Icon name="target" size={20} color={THEME.ACCENT} />
+                <Text style={styles.actionText}>Score</Text>
+              </TouchableOpacity>
+            )}
+
+          {/* Partager - Accessible à tous */}
+          <TouchableOpacity style={styles.actionBtn} onPress={handleShare}>
+            <Icon name="share-2" size={20} color={THEME.TEXT} />
+            <Text style={[styles.actionText, { color: THEME.TEXT }]}>
+              Partager
+            </Text>
+          </TouchableOpacity>
+        </View>
 
         {/* INFO CARD */}
         <View style={styles.card}>
@@ -187,12 +274,17 @@ export const MatchDetailScreen = ({ route, navigation }) => {
           <StatRow
             icon="calendar"
             label="Date"
-            value={new Date(match.matchDate).toLocaleDateString()}
+            value={new Date(match.matchDate).toLocaleDateString('fr-FR', {
+              weekday: 'long',
+              day: 'numeric',
+              month: 'long',
+              year: 'numeric',
+            })}
           />
           <StatRow
             icon="clock"
             label="Heure"
-            value={new Date(match.matchDate).toLocaleTimeString([], {
+            value={new Date(match.matchDate).toLocaleTimeString('fr-FR', {
               hour: '2-digit',
               minute: '2-digit',
             })}
@@ -202,10 +294,22 @@ export const MatchDetailScreen = ({ route, navigation }) => {
             label="Lieu"
             value={match.location?.name || 'Non défini'}
           />
+          {match.location?.address && (
+            <StatRow
+              icon="navigation"
+              label="Adresse"
+              value={match.location.address}
+            />
+          )}
           <StatRow
             icon="user"
             label="Arbitre"
-            value={match.refereeContact || 'Non assigné'}
+            value={match.referee?.name || match.refereeContact || 'Non assigné'}
+          />
+          <StatRow
+            icon="users"
+            label="Organisateur"
+            value={match.organizer?.name || match.homeTeam.name}
           />
         </View>
 
@@ -214,6 +318,128 @@ export const MatchDetailScreen = ({ route, navigation }) => {
           <View style={styles.card}>
             <Text style={styles.cardTitle}>Notes</Text>
             <Text style={styles.notesText}>{match.notes}</Text>
+          </View>
+        )}
+
+        {/* ZONE MANAGER - Actions rapides */}
+        {canManage && (
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>
+              {isReferee ? 'Zone Arbitre' : 'Zone Manager'}
+            </Text>
+
+            {/* Confirmer le match - Uniquement si en attente */}
+            {match.status === 'pending' && match.awayTeam && (
+              <TouchableOpacity
+                style={styles.managerAction}
+                onPress={() => {
+                  // TODO: Ajouter la logique de confirmation
+                  Alert.alert('Info', 'Confirmation de match à venir');
+                }}
+              >
+                <Icon name="check-circle" size={18} color={THEME.ACCENT} />
+                <Text style={styles.managerActionText}>Confirmer le match</Text>
+              </TouchableOpacity>
+            )}
+
+            {/* Voir les confirmations de participation */}
+            {['confirmed', 'in_progress'].includes(match.status) && (
+              <TouchableOpacity
+                style={styles.managerAction}
+                onPress={() => {
+                  // TODO: Navigation vers les participations
+                  Alert.alert('Info', 'Participations à venir');
+                }}
+              >
+                <Icon name="users" size={18} color="#3B82F6" />
+                <Text style={styles.managerActionText}>
+                  Voir les confirmations de présence
+                </Text>
+              </TouchableOpacity>
+            )}
+
+            {/* Gérer la composition - Uniquement si équipe adverse */}
+            {['pending', 'confirmed', 'in_progress'].includes(match.status) &&
+              match.awayTeam && (
+                <TouchableOpacity
+                  style={styles.managerAction}
+                  onPress={() => {
+                    // TODO: Navigation vers la composition
+                    Alert.alert('Info', 'Composition à venir');
+                  }}
+                >
+                  <Icon name="clipboard" size={18} color="#8B5CF6" />
+                  <Text style={styles.managerActionText}>
+                    Gérer la composition
+                  </Text>
+                </TouchableOpacity>
+              )}
+
+            {/* Assigner arbitre - Si pas d'arbitre et avant le match */}
+            {['pending', 'confirmed'].includes(match.status) &&
+              !match.referee_id &&
+              !isReferee && (
+                <TouchableOpacity
+                  style={styles.managerAction}
+                  onPress={() => {
+                    // TODO: Navigation vers assignation arbitre
+                    Alert.alert('Info', 'Assignation arbitre à venir');
+                  }}
+                >
+                  <Icon name="user-plus" size={18} color="#F59E0B" />
+                  <Text style={styles.managerActionText}>
+                    Assigner un arbitre
+                  </Text>
+                </TouchableOpacity>
+              )}
+
+            {/* Annuler le match */}
+            {['pending', 'confirmed'].includes(match.status) && (
+              <TouchableOpacity
+                style={[styles.managerAction, { borderColor: '#EF4444' }]}
+                onPress={() => {
+                  Alert.alert(
+                    'Annuler le match',
+                    'Êtes-vous sûr de vouloir annuler ce match ?',
+                    [
+                      { text: 'Non', style: 'cancel' },
+                      {
+                        text: 'Oui, annuler',
+                        style: 'destructive',
+                        onPress: async () => {
+                          // TODO: Ajouter la logique d'annulation
+                          Alert.alert('Info', 'Annulation à venir');
+                        },
+                      },
+                    ],
+                  );
+                }}
+              >
+                <Icon name="x-circle" size={18} color="#EF4444" />
+                <Text style={[styles.managerActionText, { color: '#EF4444' }]}>
+                  Annuler le match
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
+
+        {/* ZONE ARBITRE - Spécifique pour les arbitres */}
+        {isReferee && match.status === 'completed' && !match.scoreVerified && (
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>Validation du score</Text>
+            <TouchableOpacity
+              style={[styles.managerAction, { backgroundColor: THEME.ACCENT + '20' }]}
+              onPress={() => {
+                // TODO: Navigation vers validation du score
+                Alert.alert('Info', 'Validation du score à venir');
+              }}
+            >
+              <Icon name="check-square" size={18} color={THEME.ACCENT} />
+              <Text style={[styles.managerActionText, { color: THEME.ACCENT }]}>
+                Valider le score final
+              </Text>
+            </TouchableOpacity>
           </View>
         )}
       </ScrollView>
@@ -345,6 +571,44 @@ const styles = StyleSheet.create({
 
   content: { padding: 20 },
 
+  // WARNING BOX
+  warningBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEF3C7',
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#FCD34D',
+    marginBottom: 16,
+    gap: 8,
+  },
+  warningText: {
+    flex: 1,
+    color: '#92400E',
+    fontSize: 12,
+    fontWeight: '500',
+  },
+
+  // INFO BOX
+  infoBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#DBEAFE',
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#93C5FD',
+    marginBottom: 16,
+    gap: 8,
+  },
+  infoText: {
+    flex: 1,
+    color: '#1E3A8A',
+    fontSize: 12,
+    fontWeight: '500',
+  },
+
   // ACTIONS
   actionsRow: { flexDirection: 'row', gap: 12, marginBottom: 24 },
   actionBtn: {
@@ -360,6 +624,23 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   actionText: { color: THEME.ACCENT, fontWeight: '600' },
+
+  // MANAGER ACTIONS
+  managerAction: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    backgroundColor: THEME.BG,
+    marginBottom: 8,
+    gap: 12,
+  },
+  managerActionText: {
+    color: THEME.TEXT,
+    fontSize: 14,
+    fontWeight: '500',
+  },
 
   // CARD
   card: {

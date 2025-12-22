@@ -103,7 +103,7 @@ const SentInvitations = ({ invitations, loading }) => {
                   Invitation à {invitation.receiverTeam.name}
                 </h3>
                 <p className="text-gray-600">
-                  Capitaine: {invitation.receiverTeam.captain.firstName}{" "}
+                  Manager: {invitation.receiverTeam.captain.firstName}{" "}
                   {invitation.receiverTeam.captain.lastName}
                 </p>
               </div>

@@ -27,6 +27,7 @@ import SearchTeams from "./components/teams/SearchTeams";
 import PublicTeamProfile from "./components/teams/PublicTeamProfile";
 import Invitations from "./components/matches/Invitations";
 import MatchDetails from "./components/matches/MatchDetails";
+import PublicMatchDetails from "./components/matches/PublicMatchDetails";
 import Matches from "./components/matches/Matches";
 import CreateMatch from "./components/matches/CreateMatch";
 import Calendar from "./components/calendar/Calendar";
@@ -355,6 +356,10 @@ function App() {
                       <PlayerSearch />
                     </ManagerOnlyRoute>
                   }
+                />
+                <Route
+                  path="/matches/:matchId/public"
+                  element={<PublicMatchDetails />}
                 />
                 <Route
                   path="/matches/:matchId"

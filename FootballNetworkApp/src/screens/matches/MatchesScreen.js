@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import { useFocusEffect } from '@react-navigation/native';
+import { useSelector } from 'react-redux';
 import LinearGradient from 'react-native-linear-gradient';
 import { matchesApi } from '../../services/api';
 import { API_CONFIG } from '../../utils/constants';
@@ -209,10 +210,16 @@ const MatchCard = ({ match, onPress }) => {
 };
 
 export const MatchesScreen = ({ navigation }) => {
+  const { user } = useSelector(state => state.auth);
+  const userType = user?.userType;
+
   const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [matches, setMatches] = useState([]);
   const [filter, setFilter] = useState('upcoming'); // upcoming, past
+
+  // Déterminer si l'utilisateur peut créer des matchs
+  const canCreateMatch = userType === 'manager';
 
   useFocusEffect(
     useCallback(() => {
@@ -259,19 +266,22 @@ export const MatchesScreen = ({ navigation }) => {
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.title}>Mes Matchs</Text>
-        <TouchableOpacity
-          style={styles.createBtn}
-          onPress={() => navigation.navigate('CreateMatch')}
-        >
-          <Icon name="plus" size={24} color="#000" />
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.invitationButton} // ou styles.iconBtn selon la version
-          onPress={handleInvitations}
-        >
-          <Icon name="mail" size={20} color="#FFF" />
-          {/* Badge de notification optionnel */}
-        </TouchableOpacity>
+        <View style={styles.headerActions}>
+          {canCreateMatch && (
+            <TouchableOpacity
+              style={styles.createBtn}
+              onPress={() => navigation.navigate('CreateMatch')}
+            >
+              <Icon name="plus" size={24} color="#000" />
+            </TouchableOpacity>
+          )}
+          <TouchableOpacity
+            style={styles.invitationButton}
+            onPress={handleInvitations}
+          >
+            <Icon name="mail" size={20} color="#FFF" />
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Tabs */}
@@ -317,7 +327,7 @@ export const MatchesScreen = ({ navigation }) => {
             <Text style={styles.emptyText}>
               Aucun match {filter === 'upcoming' ? 'prévu' : 'trouvé'}
             </Text>
-            {filter === 'upcoming' && (
+            {filter === 'upcoming' && canCreateMatch && (
               <TouchableOpacity
                 onPress={() => navigation.navigate('CreateMatch')}
               >
@@ -355,6 +365,11 @@ const styles = StyleSheet.create({
     borderBottomColor: THEME.BORDER,
   },
   title: { fontSize: 28, fontWeight: '900', color: THEME.TEXT },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
   createBtn: {
     width: 44,
     height: 44,
@@ -366,6 +381,16 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
+  },
+  invitationButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: THEME.SURFACE,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: THEME.BORDER,
   },
   tabs: {
     flexDirection: 'row',

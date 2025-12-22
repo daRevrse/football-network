@@ -13,8 +13,7 @@ import {
 } from "lucide-react";
 import toast from "react-hot-toast";
 
-const API_BASE_URL =
-  process.env.REACT_APP_API_URL || "http://localhost:5000/api";
+const API_BASE_URL = process.env.REACT_APP_API_URL;
 
 const PendingParticipations = () => {
   const [participations, setParticipations] = useState([]);
@@ -35,6 +34,8 @@ const PendingParticipations = () => {
           headers: { Authorization: `Bearer ${token}` },
         }
       );
+
+      console.log("response", response);
 
       setParticipations(response.data.participations || []);
     } catch (error) {
@@ -109,7 +110,7 @@ const PendingParticipations = () => {
 
   if (participations.length === 0) {
     return (
-      <div className="bg-gray-50 rounded-lg border-2 border-dashed border-gray-300 p-8 text-center">
+      <div className="bg-gray-50 rounded-lg border-2 border-dashed border-gray-300 p-8 text-center max-w-7xl mx-auto space-y-8 mt-5">
         <CheckCircle className="w-12 h-12 text-gray-400 mx-auto mb-3" />
         <h3 className="text-lg font-semibold text-gray-900 mb-2">
           Aucune participation en attente
@@ -122,7 +123,7 @@ const PendingParticipations = () => {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="max-w-7xl mx-auto space-y-8 mt-5">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
@@ -142,9 +143,8 @@ const PendingParticipations = () => {
       {/* Liste des participations */}
       <div className="space-y-4">
         {participations.map((participation) => {
-          const matchStatus = getMatchStatus(participation?.match?.status);
-          const isMyTeamHome =
-            participation?.team?.id === participation?.match?.homeTeamId;
+          const matchStatus = getMatchStatus(participation?.match_status);
+          const isMyTeamHome = participation?.team_id;
 
           return (
             <div
@@ -158,13 +158,13 @@ const PendingParticipations = () => {
                     <h3 className="text-lg font-bold text-gray-900">
                       {isMyTeamHome ? (
                         <>
-                          {participation?.match?.homeTeamName} vs{" "}
-                          {participation?.match?.awayTeamName}
+                          {participation?.home_team_name} vs{" "}
+                          {participation?.away_team_name}
                         </>
                       ) : (
                         <>
-                          {participation?.match?.awayTeamName} vs{" "}
-                          {participation?.match?.homeTeamName}
+                          {participation?.away_team_name} vs{" "}
+                          {participation?.home_team_name}
                         </>
                       )}
                     </h3>
@@ -178,7 +178,9 @@ const PendingParticipations = () => {
                   <div className="flex items-center text-sm text-gray-600 mb-1">
                     <Users className="w-4 h-4 mr-1" />
                     <span className="font-medium">Mon équipe:</span>
-                    <span className="ml-1">{participation?.team?.name}</span>
+                    <span className="ml-1">
+                      {participation?.home_team_name}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -187,13 +189,13 @@ const PendingParticipations = () => {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4 bg-gray-50 rounded-lg p-4">
                 <div className="flex items-center space-x-2 text-sm text-gray-700">
                   <Calendar className="w-4 h-4 text-gray-400" />
-                  <span>{formatDate(participation?.match?.matchDate)}</span>
+                  <span>{formatDate(participation?.match_date)}</span>
                 </div>
 
                 {participation?.match?.location && (
                   <div className="flex items-center space-x-2 text-sm text-gray-700">
                     <MapPin className="w-4 h-4 text-gray-400" />
-                    <span>{participation?.match?.location}</span>
+                    <span>{participation?.location_city}</span>
                   </div>
                 )}
 
@@ -215,7 +217,7 @@ const PendingParticipations = () => {
               </div>
 
               {/* Info importante */}
-              {participation?.match?.status === "pending" && (
+              {participation?.match_status === "pending" && (
                 <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
                   <div className="flex items-start space-x-2">
                     <AlertCircle className="w-5 h-5 text-yellow-600 mt-0.5 flex-shrink-0" />

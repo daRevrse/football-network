@@ -254,6 +254,29 @@ const Signup = () => {
             {/* Input caché pour le userType (nécessaire pour react-hook-form) */}
             <input type="hidden" {...register("userType")} />
 
+            {/* Bouton Google Sign-In */}
+            <button
+              type="button"
+              onClick={() => {
+                alert('Cette fonctionnalité sera bientôt disponible. Veuillez remplir le formulaire ci-dessous.');
+              }}
+              className="w-full bg-white/10 backdrop-blur-sm border border-white/20 text-white py-3 px-4 rounded-xl font-semibold hover:bg-white/15 focus:ring-4 focus:ring-white/20 transition-all flex items-center justify-center space-x-3"
+            >
+              <img
+                src="https://www.google.com/images/branding/googleg/1x/googleg_standard_color_128dp.png"
+                alt="Google"
+                className="w-5 h-5"
+              />
+              <span>S'inscrire avec Google</span>
+            </button>
+
+            {/* Divider avec OU */}
+            <div className="flex items-center my-6">
+              <div className="flex-1 h-px bg-white/20"></div>
+              <span className="px-4 text-sm text-gray-400 font-semibold">OU</span>
+              <div className="flex-1 h-px bg-white/20"></div>
+            </div>
+
             {/* Section 1: Identité */}
             <div>
               <h3 className="text-green-400 font-semibold text-sm uppercase tracking-wider mb-4 flex items-center">
@@ -398,7 +421,7 @@ const Signup = () => {
                       error={errors.teamName}
                     />
                     <p className="text-xs text-gray-400 mt-2 ml-1">
-                      * Vous serez automatiquement désigné capitaine.
+                      * Vous serez automatiquement désigné manager.
                     </p>
                   </div>
                 )}

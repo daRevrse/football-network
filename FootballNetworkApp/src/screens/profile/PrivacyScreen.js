@@ -70,7 +70,7 @@ export const PrivacyScreen = ({ navigation }) => {
           <View style={styles.divider} />
           <PrivacyToggle
             label="Apparaître dans la recherche"
-            desc="Permettre aux capitaines de vous trouver."
+            desc="Permettre aux managers de vous trouver."
             value={privacy.allowSearch}
             onValueChange={() => toggle('allowSearch')}
           />
@@ -87,7 +87,7 @@ export const PrivacyScreen = ({ navigation }) => {
           <View style={styles.divider} />
           <PrivacyToggle
             label="Afficher le téléphone"
-            desc="Visible uniquement par vos capitaines."
+            desc="Visible uniquement par vos managers."
             value={privacy.showPhone}
             onValueChange={() => toggle('showPhone')}
           />

@@ -201,7 +201,7 @@ const MatchCard = ({ match, onRefresh }) => {
                     : "text-gray-600"
                 }
               >
-                Capitaine domicile
+                Manager domicile
               </span>
             </div>
 
@@ -218,7 +218,7 @@ const MatchCard = ({ match, onRefresh }) => {
                     : "text-gray-600"
                 }
               >
-                Capitaine extérieur
+                Manager extérieur
               </span>
             </div>
           </div>

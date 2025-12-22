@@ -35,7 +35,22 @@ const THEME = {
 };
 
 const TeamCard = ({ team, onPress, onManage }) => {
-  const isCaptain = team.role === 'owner' || team.role === 'captain';
+  const isOwner = team.role === 'owner';
+  const isCaptain = team.role === 'captain';
+  const canManage = isOwner || isCaptain;
+
+  // Déterminer le badge de rôle à afficher
+  const getRoleBadge = () => {
+    if (isOwner) {
+      return { text: 'MANAGER', icon: 'shield', color: '#22C55E' };
+    }
+    if (isCaptain) {
+      return { text: 'CAPITAINE', icon: 'star', color: '#F59E0B' };
+    }
+    return null;
+  };
+
+  const roleBadge = getRoleBadge();
 
   return (
     <TouchableOpacity
@@ -91,10 +106,10 @@ const TeamCard = ({ team, onPress, onManage }) => {
               <Text style={styles.teamName} numberOfLines={1}>
                 {team.name}
               </Text>
-              {isCaptain && (
-                <View style={styles.roleBadge}>
-                  <Icon name="star" size={10} color="#000" />
-                  <Text style={styles.roleText}>CAPITAINE</Text>
+              {roleBadge && (
+                <View style={[styles.roleBadge, { backgroundColor: `${roleBadge.color}20`, borderColor: roleBadge.color }]}>
+                  <Icon name={roleBadge.icon} size={10} color={roleBadge.color} />
+                  <Text style={[styles.roleText, { color: roleBadge.color }]}>{roleBadge.text}</Text>
                 </View>
               )}
             </View>
@@ -104,8 +119,8 @@ const TeamCard = ({ team, onPress, onManage }) => {
             </Text>
           </View>
 
-          {/* Bouton Gestion (seulement si capitaine) */}
-          {isCaptain && (
+          {/* Bouton Gestion (seulement si capitaine ou owner) */}
+          {canManage && (
             <TouchableOpacity
               style={styles.manageButton}
               onPress={e => {
@@ -387,12 +402,13 @@ const styles = StyleSheet.create({
   roleBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: THEME.CAPTAIN,
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 6,
+    gap: 4,
+    borderWidth: 1,
   },
-  roleText: { fontSize: 9, fontWeight: '900', color: '#000' },
+  roleText: { fontSize: 9, fontWeight: '900' },
 
   teamLocation: {
     fontSize: 12,

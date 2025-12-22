@@ -310,7 +310,7 @@ router.patch("/:id/confirm", authenticateToken, async (req, res) => {
 
     const booking = bookings[0];
 
-    // Seul le capitaine ou celui qui a réservé peut confirmer
+    // Seul le manager ou celui qui a réservé peut confirmer
     if (booking.captain_id !== req.user.id && booking.booked_by !== req.user.id) {
       return res.status(403).json({ error: "Only team captain or booking creator can confirm" });
     }
@@ -368,7 +368,7 @@ router.patch(
 
       const booking = bookings[0];
 
-      // Seul le capitaine ou celui qui a réservé peut annuler
+      // Seul le manager ou celui qui a réservé peut annuler
       if (booking.captain_id !== req.user.id && booking.booked_by !== req.user.id) {
         return res.status(403).json({ error: "Only team captain or booking creator can cancel" });
       }
@@ -423,7 +423,7 @@ router.patch("/:id/complete", authenticateToken, async (req, res) => {
 
     const booking = bookings[0];
 
-    // Seul le capitaine ou celui qui a réservé peut marquer comme terminé
+    // Seul le manager ou celui qui a réservé peut marquer comme terminé
     if (booking.captain_id !== req.user.id && booking.booked_by !== req.user.id) {
       return res.status(403).json({ error: "Only team captain or booking creator can mark as completed" });
     }
@@ -482,7 +482,7 @@ router.patch(
 
       const booking = bookings[0];
 
-      // Seul le capitaine ou celui qui a réservé peut modifier le paiement
+      // Seul le manager ou celui qui a réservé peut modifier le paiement
       if (booking.captain_id !== req.user.id && booking.booked_by !== req.user.id) {
         return res.status(403).json({ error: "Access denied" });
       }

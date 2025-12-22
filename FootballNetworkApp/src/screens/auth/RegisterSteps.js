@@ -129,7 +129,7 @@ export const TeamInfoStep = ({ formData, updateField, errors }) => {
           style={{ marginRight: 10 }}
         />
         <Text style={styles.infoText}>
-          Vous serez automatiquement désigné comme capitaine de cette équipe.
+          Vous serez automatiquement désigné comme manager de cette équipe.
           Vous pourrez inviter des joueurs plus tard.
         </Text>
       </View>

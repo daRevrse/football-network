@@ -92,7 +92,11 @@ const MatchResultPost = ({ post, onLike }) => {
     ? "from-yellow-50 to-orange-50 border-yellow-200"
     : "from-red-50 to-pink-50 border-red-200";
 
-  const iconColor = isWin ? "bg-green-600" : isDraw ? "bg-yellow-600" : "bg-red-600";
+  const iconColor = isWin
+    ? "bg-green-600"
+    : isDraw
+    ? "bg-yellow-600"
+    : "bg-red-600";
   const textColor = isWin
     ? "text-green-900"
     : isDraw
@@ -179,7 +183,9 @@ const RecruitmentPost = ({ post, onLike }) => {
                 Poste recherché
               </div>
               <div className="text-lg font-bold text-gray-900">
-                {positions[post.recruitmentPosition || post.recruitment_position] ||
+                {positions[
+                  post.recruitmentPosition || post.recruitment_position
+                ] ||
                   post.recruitmentPosition ||
                   post.recruitment_position}
               </div>
@@ -311,9 +317,12 @@ const PostCard = ({ post, isLast, onLike, isAuthenticated }) => {
             className="block"
           >
             <div className="w-12 h-12 rounded-full bg-gradient-to-r from-green-400 to-blue-500 flex items-center justify-center text-white font-bold shadow-sm">
-              {post.author?.profilePicture ? (
+              {post.author?.profilePictureUrl ? (
                 <img
-                  src={post.author.profilePicture}
+                  src={
+                    API_BASE_URL.replace("/api", "") +
+                    post.author.profilePictureUrl
+                  }
                   alt=""
                   className="w-full h-full rounded-full object-cover"
                 />

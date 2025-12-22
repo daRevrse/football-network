@@ -4,7 +4,12 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { useSelector } from 'react-redux';
 import { View, Text, StyleSheet, Platform } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
-import { DashboardScreen } from '../screens/dashboard';
+import {
+  DashboardScreen,
+  PlayerDashboardScreen,
+  ManagerDashboardScreen,
+  RefereeDashboardScreen
+} from '../screens/dashboard';
 import { TeamsStackNavigator } from './TeamsStackNavigator';
 import { MatchesStackNavigator } from './MatchesStackNavigator';
 import { SearchStackNavigator } from './SearchStackNavigator';
@@ -51,6 +56,9 @@ const TabBarIcon = ({ focused, iconName, badgeCount }) => {
 };
 
 export const MainTabNavigator = () => {
+  // Récupérer le rôle de l'utilisateur
+  const userType = useSelector(state => state.auth?.user?.userType);
+
   // Sélecteurs Redux pour les badges
   const { unreadCount } = useSelector(
     state => state.notifications || { unreadCount: 0 },
@@ -61,6 +69,29 @@ export const MainTabNavigator = () => {
   const pendingInvitations = invitations.filter(
     inv => inv.status === 'pending',
   ).length;
+
+  // Choisir le bon Dashboard selon le rôle
+  const getDashboardComponent = () => {
+    switch (userType) {
+      case 'player':
+        return PlayerDashboardScreen;
+      case 'manager':
+        return ManagerDashboardScreen;
+      case 'referee':
+        return RefereeDashboardScreen;
+      default:
+        return PlayerDashboardScreen; // Par défaut joueur
+    }
+  };
+
+  // Déterminer si l'utilisateur peut créer des matchs
+  const canCreateMatches = userType === 'manager';
+
+  // Déterminer si l'utilisateur peut créer/gérer des équipes
+  const canManageTeams = userType === 'player' || userType === 'manager';
+
+  // Les arbitres ont accès à leurs propres écrans
+  const isReferee = userType === 'referee';
 
   return (
     <Tab.Navigator
@@ -107,11 +138,27 @@ export const MainTabNavigator = () => {
         },
       })}
     >
-      <Tab.Screen name="Dashboard" component={DashboardScreen} />
+      <Tab.Screen
+        name="Dashboard"
+        component={getDashboardComponent()}
+        options={{
+          title: userType === 'referee' ? 'Dashboard Arbitre' :
+                 userType === 'manager' ? 'Dashboard Manager' :
+                 'Dashboard'
+        }}
+      />
       <Tab.Screen name="Feed" component={FeedScreen} />
-      <Tab.Screen name="Teams" component={TeamsStackNavigator} />
+
+      {/* Les arbitres n'ont pas besoin de l'onglet Teams */}
+      {canManageTeams && (
+        <Tab.Screen name="Teams" component={TeamsStackNavigator} />
+      )}
+
       <Tab.Screen name="Matches" component={MatchesStackNavigator} />
+
+      {/* L'onglet Search reste accessible à tous */}
       <Tab.Screen name="Search" component={SearchStackNavigator} />
+
       <Tab.Screen name="Profile" component={ProfileStackNavigator} />
     </Tab.Navigator>
   );

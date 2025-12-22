@@ -18,7 +18,7 @@ class UploadServiceExtension {
     try {
       await connection.beginTransaction();
 
-      // Vérifier que l'utilisateur est le capitaine
+      // Vérifier que l'utilisateur est le manager
       const [teams] = await connection.execute(
         "SELECT captain_id, logo_id FROM teams WHERE id = ? AND is_active = true",
         [teamId]
@@ -29,7 +29,7 @@ class UploadServiceExtension {
       }
 
       if (teams[0].captain_id !== userId) {
-        throw new Error("Seul le capitaine peut modifier le logo");
+        throw new Error("Seul le manager peut modifier le logo");
       }
 
       // Récupérer l'upload
@@ -137,7 +137,7 @@ class UploadServiceExtension {
     try {
       await connection.beginTransaction();
 
-      // Vérifier que l'utilisateur est le capitaine
+      // Vérifier que l'utilisateur est le manager
       const [teams] = await connection.execute(
         "SELECT captain_id, banner_id FROM teams WHERE id = ? AND is_active = true",
         [teamId]
@@ -148,7 +148,7 @@ class UploadServiceExtension {
       }
 
       if (teams[0].captain_id !== userId) {
-        throw new Error("Seul le capitaine peut modifier la bannière");
+        throw new Error("Seul le manager peut modifier la bannière");
       }
 
       // Récupérer l'upload
@@ -306,7 +306,7 @@ class UploadServiceExtension {
     try {
       await connection.beginTransaction();
 
-      // Vérifier que l'utilisateur est le capitaine
+      // Vérifier que l'utilisateur est le manager
       const [teams] = await connection.execute(
         "SELECT captain_id, logo_id FROM teams WHERE id = ? AND is_active = true",
         [teamId]
@@ -317,7 +317,7 @@ class UploadServiceExtension {
       }
 
       if (teams[0].captain_id !== userId) {
-        throw new Error("Seul le capitaine peut modifier le logo");
+        throw new Error("Seul le manager peut modifier le logo");
       }
 
       const logoId = teams[0].logo_id;
@@ -387,7 +387,7 @@ class UploadServiceExtension {
     try {
       await connection.beginTransaction();
 
-      // Vérifier que l'utilisateur est le capitaine
+      // Vérifier que l'utilisateur est le manager
       const [teams] = await connection.execute(
         "SELECT captain_id, banner_id FROM teams WHERE id = ? AND is_active = true",
         [teamId]
@@ -398,7 +398,7 @@ class UploadServiceExtension {
       }
 
       if (teams[0].captain_id !== userId) {
-        throw new Error("Seul le capitaine peut modifier la bannière");
+        throw new Error("Seul le manager peut modifier la bannière");
       }
 
       const bannerId = teams[0].banner_id;

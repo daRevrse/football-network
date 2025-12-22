@@ -203,13 +203,22 @@ const FeedScreen = ({ navigation }) => {
     );
   };
 
-  const PostItem = ({ post }) => {
+  const PostItem = ({ post, navigation }) => {
     // Sécurité données
     if (!post || !post.author) return null;
 
     const postType = POST_TYPES[post.type] || POST_TYPES.general;
     const isMatch =
       post.type === 'match_announcement' || post.type === 'match_result';
+
+    const handleViewMatch = () => {
+      if (post.matchId) {
+        navigation.navigate('Matches', {
+          screen: 'PublicMatchDetail',
+          params: { matchId: post.matchId },
+        });
+      }
+    };
 
     return (
       <View style={styles.postCard}>
@@ -251,6 +260,18 @@ const FeedScreen = ({ navigation }) => {
 
         {/* Contenu */}
         <Text style={styles.postContent}>{post.content}</Text>
+
+        {/* Bouton Voir le match pour les posts de type match */}
+        {isMatch && post.matchId && (
+          <TouchableOpacity
+            style={styles.viewMatchButton}
+            onPress={handleViewMatch}
+          >
+            <Icon name="eye" size={16} color="#3B82F6" />
+            <Text style={styles.viewMatchText}>Voir le match</Text>
+            <Icon name="chevron-right" size={16} color="#3B82F6" />
+          </TouchableOpacity>
+        )}
 
         {/* Média / Match Info */}
         {post.media && (
@@ -348,7 +369,7 @@ const FeedScreen = ({ navigation }) => {
         <FlatList
           data={posts}
           keyExtractor={item => item.id.toString()}
-          renderItem={({ item }) => <PostItem post={item} />}
+          renderItem={({ item }) => <PostItem post={item} navigation={navigation} />}
           contentContainerStyle={styles.feedContent}
           refreshControl={
             <RefreshControl
@@ -608,6 +629,24 @@ const styles = StyleSheet.create({
     fontSize: 15,
     lineHeight: 22,
     marginBottom: 12,
+  },
+  viewMatchButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#3B82F620',
+    borderWidth: 1,
+    borderColor: '#3B82F6',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 10,
+    marginBottom: 12,
+    gap: 8,
+  },
+  viewMatchText: {
+    color: '#3B82F6',
+    fontSize: 14,
+    fontWeight: '600',
   },
   postMedia: {
     width: '100%',

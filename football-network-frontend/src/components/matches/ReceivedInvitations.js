@@ -72,7 +72,7 @@ const ReceivedInvitations = ({ invitations, onRespond, loading }) => {
                         Invitation de {invitation.senderTeam.name}
                       </h3>
                       <p className="text-gray-600">
-                        Capitaine: {invitation.senderTeam.captain.firstName}{" "}
+                        Manager: {invitation.senderTeam.captain.firstName}{" "}
                         {invitation.senderTeam.captain.lastName}
                       </p>
                     </div>

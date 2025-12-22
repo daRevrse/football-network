@@ -536,6 +536,49 @@ class TeamsApiService {
     }
   }
 
+  /**
+   * Toggle mercato (activer/désactiver les recrutements)
+   */
+  async toggleMercato(teamId, mercatoActif) {
+    try {
+      const token = await SecureStorage.getToken();
+      if (!token) {
+        return { success: false, error: 'Non authentifié' };
+      }
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), this.timeout);
+
+      const response = await fetch(`${this.baseURL}/teams/${teamId}/mercato`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ mercato_actif: mercatoActif }),
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        throw {
+          response: { status: response.status, data: await response.json() },
+        };
+      }
+
+      const data = await response.json();
+
+      return {
+        success: true,
+        data: data,
+        message: data.message,
+      };
+    } catch (error) {
+      return this.handleApiError(error);
+    }
+  }
+
   // ==================== RECHERCHE ====================
 
   /**

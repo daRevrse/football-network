@@ -12,10 +12,12 @@ import {
   Platform,
   ActivityIndicator,
   Image,
+  Switch,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import LinearGradient from 'react-native-linear-gradient';
 import { useFocusEffect } from '@react-navigation/native';
+import { useSelector } from 'react-redux';
 import { teamsApi } from '../../services/api';
 import { API_CONFIG } from '../../utils/constants';
 
@@ -37,6 +39,8 @@ const StatBox = ({ label, value }) => (
 
 export const TeamDetailScreen = ({ route, navigation }) => {
   const { teamId } = route.params;
+  const { user } = useSelector(state => state.auth);
+
   const [loading, setLoading] = useState(true);
   const [team, setTeam] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -53,6 +57,25 @@ export const TeamDetailScreen = ({ route, navigation }) => {
     }
   };
 
+  const handleToggleMercato = async (newValue) => {
+    try {
+      const result = await teamsApi.toggleMercato(teamId, newValue);
+      if (result.success) {
+        setTeam(prev => ({ ...prev, mercatoActif: newValue }));
+        Alert.alert(
+          'Succès',
+          newValue
+            ? 'Mercato activé - Les joueurs peuvent maintenant demander à rejoindre'
+            : 'Mercato fermé - Les demandes sont suspendues',
+        );
+      } else {
+        Alert.alert('Erreur', result.error || 'Impossible de modifier le mercato');
+      }
+    } catch (e) {
+      Alert.alert('Erreur', 'Une erreur est survenue');
+    }
+  };
+
   useFocusEffect(
     useCallback(() => {
       loadData();
@@ -66,7 +89,11 @@ export const TeamDetailScreen = ({ route, navigation }) => {
       </View>
     );
 
+  // Vérifier les permissions: L'utilisateur est-il owner ou captain de cette équipe?
   const isOwner = team.role === 'owner' || team.role === 'captain';
+  const isManager = team.manager_id === user?.id;
+  const isCaptain = team.captain_id === user?.id;
+  const canManage = isOwner || isManager || isCaptain;
 
   return (
     <View style={styles.container}>
@@ -130,6 +157,27 @@ export const TeamDetailScreen = ({ route, navigation }) => {
           <Text style={styles.teamLoc}>
             {team.locationCity} • {team.skillLevel}
           </Text>
+          {/* Badge Mercato */}
+          <View
+            style={[
+              styles.mercatoBadge,
+              team.mercatoActif ? styles.mercatoOpen : styles.mercatoClosed,
+            ]}
+          >
+            <Icon
+              name={team.mercatoActif ? 'user-check' : 'user-x'}
+              size={14}
+              color={team.mercatoActif ? '#22C55E' : '#EF4444'}
+            />
+            <Text
+              style={[
+                styles.mercatoText,
+                {color: team.mercatoActif ? '#22C55E' : '#EF4444'},
+              ]}
+            >
+              {team.mercatoActif ? 'Recrute' : 'Mercato Fermé'}
+            </Text>
+          </View>
         </View>
       </View>
 
@@ -173,16 +221,55 @@ export const TeamDetailScreen = ({ route, navigation }) => {
           <Icon name="chevron-right" size={20} color={THEME.TEXT_SEC} />
         </TouchableOpacity>
 
-        {isOwner && (
-          <TouchableOpacity style={styles.menuItem}>
-            <View style={styles.menuLeft}>
-              <View style={[styles.menuIcon, { backgroundColor: '#F59E0B20' }]}>
-                <Icon name="calendar" size={20} color="#F59E0B" />
+        {canManage && (
+          <>
+            <TouchableOpacity style={styles.menuItem}>
+              <View style={styles.menuLeft}>
+                <View style={[styles.menuIcon, { backgroundColor: '#F59E0B20' }]}>
+                  <Icon name="calendar" size={20} color="#F59E0B" />
+                </View>
+                <Text style={styles.menuText}>Planifier un match</Text>
               </View>
-              <Text style={styles.menuText}>Planifier un match</Text>
+              <Icon name="chevron-right" size={20} color={THEME.TEXT_SEC} />
+            </TouchableOpacity>
+
+            {/* Toggle Mercato pour Managers */}
+            <View style={styles.menuItem}>
+              <View style={styles.menuLeft}>
+                <View
+                  style={[
+                    styles.menuIcon,
+                    {
+                      backgroundColor: team.mercatoActif
+                        ? '#22C55E20'
+                        : '#EF444420',
+                    },
+                  ]}
+                >
+                  <Icon
+                    name={team.mercatoActif ? 'user-check' : 'user-x'}
+                    size={20}
+                    color={team.mercatoActif ? THEME.ACCENT : '#EF4444'}
+                  />
+                </View>
+                <View style={{flex: 1}}>
+                  <Text style={styles.menuText}>Mercato</Text>
+                  <Text style={styles.menuSubtext}>
+                    {team.mercatoActif
+                      ? 'Les joueurs peuvent rejoindre'
+                      : 'Recrutement fermé'}
+                  </Text>
+                </View>
+              </View>
+              <Switch
+                value={team.mercatoActif || false}
+                onValueChange={handleToggleMercato}
+                trackColor={{false: '#334155', true: '#22C55E40'}}
+                thumbColor={team.mercatoActif ? THEME.ACCENT : '#94A3B8'}
+                ios_backgroundColor="#334155"
+              />
             </View>
-            <Icon name="chevron-right" size={20} color={THEME.TEXT_SEC} />
-          </TouchableOpacity>
+          </>
         )}
 
         {/* DESCRIPTION */}
@@ -307,6 +394,36 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   menuText: { fontSize: 16, color: THEME.TEXT, fontWeight: '600' },
+  menuSubtext: {
+    fontSize: 12,
+    color: THEME.TEXT_SEC,
+    marginTop: 2,
+  },
+
+  // Mercato Badge
+  mercatoBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    marginTop: 8,
+    gap: 6,
+  },
+  mercatoOpen: {
+    backgroundColor: '#22C55E20',
+    borderWidth: 1,
+    borderColor: '#22C55E40',
+  },
+  mercatoClosed: {
+    backgroundColor: '#EF444420',
+    borderWidth: 1,
+    borderColor: '#EF444440',
+  },
+  mercatoText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
 
   description: { fontSize: 14, color: THEME.TEXT_SEC, lineHeight: 22 },
 });

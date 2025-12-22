@@ -108,7 +108,7 @@ class MatchStatusService {
 
           console.log(`✅ Match ${match.id} started automatically: ${match.home_team_name} vs ${match.away_team_name}`);
 
-          // Notifier les capitaines
+          // Notifier les managers
           await this.notifyCaptains(
             match.home_captain_id,
             match.away_captain_id,
@@ -173,7 +173,7 @@ class MatchStatusService {
 
           console.log(`✅ Match ${match.id} completed automatically: ${match.home_team_name} vs ${match.away_team_name}`);
 
-          // Notifier les capitaines pour qu'ils saisissent le score
+          // Notifier les managers pour qu'ils saisissent le score
           await this.notifyCaptains(
             match.home_captain_id,
             match.away_captain_id,
@@ -195,11 +195,11 @@ class MatchStatusService {
   }
 
   /**
-   * Notifie les deux capitaines d'une équipe
+   * Notifie les deux managers d'équipe
    */
   async notifyCaptains(homeCaptainId, awayCaptainId, matchId, type, title, message) {
     try {
-      // Notifier le capitaine domicile
+      // Notifier le manager domicile
       if (homeCaptainId) {
         await NotificationService.createNotification({
           userId: homeCaptainId,
@@ -211,7 +211,7 @@ class MatchStatusService {
         });
       }
 
-      // Notifier le capitaine extérieur
+      // Notifier le manager extérieur
       if (awayCaptainId) {
         await NotificationService.createNotification({
           userId: awayCaptainId,
@@ -223,7 +223,7 @@ class MatchStatusService {
         });
       }
     } catch (error) {
-      console.error("❌ Error notifying captains:", error);
+      console.error("❌ Error notifying managers:", error);
     }
   }
 

@@ -21,6 +21,7 @@ import {
 import Icon from 'react-native-vector-icons/Feather';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import LinearGradient from 'react-native-linear-gradient';
+import { useSelector } from 'react-redux';
 import { matchesApi, teamsApi } from '../../services/api';
 import { DIMENSIONS, SHADOWS } from '../../styles/theme';
 
@@ -173,6 +174,9 @@ const TeamSelectorModal = ({
 );
 
 export const CreateMatchScreen = ({ navigation }) => {
+  const { user } = useSelector(state => state.auth);
+  const userType = user?.userType;
+
   // États du formulaire
   const [form, setForm] = useState({
     team1: null,
@@ -210,6 +214,23 @@ export const CreateMatchScreen = ({ navigation }) => {
     extrapolate: 'clamp',
   });
 
+  // Vérification des permissions
+  useEffect(() => {
+    if (userType === 'player') {
+      Alert.alert(
+        'Accès refusé',
+        'Seuls les managers peuvent créer des matchs. Rejoignez une équipe en tant que capitaine ou créez votre propre équipe pour organiser des matchs.',
+        [
+          {
+            text: 'OK',
+            onPress: () => navigation.goBack(),
+          },
+        ],
+        { cancelable: false }
+      );
+    }
+  }, [userType, navigation]);
+
   // Chargement des équipes du capitaine
   useEffect(() => {
     const loadTeams = async () => {
@@ -221,7 +242,25 @@ export const CreateMatchScreen = ({ navigation }) => {
             t => t.role === 'owner' || t.role === 'captain',
           );
           setMyTeams(captainTeams);
-          if (captainTeams.length > 0) {
+
+          // Vérifier s'il n'y a aucune équipe à gérer
+          if (captainTeams.length === 0 && userType === 'manager') {
+            Alert.alert(
+              'Aucune équipe',
+              'Vous devez d\'abord créer une équipe pour organiser un match.',
+              [
+                {
+                  text: 'Créer une équipe',
+                  onPress: () => navigation.navigate('Teams', { screen: 'CreateTeam' }),
+                },
+                {
+                  text: 'Retour',
+                  onPress: () => navigation.goBack(),
+                  style: 'cancel',
+                },
+              ]
+            );
+          } else if (captainTeams.length > 0) {
             setForm(f => ({ ...f, team1: captainTeams[0] }));
           }
         }
@@ -231,8 +270,12 @@ export const CreateMatchScreen = ({ navigation }) => {
         setLoadingTeams(false);
       }
     };
-    loadTeams();
-  }, []);
+
+    // Ne charger les équipes que si l'utilisateur n'est pas un simple player
+    if (userType !== 'player') {
+      loadTeams();
+    }
+  }, [userType, navigation]);
 
   // Gestion de la recherche d'adversaire
   const handleOpponentChange = text => {
@@ -362,7 +405,7 @@ export const CreateMatchScreen = ({ navigation }) => {
         <Icon name="shield-off" size={64} color={THEME.TEXT_SEC} />
         <Text style={styles.emptyTitle}>Aucune équipe trouvée</Text>
         <Text style={styles.emptyText}>
-          Vous devez être capitaine d'une équipe pour organiser un match.
+          Vous devez être manager d'une équipe pour organiser un match.
         </Text>
         <TouchableOpacity
           style={styles.createTeamBtn}

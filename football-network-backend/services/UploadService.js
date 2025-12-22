@@ -72,7 +72,7 @@ class UploadService {
     try {
       await connection.beginTransaction();
 
-      // Vérifier que l'utilisateur est capitaine de l'équipe
+      // Vérifier que l'utilisateur est manager de l'équipe
       const [teams] = await connection.execute(
         "SELECT captain_id, logo_id FROM teams WHERE id = ? AND is_active = true",
         [teamId]
@@ -83,7 +83,7 @@ class UploadService {
       }
 
       if (teams[0].captain_id !== userId) {
-        throw new Error("Seul le capitaine peut modifier le logo");
+        throw new Error("Seul le manager peut modifier le logo");
       }
 
       // Vérifier que l'upload existe

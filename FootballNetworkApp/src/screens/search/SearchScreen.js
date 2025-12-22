@@ -107,6 +107,7 @@ const EmptyState = ({ icon, title, message }) => (
 export const SearchScreen = ({ navigation }) => {
   const [query, setQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState('all');
+  const [mercatoFilter, setMercatoFilter] = useState(false);
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState({
     teams: [],
@@ -137,7 +138,7 @@ export const SearchScreen = ({ navigation }) => {
       setResults({ teams: [], matches: [], players: [] });
       setLoading(false);
     }
-  }, [query, activeFilter]);
+  }, [query, activeFilter, mercatoFilter]);
 
   // Charger les recherches récentes depuis AsyncStorage
   const loadRecentSearches = async () => {
@@ -188,8 +189,15 @@ export const SearchScreen = ({ navigation }) => {
       const response = await searchApi.search(query, searchType);
 
       if (response.success) {
+        let teams = response.results.teams || [];
+
+        // Filtrer par mercato si activé
+        if (mercatoFilter && teams.length > 0) {
+          teams = teams.filter(team => team.mercatoActif === true);
+        }
+
         setResults({
-          teams: response.results.teams || [],
+          teams: teams,
           players: response.results.players || [],
           matches: response.results.matches || [],
         });
@@ -287,6 +295,14 @@ export const SearchScreen = ({ navigation }) => {
               active={activeFilter === 'matches'}
               onPress={() => setActiveFilter('matches')}
             />
+            {(activeFilter === 'teams' || activeFilter === 'all') && (
+              <FilterChip
+                label="Mercato Ouvert"
+                icon="user-check"
+                active={mercatoFilter}
+                onPress={() => setMercatoFilter(!mercatoFilter)}
+              />
+            )}
           </ScrollView>
         </View>
       </View>
@@ -358,6 +374,7 @@ export const SearchScreen = ({ navigation }) => {
                       subtitle={`${team.city} • ${team.members} membres`}
                       icon="shield"
                       type="team"
+                      badge={team.mercatoActif ? '✓ Recrute' : '✗ Fermé'}
                       onPress={() =>
                         navigation.navigate('Teams', {
                           screen: 'TeamDetail',

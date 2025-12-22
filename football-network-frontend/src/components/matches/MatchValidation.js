@@ -108,6 +108,33 @@ const MatchValidation = () => {
   if (!data) return null;
 
   const { match, validation, userRole } = data;
+
+  // Vérifier que le match est terminé
+  if (match.status !== "completed") {
+    return (
+      <div className="max-w-3xl mx-auto pb-12 pt-6 px-4">
+        <button
+          onClick={() => navigate(-1)}
+          className="flex items-center text-gray-500 hover:text-gray-800 mb-6 transition"
+        >
+          <ArrowLeft className="w-5 h-5 mr-2" /> Retour au match
+        </button>
+        <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-8 text-center">
+          <Clock className="w-16 h-16 text-yellow-500 mx-auto mb-4" />
+          <h2 className="text-2xl font-bold text-yellow-800 mb-2">
+            Match non terminé
+          </h2>
+          <p className="text-yellow-700">
+            La validation du score ne peut se faire qu'après la fin du match.
+          </p>
+          <p className="text-yellow-600 text-sm mt-2">
+            Statut actuel: <span className="font-semibold">{match.status}</span>
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   const hasValidated =
     (userRole === "home_captain" && validation.homeCaptainValidated) ||
     (userRole === "away_captain" && validation.awayCaptainValidated);

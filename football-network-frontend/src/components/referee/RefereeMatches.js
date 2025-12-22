@@ -7,7 +7,6 @@ import {
   MapPin,
   Users,
   CheckCircle,
-  Play,
   FileText,
   AlertCircle,
 } from "lucide-react";
@@ -50,32 +49,13 @@ const RefereeMatches = () => {
     }
   };
 
-  const handleStartMatch = async (matchId) => {
-    try {
-      const token = localStorage.getItem("token");
-      await axios.post(
-        `${API_BASE_URL}/referee/matches/${matchId}/start`,
-        {},
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
-      alert("Match démarré avec succès !");
-      loadMatches();
-    } catch (error) {
-      console.error("Erreur lors du démarrage du match:", error);
-      alert(
-        error.response?.data?.message || "Erreur lors du démarrage du match"
-      );
-    }
-  };
 
   const getFilteredMatches = () => {
     const now = new Date();
     switch (filter) {
       case "upcoming":
         return matches.filter(
-          (m) => m.status === "confirmed" && new Date(m.match_date) > now
+          (m) => ["pending", "confirmed"].includes(m.status) && new Date(m.matchDate) > now
         );
       case "completed":
         return matches.filter((m) => m.status === "completed");
@@ -137,7 +117,7 @@ const RefereeMatches = () => {
     <div className="max-w-7xl mx-auto px-4 py-8">
       {/* Header */}
       <div className="mb-8">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between mb-6">
           <div>
             <h1 className="text-3xl font-bold text-gray-900 flex items-center">
               <ShieldUser className="w-8 h-8 mr-3 text-blue-600" />
@@ -147,9 +127,31 @@ const RefereeMatches = () => {
               Gérez vos matchs assignés et validez les scores
             </p>
           </div>
-          <div className="text-right">
-            <p className="text-sm text-gray-500">Total</p>
-            <p className="text-3xl font-bold text-blue-600">{matches.length}</p>
+        </div>
+
+        {/* Stats Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+            <p className="text-sm text-gray-500 mb-1">Total matchs</p>
+            <p className="text-3xl font-bold text-gray-900">{matches.length}</p>
+          </div>
+          <div className="bg-blue-50 rounded-xl border border-blue-100 p-4">
+            <p className="text-sm text-blue-600 mb-1">À venir</p>
+            <p className="text-3xl font-bold text-blue-700">
+              {matches.filter((m) => ["pending", "confirmed"].includes(m.status) && new Date(m.matchDate) > new Date()).length}
+            </p>
+          </div>
+          <div className="bg-green-50 rounded-xl border border-green-100 p-4">
+            <p className="text-sm text-green-600 mb-1">Validés</p>
+            <p className="text-3xl font-bold text-green-700">
+              {matches.filter((m) => m.isRefereeVerified).length}
+            </p>
+          </div>
+          <div className="bg-orange-50 rounded-xl border border-orange-100 p-4">
+            <p className="text-sm text-orange-600 mb-1">En attente</p>
+            <p className="text-3xl font-bold text-orange-700">
+              {matches.filter((m) => m.status === "completed" && !m.isRefereeVerified).length}
+            </p>
           </div>
         </div>
       </div>
@@ -178,7 +180,7 @@ const RefereeMatches = () => {
           {
             matches?.filter(
               (m) =>
-                m.status === "confirmed" && new Date(m.match_date) > new Date()
+                ["pending", "confirmed"].includes(m.status) && new Date(m.matchDate) > new Date()
             ).length
           }
           )
@@ -213,13 +215,6 @@ const RefereeMatches = () => {
       ) : (
         <div className="grid gap-6">
           {filteredMatches.map((match) => {
-            const isUpcoming =
-              match.status === "confirmed" &&
-              new Date(match.match_date) > new Date();
-            const canStart =
-              match.status === "confirmed" &&
-              new Date(match.match_date) <= new Date();
-
             return (
               <div
                 key={match.id}
@@ -228,12 +223,24 @@ const RefereeMatches = () => {
                 <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
                   {/* Informations match */}
                   <div className="flex-1">
-                    <div className="flex items-center gap-3 mb-3">
+                    <div className="flex items-center gap-3 mb-3 flex-wrap">
                       {getStatusBadge(match.status)}
-                      {match.is_referee_verified && (
+                      {match.isRefereeVerified && (
                         <span className="px-3 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-800 flex items-center">
                           <CheckCircle className="w-3 h-3 mr-1" />
                           Validé par arbitre
+                        </span>
+                      )}
+                      {match.hasConsensus && (
+                        <span className="px-3 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-800 flex items-center">
+                          <CheckCircle className="w-3 h-3 mr-1" />
+                          Consensus atteint
+                        </span>
+                      )}
+                      {match.hasDispute && (
+                        <span className="px-3 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-800 flex items-center">
+                          <AlertCircle className="w-3 h-3 mr-1" />
+                          Désaccord sur le score
                         </span>
                       )}
                     </div>
@@ -242,22 +249,22 @@ const RefereeMatches = () => {
                     <div className="flex items-center space-x-4 mb-4">
                       <div className="flex-1 text-right">
                         <p className="text-lg font-bold text-gray-900">
-                          {match.home_team_name}
+                          {match.homeTeam?.name || "Équipe A"}
                         </p>
                         <p className="text-sm text-gray-500">Domicile</p>
                       </div>
                       <div className="flex items-center space-x-3 px-4 py-2 bg-gray-50 rounded-lg">
                         <span className="text-2xl font-bold text-gray-900">
-                          {match.home_score ?? "-"}
+                          {match.score?.home ?? "-"}
                         </span>
                         <span className="text-gray-400">vs</span>
                         <span className="text-2xl font-bold text-gray-900">
-                          {match.away_score ?? "-"}
+                          {match.score?.away ?? "-"}
                         </span>
                       </div>
                       <div className="flex-1">
                         <p className="text-lg font-bold text-gray-900">
-                          {match.away_team_name || "À définir"}
+                          {match.awayTeam?.name || "À définir"}
                         </p>
                         <p className="text-sm text-gray-500">Extérieur</p>
                       </div>
@@ -267,16 +274,16 @@ const RefereeMatches = () => {
                     <div className="flex flex-wrap gap-4 text-sm text-gray-600">
                       <div className="flex items-center">
                         <Calendar className="w-4 h-4 mr-2 text-blue-500" />
-                        {formatDate(match.match_date)}
+                        {formatDate(match.matchDate)}
                       </div>
                       <div className="flex items-center">
                         <Clock className="w-4 h-4 mr-2 text-blue-500" />
-                        {formatTime(match.match_date)}
+                        {formatTime(match.matchDate)}
                       </div>
-                      {match.location_name && (
+                      {match.location?.name && (
                         <div className="flex items-center">
                           <MapPin className="w-4 h-4 mr-2 text-blue-500" />
-                          {match.location_name}
+                          {match.location.name}
                         </div>
                       )}
                     </div>
@@ -284,23 +291,36 @@ const RefereeMatches = () => {
 
                   {/* Actions */}
                   <div className="flex flex-col gap-2 lg:w-48">
-                    {canStart && match.status === "confirmed" && (
-                      <button
-                        onClick={() => handleStartMatch(match.id)}
+                    {/* Validation du score - Uniquement si le match est terminé */}
+                    {match.status === "completed" && !match.isRefereeVerified && (
+                      <Link
+                        to={`/referee/matches/${match.id}/validate`}
                         className="flex items-center justify-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium"
                       >
-                        <Play className="w-4 h-4 mr-2" />
-                        Démarrer
-                      </button>
+                        <CheckCircle className="w-4 h-4 mr-2" />
+                        Valider score
+                      </Link>
                     )}
 
+                    {/* Bouton Détails pour tous les matchs */}
                     <Link
                       to={`/matches/${match.id}`}
                       className="flex items-center justify-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
                     >
                       <FileText className="w-4 h-4 mr-2" />
-                      Gérer
+                      Voir détails
                     </Link>
+
+                    {/* Rapport arbitre - Si match terminé et validé */}
+                    {match.status === "completed" && match.isRefereeVerified && (
+                      <Link
+                        to={`/referee/matches/${match.id}/report`}
+                        className="flex items-center justify-center px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors font-medium"
+                      >
+                        <FileText className="w-4 h-4 mr-2" />
+                        Voir rapport
+                      </Link>
+                    )}
                   </div>
                 </div>
               </div>

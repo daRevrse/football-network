@@ -39,7 +39,7 @@ const ReceivedInvitationCard = ({ invitation, onRespond }) => (
         <View>
           <Text style={styles.teamName}>{invitation.senderTeam.name}</Text>
           <Text style={styles.captainName}>
-            Capitaine: {invitation.senderTeam.captain.firstName}
+            Manager: {invitation.senderTeam.captain.firstName}
           </Text>
         </View>
       </View>

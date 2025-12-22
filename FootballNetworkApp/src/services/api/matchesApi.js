@@ -171,6 +171,41 @@ class MatchesApiService {
     }
   }
 
+  /**
+   * Récupérer les détails publics d'un match (sans authentification)
+   */
+  async getPublicMatchById(matchId) {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), this.timeout);
+
+      const response = await fetch(`${this.baseURL}/matches/${matchId}/public`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        throw {
+          response: { status: response.status, data: await response.json() },
+        };
+      }
+
+      const data = await response.json();
+
+      return {
+        success: true,
+        data: data.match || data,
+      };
+    } catch (error) {
+      return this.handleApiError(error);
+    }
+  }
+
   // ==================== CRÉATION ET MODIFICATION ====================
 
   /**
@@ -747,6 +782,148 @@ class MatchesApiService {
       return {
         success: true,
         data: data.matches || data,
+      };
+    } catch (error) {
+      return this.handleApiError(error);
+    }
+  }
+
+  // ==================== FONCTIONNALITÉS ARBITRE ====================
+
+  /**
+   * Récupérer les matchs assignés à l'arbitre connecté
+   */
+  async getRefereeMatches(filters = {}) {
+    try {
+      const token = await SecureStorage.getToken();
+      if (!token) {
+        return { success: false, error: 'Non authentifié' };
+      }
+
+      // Construire les query params
+      const queryParams = new URLSearchParams();
+      if (filters.status) queryParams.append('status', filters.status);
+      if (filters.limit) queryParams.append('limit', filters.limit);
+      if (filters.offset) queryParams.append('offset', filters.offset);
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), this.timeout);
+
+      const response = await fetch(
+        `${this.baseURL}/referee/matches/my-matches?${queryParams.toString()}`,
+        {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          signal: controller.signal,
+        },
+      );
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        throw {
+          response: { status: response.status, data: await response.json() },
+        };
+      }
+
+      const data = await response.json();
+
+      return {
+        success: true,
+        data: data.matches || data,
+      };
+    } catch (error) {
+      return this.handleApiError(error);
+    }
+  }
+
+  /**
+   * Démarrer un match (passer le statut de 'confirmed' à 'in_progress')
+   */
+  async startMatch(matchId) {
+    try {
+      const token = await SecureStorage.getToken();
+      if (!token) {
+        return { success: false, error: 'Non authentifié' };
+      }
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), this.timeout);
+
+      const response = await fetch(
+        `${this.baseURL}/referee/matches/${matchId}/start`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          signal: controller.signal,
+        },
+      );
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        throw {
+          response: { status: response.status, data: await response.json() },
+        };
+      }
+
+      const data = await response.json();
+
+      return {
+        success: true,
+        data: data.match || data,
+        message: data.message,
+      };
+    } catch (error) {
+      return this.handleApiError(error);
+    }
+  }
+
+  /**
+   * Terminer un match (passer le statut à 'completed')
+   */
+  async completeMatch(matchId) {
+    try {
+      const token = await SecureStorage.getToken();
+      if (!token) {
+        return { success: false, error: 'Non authentifié' };
+      }
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), this.timeout);
+
+      const response = await fetch(
+        `${this.baseURL}/referee/matches/${matchId}/complete`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          signal: controller.signal,
+        },
+      );
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        throw {
+          response: { status: response.status, data: await response.json() },
+        };
+      }
+
+      const data = await response.json();
+
+      return {
+        success: true,
+        data: data.match || data,
+        message: data.message,
       };
     } catch (error) {
       return this.handleApiError(error);

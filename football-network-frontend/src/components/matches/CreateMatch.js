@@ -37,7 +37,7 @@ const CreateMatch = () => {
 
       if (teamsWithAdminRole.length === 0) {
         setError(
-          "Vous devez être capitaine ou manager d'une équipe pour organiser un match."
+          "Vous devez être manager d'une équipe pour organiser un match."
         );
       }
     } catch (error) {

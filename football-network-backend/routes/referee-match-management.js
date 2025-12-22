@@ -3,6 +3,7 @@ const { body, validationResult } = require("express-validator");
 const db = require("../config/database");
 const { authenticateToken } = require("../middleware/auth");
 const NotificationService = require("../services/NotificationService");
+const MatchValidationService = require("../services/MatchValidationService");
 
 const router = express.Router();
 
@@ -59,7 +60,6 @@ router.get("/my-matches", authenticateToken, async (req, res) => {
       LEFT JOIN uploads away_logo ON at.logo_id = away_logo.id AND away_logo.is_active = true
       LEFT JOIN locations l ON m.location_id = l.id
       WHERE ra.referee_id = ?
-      AND ra.status IN ('confirmed', 'pending')
     `;
 
     const queryParams = [refereeId];
@@ -257,56 +257,36 @@ router.post(
 
       const match = matches[0];
 
-      // Valider et mettre à jour le score
-      await db.execute(
-        `UPDATE matches
-         SET home_score = ?,
-             away_score = ?,
-             status = 'completed',
-             completed_at = NOW(),
-             is_referee_verified = true,
-             referee_validation_notes = ?,
-             referee_validated_at = NOW(),
-             referee_validated_by = ?,
-             home_captain_validated = true,
-             away_captain_validated = true
-         WHERE id = ?`,
-        [homeScore, awayScore, notes || null, refereeId, matchId]
-      );
-
-      // Enregistrer dans l'historique
-      await db.execute(
-        `INSERT INTO match_validations
-         (match_id, validator_id, validator_role, validation_type, home_score, away_score, status, notes)
-         VALUES (?, ?, 'referee', 'score', ?, ?, 'approved', ?)`,
-        [matchId, req.user.id, homeScore, awayScore, notes || null]
-      );
-
-      // Notifier les capitaines
-      await NotificationService.createNotification({
-        userId: match.home_captain_id,
-        type: "match_referee_validated",
-        title: "Score validé par l'arbitre",
-        message: `Le score du match a été validé par l'arbitre : ${match.home_team_name} ${homeScore} - ${awayScore} ${match.away_team_name}`,
-        relatedId: matchId,
-        relatedType: "match",
+      // Soumettre la validation via le service unifié
+      const result = await MatchValidationService.submitValidation({
+        matchId,
+        validatorId: req.user.id,
+        validatorRole: 'referee',
+        homeScore,
+        awayScore,
+        notes
       });
 
-      if (match.away_captain_id) {
-        await NotificationService.createNotification({
-          userId: match.away_captain_id,
-          type: "match_referee_validated",
-          title: "Score validé par l'arbitre",
-          message: `Le score du match a été validé par l'arbitre : ${match.home_team_name} ${homeScore} - ${awayScore} ${match.away_team_name}`,
-          relatedId: matchId,
-          relatedType: "match",
-        });
+      if (!result.success) {
+        return res.status(400).json({ error: result.error });
       }
 
+      // Retourner le résultat avec info sur le consensus
       res.json({
         success: true,
-        message: "Score validated and certified by referee",
+        message: result.consensus.hasConsensus
+          ? "Score validated and certified by referee. Match finalized with consensus."
+          : result.consensus.hasDispute
+          ? "Your validation has been recorded. The match is disputed due to conflicting scores."
+          : "Your validation has been recorded. Waiting for team managers to validate.",
+        validationId: result.validationId,
         score: { home: homeScore, away: awayScore },
+        consensus: {
+          hasConsensus: result.consensus.hasConsensus,
+          hasDispute: result.consensus.hasDispute,
+          validationsCount: result.consensus.validationsCount,
+          agreedScore: result.consensus.agreedScore
+        }
       });
     } catch (error) {
       console.error("Referee validate score error:", error);

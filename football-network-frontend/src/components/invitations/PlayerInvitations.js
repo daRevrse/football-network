@@ -113,7 +113,7 @@ const PlayerInvitations = () => {
 
           <div className="p-6">
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Message pour le capitaine (optionnel)
+              Message pour le manager (optionnel)
             </label>
             <textarea
               value={message}
