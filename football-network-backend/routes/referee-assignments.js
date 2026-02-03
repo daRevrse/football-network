@@ -45,7 +45,7 @@ router.post(
       // Vérifier que l'utilisateur est manager d'une des deux équipes
       const [membership] = await db.execute(
         `SELECT team_id, role FROM team_members
-         WHERE user_id = ? AND (team_id = ? OR team_id = ?) AND role = 'manager' AND is_active = true`,
+         WHERE user_id = ? AND (team_id = ? OR team_id = ?) AND role IN ('manager', 'captain') AND is_active = true`,
         [req.user.id, match.home_team_id, match.away_team_id]
       );
 
@@ -317,7 +317,7 @@ router.patch("/:id/confirm", authenticateToken, async (req, res) => {
       // Notifier le manager de l'équipe domicile
       const [homeManagers] = await db.execute(
         `SELECT user_id FROM team_members
-         WHERE team_id = ? AND role = 'manager' AND is_active = true
+         WHERE team_id = ? AND role IN ('manager', 'captain') AND is_active = true
          LIMIT 1`,
         [match[0].home_team_id]
       );
@@ -337,7 +337,7 @@ router.patch("/:id/confirm", authenticateToken, async (req, res) => {
       if (match[0].away_team_id) {
         const [awayManagers] = await db.execute(
           `SELECT user_id FROM team_members
-           WHERE team_id = ? AND role = 'manager' AND is_active = true
+           WHERE team_id = ? AND role IN ('manager', 'captain') AND is_active = true
            LIMIT 1`,
           [match[0].away_team_id]
         );
@@ -442,7 +442,7 @@ router.patch(
         // Notifier le manager de l'équipe domicile
         const [homeManagers] = await db.execute(
           `SELECT user_id FROM team_members
-           WHERE team_id = ? AND role = 'manager' AND is_active = true
+           WHERE team_id = ? AND role IN ('manager', 'captain') AND is_active = true
            LIMIT 1`,
           [match[0].home_team_id]
         );
@@ -462,7 +462,7 @@ router.patch(
         if (match[0].away_team_id) {
           const [awayManagers] = await db.execute(
             `SELECT user_id FROM team_members
-             WHERE team_id = ? AND role = 'manager' AND is_active = true
+             WHERE team_id = ? AND role IN ('manager', 'captain') AND is_active = true
              LIMIT 1`,
             [match[0].away_team_id]
           );

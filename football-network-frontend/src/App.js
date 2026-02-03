@@ -11,12 +11,14 @@ import { UserProfileProvider } from "./contexts/UserContext";
 
 // Layouts
 import MainLayout from "./components/layout/MainLayout";
+import AppLayout from "./components/layout/AppLayout";
 import AdminLayout from "./components/admin/AdminLayout";
 import VenueOwnerLayout from "./components/layout/VenueOwnerLayout";
 
 // Composants Standards
 import Login from "./components/auth/Login";
 import Signup from "./components/auth/Signup";
+import VenueOwnerSignup from "./components/auth/VenueOwnerSignup";
 import ForgotPassword from "./components/auth/ForgotPassword";
 import ResetPassword from "./components/auth/ResetPassword";
 import Dashboard from "./components/Dashboard";
@@ -52,7 +54,6 @@ import RefereeReports from "./components/referee/RefereeReports";
 import AdminDashboard from "./components/admin/AdminDashboard";
 import AdminProfile from "./components/admin/AdminProfile";
 import VenueOwnerDashboard from "./components/venue-owner/VenueOwnerDashboard";
-import VenueOwnerBookings from "./components/venue-owner/VenueOwnerBookings";
 import VenueOwnerProfile from "./components/venue-owner/VenueOwnerProfile";
 import VenueForm from "./components/venue-owner/VenueForm";
 import VenueBookingDetails from "./components/venue-owner/VenueBookingDetails";
@@ -182,10 +183,6 @@ function App() {
                 <Route index element={<VenueOwnerDashboard />} />
                 <Route path="bookings" element={<BookingManagement />} />
                 <Route
-                  path="bookings-legacy"
-                  element={<VenueOwnerBookings />}
-                />
-                <Route
                   path="venues/:id/bookings"
                   element={<VenueBookingDetails />}
                 />
@@ -195,7 +192,7 @@ function App() {
                 <Route path="profile" element={<VenueOwnerProfile />} />
               </Route>
 
-              {/* === ZONE STANDARD (MainLayout avec Navbar) === */}
+              {/* === ZONE PUBLIQUE (MainLayout avec Navbar) === */}
               <Route
                 element={
                   <MainLayout>
@@ -224,6 +221,14 @@ function App() {
                   }
                 />
                 <Route
+                  path="/signup/venue-owner"
+                  element={
+                    <PublicRoute>
+                      <VenueOwnerSignup />
+                    </PublicRoute>
+                  }
+                />
+                <Route
                   path="/verify-email"
                   element={
                     <PublicRoute>
@@ -248,71 +253,13 @@ function App() {
                   }
                 />
 
-                {/* Routes Protégées Standard (Joueurs/Managers) */}
-                <Route
-                  path="/dashboard"
-                  element={
-                    <ProtectedRoute>
-                      <Dashboard />
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/profile"
-                  element={
-                    <ProtectedRoute>
-                      <ProfileRouter />
-                    </ProtectedRoute>
-                  }
-                />
+                {/* Routes Publiques avec layout */}
                 <Route
                   path="/users/:userId"
                   element={
                     <OptionalAuthRoute>
                       <PublicProfile />
                     </OptionalAuthRoute>
-                  }
-                />
-                <Route
-                  path="/feed"
-                  element={
-                    <ProtectedRoute>
-                      <Feed />
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/feed/improved"
-                  element={
-                    <ProtectedRoute>
-                      <ImprovedFeed />
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/calendar"
-                  element={
-                    <ProtectedRoute>
-                      <Calendar />
-                    </ProtectedRoute>
-                  }
-                />
-
-                {/* Équipes */}
-                <Route
-                  path="/teams"
-                  element={
-                    <ProtectedRoute>
-                      <MyTeams />
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/teams/:teamId"
-                  element={
-                    <ProtectedRoute>
-                      <TeamDetails />
-                    </ProtectedRoute>
                   }
                 />
                 <Route
@@ -324,31 +271,36 @@ function App() {
                   }
                 />
                 <Route
-                  path="/teams/search"
-                  element={
-                    <ProtectedRoute>
-                      <SearchTeams />
-                    </ProtectedRoute>
-                  }
+                  path="/matches/:matchId/public"
+                  element={<PublicMatchDetails />}
                 />
+              </Route>
+
+              {/* === ZONE APP PROTEGEE (AppLayout avec Sidebar) === */}
+              <Route
+                element={
+                  <ProtectedRoute>
+                    <AppLayout>
+                      <Outlet />
+                    </AppLayout>
+                  </ProtectedRoute>
+                }
+              >
+                {/* Dashboard */}
+                <Route path="/dashboard" element={<Dashboard />} />
+                <Route path="/profile" element={<ProfileRouter />} />
+                <Route path="/feed" element={<Feed />} />
+                <Route path="/feed/improved" element={<ImprovedFeed />} />
+                <Route path="/calendar" element={<Calendar />} />
+
+                {/* Équipes */}
+                <Route path="/teams" element={<MyTeams />} />
+                <Route path="/teams/:teamId" element={<TeamDetails />} />
+                <Route path="/teams/search" element={<SearchTeams />} />
 
                 {/* Matchs */}
-                <Route
-                  path="/invitations"
-                  element={
-                    <ProtectedRoute>
-                      <Invitations />
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/player-invitations"
-                  element={
-                    <ProtectedRoute>
-                      <PlayerInvitations />
-                    </ProtectedRoute>
-                  }
-                />
+                <Route path="/invitations" element={<Invitations />} />
+                <Route path="/player-invitations" element={<PlayerInvitations />} />
                 <Route
                   path="/recruitment"
                   element={
@@ -358,57 +310,20 @@ function App() {
                   }
                 />
                 <Route
-                  path="/matches/:matchId/public"
-                  element={<PublicMatchDetails />}
-                />
-                <Route
                   path="/matches/:matchId"
-                  element={
-                    <OptionalAuthRoute>
-                      <MatchDetails />
-                    </OptionalAuthRoute>
-                  }
+                  element={<MatchDetails />}
                 />
                 <Route
                   path="/matches/:matchId/participations"
-                  element={
-                    <ProtectedRoute>
-                      <MatchParticipations />
-                    </ProtectedRoute>
-                  }
+                  element={<MatchParticipations />}
                 />
-                <Route
-                  path="/my-participations"
-                  element={
-                    <ProtectedRoute>
-                      <MyPendingParticipations />
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/participations"
-                  element={
-                    <ProtectedRoute>
-                      <PendingParticipations />
-                    </ProtectedRoute>
-                  }
-                />
+                <Route path="/my-participations" element={<MyPendingParticipations />} />
+                <Route path="/participations" element={<PendingParticipations />} />
                 <Route
                   path="/matches/:matchId/validate"
-                  element={
-                    <ProtectedRoute>
-                      <MatchValidation />
-                    </ProtectedRoute>
-                  }
+                  element={<MatchValidation />}
                 />
-                <Route
-                  path="/pending-validations"
-                  element={
-                    <ProtectedRoute>
-                      <PendingValidations />
-                    </ProtectedRoute>
-                  }
-                />
+                <Route path="/pending-validations" element={<PendingValidations />} />
 
                 {/* Manager Only */}
                 <Route
@@ -436,41 +351,13 @@ function App() {
                   }
                 />
 
-                {/* Recherche Terrains (Vue Joueur) */}
-                <Route
-                  path="/venues"
-                  element={
-                    <ProtectedRoute>
-                      <VenueSearch />
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/venues/:id"
-                  element={
-                    <ProtectedRoute>
-                      <VenueDetails />
-                    </ProtectedRoute>
-                  }
-                />
+                {/* Recherche Terrains */}
+                <Route path="/venues" element={<VenueSearch />} />
+                <Route path="/venues/:id" element={<VenueDetails />} />
 
                 {/* Routes Arbitre */}
-                <Route
-                  path="/referee/matches"
-                  element={
-                    <ProtectedRoute>
-                      <RefereeMatches />
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/referee/reports"
-                  element={
-                    <ProtectedRoute>
-                      <RefereeReports />
-                    </ProtectedRoute>
-                  }
-                />
+                <Route path="/referee/matches" element={<RefereeMatches />} />
+                <Route path="/referee/reports" element={<RefereeReports />} />
               </Route>
 
               {/* Route 404 - Redirige vers la racine qui triera ensuite */}

@@ -1,9 +1,46 @@
 // football-network-backend/services/SocketManager.js
+const pool = require("../config/database");
+
 class SocketManager {
   constructor() {
     this.io = null;
     this.userSockets = new Map(); // userId -> Set of socket IDs
     this.socketUsers = new Map(); // socket ID -> userId
+  }
+
+  // Vérifier si un utilisateur a le droit de rejoindre un match
+  async canUserJoinMatch(userId, matchId) {
+    try {
+      const [rows] = await pool.query(
+        `SELECT 1 FROM matches m
+         LEFT JOIN team_members tm_home ON tm_home.team_id = m.home_team_id AND tm_home.user_id = ? AND tm_home.is_active = true
+         LEFT JOIN team_members tm_away ON tm_away.team_id = m.away_team_id AND tm_away.user_id = ? AND tm_away.is_active = true
+         LEFT JOIN match_referee_assignments mra ON mra.match_id = m.id AND mra.referee_id = (SELECT id FROM referees WHERE user_id = ?)
+         WHERE m.id = ? AND (tm_home.id IS NOT NULL OR tm_away.id IS NOT NULL OR mra.id IS NOT NULL)
+         LIMIT 1`,
+        [userId, userId, userId, matchId]
+      );
+      return rows.length > 0;
+    } catch (error) {
+      console.error("Error checking match permission:", error);
+      return false;
+    }
+  }
+
+  // Vérifier si un utilisateur fait partie d'une équipe
+  async canUserJoinTeam(userId, teamId) {
+    try {
+      const [rows] = await pool.query(
+        `SELECT 1 FROM team_members
+         WHERE team_id = ? AND user_id = ? AND is_active = true
+         LIMIT 1`,
+        [teamId, userId]
+      );
+      return rows.length > 0;
+    } catch (error) {
+      console.error("Error checking team permission:", error);
+      return false;
+    }
   }
 
   // Initialiser avec l'instance Socket.IO
@@ -21,12 +58,24 @@ class SocketManager {
         this.authenticateSocket(socket, token);
       });
 
-      // Rejoindre une room de match
-      socket.on("join_match", (matchId) => {
+      // Rejoindre une room de match (avec vérification de permission)
+      socket.on("join_match", async (matchId) => {
+        // Vérifier que l'utilisateur est authentifié
+        if (!socket.userId) {
+          socket.emit("error", { message: "Authentication required to join match room" });
+          return;
+        }
+
+        // Vérifier que l'utilisateur a le droit de rejoindre ce match
+        const canJoin = await this.canUserJoinMatch(socket.userId, matchId);
+        if (!canJoin) {
+          socket.emit("error", { message: "You are not authorized to join this match room" });
+          console.log(`🚫 User ${socket.userId} denied access to match ${matchId}`);
+          return;
+        }
+
         socket.join(`match_${matchId}`);
-        console.log(
-          `👥 User ${socket.userId || socket.id} joined match ${matchId}`
-        );
+        console.log(`👥 User ${socket.userId} joined match ${matchId}`);
 
         // Notifier les autres participants
         socket.to(`match_${matchId}`).emit("user_joined_match", {
@@ -38,10 +87,10 @@ class SocketManager {
 
       // Quitter une room de match
       socket.on("leave_match", (matchId) => {
+        if (!socket.userId) return;
+
         socket.leave(`match_${matchId}`);
-        console.log(
-          `👥 User ${socket.userId || socket.id} left match ${matchId}`
-        );
+        console.log(`👥 User ${socket.userId} left match ${matchId}`);
 
         socket.to(`match_${matchId}`).emit("user_left_match", {
           userId: socket.userId,
@@ -50,22 +99,56 @@ class SocketManager {
         });
       });
 
-      // Rejoindre une room d'équipe (pour les notifications d'équipe)
-      socket.on("join_team", (teamId) => {
+      // Rejoindre une room d'équipe (avec vérification de permission)
+      socket.on("join_team", async (teamId) => {
+        // Vérifier que l'utilisateur est authentifié
+        if (!socket.userId) {
+          socket.emit("error", { message: "Authentication required to join team room" });
+          return;
+        }
+
+        // Vérifier que l'utilisateur fait partie de l'équipe
+        const canJoin = await this.canUserJoinTeam(socket.userId, teamId);
+        if (!canJoin) {
+          socket.emit("error", { message: "You are not a member of this team" });
+          console.log(`🚫 User ${socket.userId} denied access to team ${teamId}`);
+          return;
+        }
+
         socket.join(`team_${teamId}`);
-        console.log(
-          `🏆 User ${socket.userId || socket.id} joined team ${teamId}`
-        );
+        console.log(`🏆 User ${socket.userId} joined team ${teamId}`);
       });
 
-      // Gérer l'envoi de messages de match
-      socket.on("send_match_message", (data) => {
+      // Gérer l'envoi de messages de match (avec validation)
+      socket.on("send_match_message", async (data) => {
+        // Vérifier que l'utilisateur est authentifié
+        if (!socket.userId) {
+          socket.emit("error", { message: "Authentication required to send messages" });
+          return;
+        }
+
+        // Vérifier que l'utilisateur fait partie du match
+        const canSend = await this.canUserJoinMatch(socket.userId, data.matchId);
+        if (!canSend) {
+          socket.emit("error", { message: "You are not authorized to send messages in this match" });
+          return;
+        }
+
+        // Valider le contenu du message
+        if (!data.content || typeof data.content !== "string" || data.content.trim().length === 0) {
+          socket.emit("error", { message: "Invalid message content" });
+          return;
+        }
+
+        // Limiter la longueur du message
+        const sanitizedContent = data.content.trim().substring(0, 1000);
+
         // Rediffuser le message à tous les autres participants du match
         socket.to(`match_${data.matchId}`).emit("new_match_message", {
           id: data.messageId,
-          content: data.content,
-          sender: data.sender,
-          sentAt: data.sentAt,
+          content: sanitizedContent,
+          sender: { ...data.sender, id: socket.userId }, // Forcer l'ID du sender authentifié
+          sentAt: data.sentAt || new Date().toISOString(),
           type: data.type || "text",
         });
       });

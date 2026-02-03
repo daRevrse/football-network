@@ -47,11 +47,11 @@ router.get(
       const currentUserId = req.user?.id;
 
       let query = `
-        SELECT 
+        SELECT
           fp.*,
-          u.first_name, u.last_name, u.profile_picture, u.skill_level,
+          u.first_name, u.last_name, u.skill_level,
           t.name AS team_name,
-          pp.stored_filename as profile_picture,
+          pp.stored_filename as profile_picture_filename,
           m.home_team_id, m.away_team_id, m.status AS match_status,
           m.match_date AS match_date,
           ${
@@ -104,9 +104,9 @@ router.get(
           id: post.user_id,
           firstName: post.first_name,
           lastName: post.last_name,
-          profilePicture: post.profile_picture,
-          profilePictureUrl: post.profile_picture
-            ? `/uploads/users/${post.profile_picture}`
+          profilePicture: post.profile_picture_filename,
+          profilePictureUrl: post.profile_picture_filename
+            ? `/uploads/users/${post.profile_picture_filename}`
             : null,
           skillLevel: post.skill_level,
         },

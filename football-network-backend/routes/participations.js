@@ -168,7 +168,7 @@ router.post('/match/:matchId/validate', authenticateToken, async (req, res) => {
           SELECT 1 FROM team_members tm
           WHERE tm.user_id = ?
           AND tm.team_id IN (m.home_team_id, m.away_team_id)
-          AND tm.role = 'manager'
+          AND tm.role IN ('manager', 'captain')
           AND tm.is_active = true
         ) as is_manager
        FROM matches m
@@ -181,7 +181,7 @@ router.post('/match/:matchId/validate', authenticateToken, async (req, res) => {
     }
 
     if (req.user.userType !== 'superadmin' && !match[0].is_manager) {
-      return res.status(403).json({ error: 'Only managers or admins can validate' });
+      return res.status(403).json({ error: 'Only team managers, captains or admins can validate' });
     }
 
     const result = await validateMatchParticipation(matchId);

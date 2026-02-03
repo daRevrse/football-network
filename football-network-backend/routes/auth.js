@@ -16,8 +16,8 @@ router.post(
     // Validation du type d'utilisateur
     body("userType")
       .optional()
-      .isIn(["player", "manager", "referee"])
-      .withMessage("User type must be player, manager or referee"),
+      .isIn(["player", "manager", "referee", "venue_owner"])
+      .withMessage("User type must be player, manager, referee or venue_owner"),
 
     // Validation conditionnelle pour le nom de l'équipe (Manager uniquement)
     body("teamName")
@@ -25,6 +25,12 @@ router.post(
       .trim()
       .isLength({ min: 3 })
       .withMessage("Team name is required for managers (min 3 chars)"),
+
+    // Validation du terrain (optionnel - sera vérifié manuellement pour venue_owner)
+    body("venue").optional(),
+    body("venue.name").optional().trim(),
+    body("venue.address").optional().trim(),
+    body("venue.city").optional().trim(),
 
     // Validations standards
     body("email").isEmail().normalizeEmail(),
@@ -39,7 +45,7 @@ router.post(
       .trim()
       .isLength({ min: 2 })
       .withMessage("Last name is required"),
-    body("phone").optional().isMobilePhone(),
+    body("phone").optional().trim(),
     body("birthDate").optional().isISO8601().toDate(),
   ],
   async (req, res) => {
@@ -66,7 +72,18 @@ router.post(
         licenseNumber,
         licenseLevel,
         experienceYears,
+        // Champs venue owner
+        venue,
       } = req.body;
+
+      // Validation manuelle pour venue_owner
+      if (userType === "venue_owner") {
+        if (!venue || !venue.name || !venue.address || !venue.city) {
+          return res.status(400).json({
+            error: "Venue information (name, address, city) is required for venue owners"
+          });
+        }
+      }
 
       // 1. Vérifier si l'email existe déjà
       const [existingUsers] = await db.execute(
@@ -85,10 +102,10 @@ router.post(
       const verificationToken = crypto.randomBytes(32).toString("hex");
       const tokenExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24h
 
-      // Définir les valeurs football (null si manager)
-      const dbPosition = userType === "manager" ? null : position || "any";
-      const dbSkillLevel =
-        userType === "manager" ? null : skillLevel || "amateur";
+      // Définir les valeurs football (null si manager, referee ou venue_owner)
+      const isPlayerType = userType === "player";
+      const dbPosition = isPlayerType ? (position || "any") : null;
+      const dbSkillLevel = isPlayerType ? (skillLevel || "amateur") : null;
 
       // 4. Créer l'utilisateur
       // Note: userType est bien inséré ici ('manager' ou 'player')
@@ -162,6 +179,25 @@ router.post(
         );
       }
 
+      // === LOGIQUE VENUE OWNER : CRÉATION DU TERRAIN ===
+      if (userType === "venue_owner" && venue) {
+        await db.execute(
+          `INSERT INTO locations
+           (owner_id, name, address, city, field_type, field_surface, field_size,
+            is_active, is_managed, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, true, true, NOW())`,
+          [
+            newUserId,
+            venue.name,
+            venue.address,
+            venue.city,
+            venue.field_type || 'outdoor',
+            venue.field_surface || 'synthetic',
+            venue.field_size || '5v5',
+          ]
+        );
+      }
+
       // 5. Envoyer l'email de confirmation
       try {
         await EmailService.sendVerificationEmail(
@@ -182,7 +218,16 @@ router.post(
       });
     } catch (error) {
       console.error("Signup error:", error);
-      res.status(500).json({ error: "Internal server error" });
+
+      // Erreur spécifique pour le type ENUM invalide
+      if (error.code === 'ER_TRUNCATED_WRONG_VALUE_FOR_FIELD' ||
+          (error.message && error.message.includes('user_type'))) {
+        return res.status(400).json({
+          error: "Invalid user type. Please run the database migration: sql/update_user_types.sql"
+        });
+      }
+
+      res.status(500).json({ error: "Internal server error", details: error.message });
     }
   }
 );

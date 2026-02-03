@@ -56,16 +56,16 @@ router.post(
         message,
       } = req.body;
 
-      // Vérifier que l'utilisateur est manager de l'équipe spécifiée (MODIFIÉ)
+      // Vérifier que l'utilisateur est manager ou captain de l'équipe spécifiée
       const [senderTeamCheck] = await db.execute(
-        'SELECT team_id FROM team_members WHERE user_id = ? AND team_id = ? AND role = "manager" AND is_active = true',
+        'SELECT team_id FROM team_members WHERE user_id = ? AND team_id = ? AND role IN ("manager", "captain") AND is_active = true',
         [req.user.id, senderTeamId]
       );
 
       if (senderTeamCheck.length === 0) {
         return res
           .status(403)
-          .json({ error: "You are not the manager of this team" });
+          .json({ error: "You are not the manager or captain of this team" });
       }
 
       // Si verifyPlayerAvailability = true, vérifier que l'équipe a minimum 6 joueurs
@@ -172,7 +172,7 @@ router.get("/invitations/received", authenticateToken, async (req, res) => {
 
     // Récupérer les équipes où l'utilisateur est manager
     const [captainTeams] = await db.execute(
-      'SELECT team_id FROM team_members WHERE user_id = ? AND role = "manager" AND is_active = true',
+      'SELECT team_id FROM team_members WHERE user_id = ? AND role IN ("manager", "captain") AND is_active = true',
       [req.user.id]
     );
 
@@ -243,7 +243,7 @@ router.get("/invitations/sent", authenticateToken, async (req, res) => {
 
     // Récupérer les équipes où l'utilisateur est manager
     const [captainTeams] = await db.execute(
-      'SELECT team_id FROM team_members WHERE user_id = ? AND role = "manager" AND is_active = true',
+      'SELECT team_id FROM team_members WHERE user_id = ? AND role IN ("manager", "captain") AND is_active = true',
       [req.user.id]
     );
 
@@ -773,8 +773,8 @@ router.get("/my-matches", authenticateToken, async (req, res) => {
         l.name AS location_name,
         l.address AS location_address,
         CASE
-          WHEN EXISTS (SELECT 1 FROM team_members WHERE team_id = ht.id AND user_id = ? AND role = 'manager' AND is_active = true) THEN true
-          WHEN EXISTS (SELECT 1 FROM team_members WHERE team_id = at.id AND user_id = ? AND role = 'manager' AND is_active = true) THEN true
+          WHEN EXISTS (SELECT 1 FROM team_members WHERE team_id = ht.id AND user_id = ? AND role IN ('manager', 'captain') AND is_active = true) THEN true
+          WHEN EXISTS (SELECT 1 FROM team_members WHERE team_id = at.id AND user_id = ? AND role IN ('manager', 'captain') AND is_active = true) THEN true
           ELSE false
         END AS is_organizer
       FROM matches m
@@ -1402,7 +1402,7 @@ router.post(
 
       const [otherManagers] = await db.execute(
         `SELECT user_id FROM team_members
-         WHERE team_id = ? AND role = 'manager' AND is_active = true
+         WHERE team_id = ? AND role IN ('manager', 'captain') AND is_active = true
          LIMIT 1`,
         [otherTeamId]
       );
@@ -1564,7 +1564,7 @@ router.get("/pending-validation/list", authenticateToken, async (req, res) => {
     // Récupérer les équipes où l'utilisateur est manager
     const [userTeams] = await db.execute(
       `SELECT team_id FROM team_members
-       WHERE user_id = ? AND role = 'manager' AND is_active = true`,
+       WHERE user_id = ? AND role IN ('manager', 'captain') AND is_active = true`,
       [userId]
     );
 
@@ -1924,7 +1924,7 @@ router.patch(
       if (otherTeamId) {
         const [otherManagers] = await db.execute(
           `SELECT user_id FROM team_members
-           WHERE team_id = ? AND role = 'manager' AND is_active = true
+           WHERE team_id = ? AND role IN ('manager', 'captain') AND is_active = true
            LIMIT 1`,
           [otherTeamId]
         );
@@ -2065,7 +2065,7 @@ router.patch("/:id/start", authenticateToken, async (req, res) => {
     if (otherTeamId) {
       const [otherManagers] = await db.execute(
         `SELECT user_id FROM team_members
-         WHERE team_id = ? AND role = 'manager' AND is_active = true
+         WHERE team_id = ? AND role IN ('manager', 'captain') AND is_active = true
          LIMIT 1`,
         [otherTeamId]
       );
@@ -2135,14 +2135,14 @@ router.patch("/:id/complete", authenticateToken, async (req, res) => {
     // Notifier les managers des deux équipes pour saisir le score
     const [homeManagers] = await db.execute(
       `SELECT user_id FROM team_members
-       WHERE team_id = ? AND role = 'manager' AND is_active = true
+       WHERE team_id = ? AND role IN ('manager', 'captain') AND is_active = true
        LIMIT 1`,
       [match.home_team_id]
     );
 
     const [awayManagers] = await db.execute(
       `SELECT user_id FROM team_members
-       WHERE team_id = ? AND role = 'manager' AND is_active = true
+       WHERE team_id = ? AND role IN ('manager', 'captain') AND is_active = true
        LIMIT 1`,
       [match.away_team_id]
     );

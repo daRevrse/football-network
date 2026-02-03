@@ -16,7 +16,12 @@
       "Bash(node:*)",
       "Bash(taskkill:*)",
       "Bash(npx kill-port:*)",
-      "Bash(timeout 3 sleep:*)"
+      "Bash(timeout 3 sleep:*)",
+      "Bash(ls -la \"C:\\\\football-network\\\\football-network-backend\\\\routes\"\" | grep \".js \")",
+      "Bash(xargs:*)",
+      "Bash(Get-ChildItem -Path \"C:\\\\football-network\" -Filter \"*.md\" -Recurse)",
+      "Bash(Where-Object { $_FullName -notlike \"*node_modules*\" })",
+      "Bash(Select-Object -ExpandProperty FullName)"
     ],
     "deny": [],
     "ask": []

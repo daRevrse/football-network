@@ -22,11 +22,11 @@ async function isHomeTeamManager(userId, matchId) {
 
     const match = matches[0];
 
-    // Vérifier si l'utilisateur est manager de l'équipe domicile
+    // Vérifier si l'utilisateur est manager ou captain de l'équipe domicile
     const [membership] = await db.execute(
       `SELECT team_id, role
        FROM team_members
-       WHERE user_id = ? AND team_id = ? AND role = 'manager' AND is_active = true`,
+       WHERE user_id = ? AND team_id = ? AND role IN ('manager', 'captain') AND is_active = true`,
       [userId, match.home_team_id]
     );
 
@@ -66,13 +66,13 @@ async function isMatchTeamManager(userId, matchId) {
 
     const match = matches[0];
 
-    // Vérifier si l'utilisateur est manager d'une des deux équipes
+    // Vérifier si l'utilisateur est manager ou captain d'une des deux équipes
     const [membership] = await db.execute(
       `SELECT team_id, role
        FROM team_members
        WHERE user_id = ?
        AND (team_id = ? OR team_id = ?)
-       AND role = 'manager'
+       AND role IN ('manager', 'captain')
        AND is_active = true`,
       [userId, match.home_team_id, match.away_team_id || 0]
     );
@@ -114,16 +114,16 @@ async function canManageMatch(userId, matchId) {
 
     const match = matches[0];
 
-    // Vérifier si l'utilisateur est manager de l'équipe domicile
+    // Vérifier si l'utilisateur est manager ou captain de l'équipe domicile
     const [membership] = await db.execute(
       `SELECT team_id, role
        FROM team_members
-       WHERE user_id = ? AND team_id = ? AND role = 'manager' AND is_active = true`,
+       WHERE user_id = ? AND team_id = ? AND role IN ('manager', 'captain') AND is_active = true`,
       [userId, match.home_team_id]
     );
 
     if (membership.length > 0) {
-      return { canManage: true, role: 'manager', match: match };
+      return { canManage: true, role: membership[0].role, match: match };
     }
 
     return { canManage: false, role: null, match: match };

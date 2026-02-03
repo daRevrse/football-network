@@ -13,11 +13,14 @@ import {
   Shield,
   MapPin,
   Award,
-  MessageSquare,
   Search,
-  ShieldUser,
+  ShieldCheck,
   FileText,
   Clock,
+  Loader2,
+  AlertTriangle,
+  ArrowUpRight,
+  Hash
 } from "lucide-react";
 import axios from "axios";
 
@@ -27,15 +30,13 @@ const Dashboard = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
 
-  // MODIFIÉ : Ajout de matchesPlayed dans l'état initial
   const [stats, setStats] = useState({
     playerInvites: 0,
     matchInvites: 0,
     validations: 0,
     teams: 0,
     pendingParticipations: 0,
-    matchesPlayed: 0, // Nouveau champ
-    // Stats arbitre
+    matchesPlayed: 0,
     assignedMatches: 0,
     upcomingMatches: 0,
     completedMatches: 0,
@@ -43,7 +44,6 @@ const Dashboard = () => {
 
   const [loading, setLoading] = useState(true);
 
-  // Vérification du rôle
   const isManager = user?.userType === "manager";
   const isPlayer = user?.userType === "player";
   const isReferee = user?.userType === "referee";
@@ -64,11 +64,8 @@ const Dashboard = () => {
     const loadDashboardStats = async () => {
       try {
         setLoading(true);
-        const token = localStorage.getItem("token");
 
-        // Stats différentes selon le rôle
         if (isReferee) {
-          // Chargement des stats arbitre
           const [refereeMatches] = await Promise.allSettled([
             axios.get(`${API_BASE_URL}/referee/matches/my-matches`),
           ]);
@@ -82,8 +79,7 @@ const Dashboard = () => {
               upcomingMatches: matches.filter(
                 (m) => m.status === "confirmed" && new Date(m.match_date) > now
               ).length,
-              completedMatches: matches.filter((m) => m.status === "completed")
-                .length,
+              completedMatches: matches.filter((m) => m.status === "completed").length,
               playerInvites: 0,
               matchInvites: 0,
               validations: 0,
@@ -95,73 +91,42 @@ const Dashboard = () => {
           return;
         }
 
-        // MODIFIÉ : Ajout de l'appel à /users/stats pour joueurs/managers
         const [
           playerInvites,
           matchInvites,
           validations,
           teams,
           pendingParticipations,
-          userGlobalStats, // Récupération des stats globales (victoires, matchs joués)
+          userGlobalStats,
         ] = await Promise.allSettled([
           axios.get(`${API_BASE_URL}/player-invitations?status=pending`),
-          axios.get(
-            `${API_BASE_URL}/matches/invitations/received?status=pending`
-          ),
+          axios.get(`${API_BASE_URL}/matches/invitations/received?status=pending`),
           axios.get(`${API_BASE_URL}/matches/pending-validation/list`),
           axios.get(`${API_BASE_URL}/teams/my`),
           axios.get(`${API_BASE_URL}/participations/my-pending`),
-          axios.get(`${API_BASE_URL}/users/stats`), // Appel existant dans users.js backend
+          axios.get(`${API_BASE_URL}/users/stats`),
         ]);
 
         if (isMounted) {
-          // Helper pour extraire la valeur ou 0 en cas d'erreur
-          const getValue = (result, path = null) => {
-            if (result.status !== "fulfilled") return 0;
-            if (!path) return result.value.data;
-            // Pour gérer les tableaux (ex: .length) ou les objets
-            return Array.isArray(result.value.data)
-              ? result.value.data.length
-              : result.value.data[path] || result.value.data;
-          };
-
-          // Extraction spécifique selon la structure de retour de chaque API
-          const playerInvitesCount =
-            playerInvites.status === "fulfilled"
-              ? playerInvites.value.data.filter((i) => i.status === "pending")
-                  .length
-              : 0;
-
-          const matchInvitesCount =
-            matchInvites.status === "fulfilled"
-              ? matchInvites.value.data.length
-              : 0;
-
-          const validationsCount =
-            validations.status === "fulfilled"
-              ? validations.value.data.count || 0
-              : 0;
-
-          const teamsCount =
-            teams.status === "fulfilled" ? teams.value.data.length : 0;
-
-          const pendingPartCount =
-            pendingParticipations.status === "fulfilled"
-              ? pendingParticipations.value.data.participations?.length || 0
-              : 0;
-
-          const matchesPlayedCount =
-            userGlobalStats.status === "fulfilled"
-              ? userGlobalStats.value.data.matchesCount || 0
-              : 0;
-
           setStats({
-            playerInvites: playerInvitesCount,
-            matchInvites: matchInvitesCount,
-            validations: validationsCount,
-            teams: teamsCount,
-            pendingParticipations: pendingPartCount,
-            matchesPlayed: matchesPlayedCount,
+            playerInvites: playerInvites.status === "fulfilled"
+              ? playerInvites.value.data.filter((i) => i.status === "pending").length
+              : 0,
+            matchInvites: matchInvites.status === "fulfilled"
+              ? matchInvites.value.data.length
+              : 0,
+            validations: validations.status === "fulfilled"
+              ? validations.value.data.count || 0
+              : 0,
+            teams: teams.status === "fulfilled"
+              ? teams.value.data.length
+              : 0,
+            pendingParticipations: pendingParticipations.status === "fulfilled"
+              ? pendingParticipations.value.data.participations?.length || 0
+              : 0,
+            matchesPlayed: userGlobalStats.status === "fulfilled"
+              ? userGlobalStats.value.data.matchesCount || 0
+              : 0,
           });
         }
       } catch (error) {
@@ -180,206 +145,216 @@ const Dashboard = () => {
     };
   }, [user, isReferee]);
 
-  // ... (Garder ActionCard et StatCard inchangés) ...
-  const ActionCard = ({ to, icon: Icon, title, desc, color, count }) => (
-    <Link
-      to={to}
-      className="group relative bg-white p-6 rounded-2xl shadow-sm border border-gray-100 hover:shadow-md hover:border-gray-200 transition-all duration-200 flex flex-col h-full"
-    >
-      <div
-        className={`w-12 h-12 rounded-xl ${color} flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-200`}
-      >
-        <Icon className="w-6 h-6 text-white" />
-      </div>
-      <h3 className="text-lg font-bold text-gray-900 mb-1 flex items-center justify-between">
-        {title}
-        {count > 0 && (
-          <span className="bg-red-500 text-white text-xs px-2 py-1 rounded-full animate-pulse">
-            {count}
-          </span>
-        )}
-      </h3>
-      <p className="text-sm text-gray-500 mb-4 flex-1">{desc}</p>
-      <div className="flex items-center text-sm font-semibold text-gray-400 group-hover:text-gray-900 transition-colors">
-        Accéder{" "}
-        <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
-      </div>
-    </Link>
-  );
-
-  const StatCard = ({ label, value, icon: Icon, color }) => (
-    <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex items-center space-x-4">
-      <div className={`p-3 rounded-lg ${color} bg-opacity-10`}>
-        <Icon className={`w-6 h-6 ${color.replace("bg-", "text-")}`} />
-      </div>
-      <div>
-        <p className="text-sm text-gray-500">{label}</p>
-        <p className="text-2xl font-bold text-gray-900">
-          {loading ? "-" : value}
-        </p>
-      </div>
-    </div>
-  );
-
-  // ... (Garder le bloc de redirection loading inchangé) ...
   if (isSuperadmin || isVenueOwner) {
     return (
-      <div className="flex justify-center items-center min-h-screen">
+      <div className="flex items-center justify-center min-h-[400px]">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">
+          <Loader2 className="w-8 h-8 animate-spin text-emerald-600 mx-auto mb-3" />
+          <p className="text-sm text-gray-500">
             {isSuperadmin
               ? "Redirection vers le panel admin..."
-              : "Redirection vers votre espace propriétaire..."}
+              : "Redirection vers votre espace..."}
           </p>
         </div>
       </div>
     );
   }
 
-  return (
-    <div className="max-w-7xl mx-auto space-y-8 mt-5">
-      {/* Header Section */}
-      <div className="bg-gradient-to-r from-gray-900 to-gray-800 rounded-3xl p-8 text-white shadow-xl relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-64 h-64 bg-white opacity-5 rounded-full -mr-16 -mt-16 blur-3xl"></div>
-        <div className="relative z-10">
-          <h1 className="text-3xl font-bold mb-2">
-            {isReferee
-              ? "Espace Arbitre"
-              : isManager
-              ? "Espace Manager"
-              : "Espace Joueur"}{" "}
-            - Bonjour {user?.firstName} ! 👋
-          </h1>
-          <p className="text-gray-300 max-w-2xl">
-            {isReferee
-              ? "Gérez vos matchs assignés, rapportez les incidents et validez les scores officiellement."
-              : isManager
-              ? "Gérez vos équipes, planifiez vos matchs et recrutez de nouveaux talents pour dominer le championnat."
-              : "Consultez vos invitations, rejoignez une équipe et participez aux matchs de la communauté."}
-          </p>
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-center">
+          <Loader2 className="w-8 h-8 animate-spin text-emerald-600 mx-auto mb-3" />
+          <p className="text-sm text-gray-500">Chargement du tableau de bord...</p>
         </div>
       </div>
+    );
+  }
 
-      {/* Stats Row */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+  const totalPendingActions = stats.validations + stats.playerInvites + stats.matchInvites + stats.pendingParticipations;
+
+  return (
+    <div className="space-y-6">
+      {/* Welcome Section */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold text-gray-900">
+            Bonjour, {user?.firstName}
+          </h1>
+          <p className="text-gray-500 mt-1">
+            {isReferee
+              ? "Consultez vos matchs assignés et vos rapports."
+              : isManager
+              ? "Gérez vos équipes et organisez vos matchs."
+              : "Voici un aperçu de votre activité."}
+          </p>
+        </div>
+        {isManager && (
+          <Link
+            to="/matches/create"
+            className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium rounded-lg transition-colors"
+          >
+            <PlusCircle className="w-4 h-4" />
+            <span>Créer un match</span>
+          </Link>
+        )}
+      </div>
+
+      {/* Alert Banner - Pending Actions */}
+      {!isReferee && totalPendingActions > 0 && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+          <div className="flex items-start sm:items-center justify-between gap-4 flex-col sm:flex-row">
+            <div className="flex items-start gap-3">
+              <div className="p-2 bg-amber-100 rounded-lg">
+                <AlertTriangle className="w-5 h-5 text-amber-600" />
+              </div>
+              <div>
+                <p className="font-medium text-amber-900">
+                  {totalPendingActions} action{totalPendingActions > 1 ? "s" : ""} en attente
+                </p>
+                <p className="text-sm text-amber-700 mt-0.5">
+                  Vous avez des éléments qui requièrent votre attention.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Action Pills */}
+          <div className="flex flex-wrap gap-2 mt-4">
+            {stats.validations > 0 && (
+              <Link
+                to="/pending-validations"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white text-amber-700 border border-amber-200 rounded-lg hover:bg-amber-100 transition text-sm font-medium"
+              >
+                <CheckCircle className="w-4 h-4" />
+                {stats.validations} match{stats.validations > 1 ? "s" : ""} à valider
+              </Link>
+            )}
+            {stats.matchInvites > 0 && (
+              <Link
+                to="/invitations"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white text-blue-700 border border-blue-200 rounded-lg hover:bg-blue-50 transition text-sm font-medium"
+              >
+                <Calendar className="w-4 h-4" />
+                {stats.matchInvites} invitation{stats.matchInvites > 1 ? "s" : ""} de match
+              </Link>
+            )}
+            {stats.playerInvites > 0 && (
+              <Link
+                to="/player-invitations"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white text-purple-700 border border-purple-200 rounded-lg hover:bg-purple-50 transition text-sm font-medium"
+              >
+                <UserPlus className="w-4 h-4" />
+                {stats.playerInvites} invitation{stats.playerInvites > 1 ? "s" : ""} d'équipe
+              </Link>
+            )}
+            {stats.pendingParticipations > 0 && (
+              <Link
+                to="/participations"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white text-emerald-700 border border-emerald-200 rounded-lg hover:bg-emerald-50 transition text-sm font-medium"
+              >
+                <CheckCircle className="w-4 h-4" />
+                {stats.pendingParticipations} participation{stats.pendingParticipations > 1 ? "s" : ""} à confirmer
+              </Link>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Stats Grid */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {isReferee ? (
           <>
             <StatCard
-              label="Matchs Assignés"
+              label="Matchs assignés"
               value={stats.assignedMatches}
-              icon={ShieldUser}
-              color="bg-blue-500"
+              icon={ShieldCheck}
+              color="blue"
             />
             <StatCard
-              label="Matchs À Venir"
+              label="À venir"
               value={stats.upcomingMatches}
               icon={Clock}
-              color="bg-orange-500"
+              color="amber"
             />
             <StatCard
-              label="Matchs Terminés"
+              label="Terminés"
               value={stats.completedMatches}
               icon={CheckCircle}
-              color="bg-green-500"
+              color="emerald"
             />
             <StatCard
-              label="Rapports Créés"
+              label="Rapports"
               value={stats.completedMatches}
               icon={FileText}
-              color="bg-purple-500"
+              color="violet"
             />
           </>
         ) : (
           <>
             <StatCard
-              label={isManager ? "Mes Équipes" : "Équipes"}
+              label={isManager ? "Mes équipes" : "Équipes"}
               value={stats.teams}
               icon={isManager ? Shield : Users}
-              color="bg-blue-500"
+              color="blue"
             />
-            {/* MODIFIÉ : Utilisation de la vraie valeur stats.matchesPlayed */}
             <StatCard
-              label="Matchs Joués"
+              label="Matchs joués"
               value={stats.matchesPlayed}
               icon={Trophy}
-              color="bg-yellow-500"
+              color="amber"
             />
             <StatCard
-              label={isManager ? "Demandes Joueurs" : "Invitations Reçues"}
+              label={isManager ? "Demandes joueurs" : "Invitations reçues"}
               value={stats.playerInvites}
               icon={UserPlus}
-              color="bg-purple-500"
+              color="violet"
             />
             <StatCard
-              label="Invitations Matchs"
+              label="Invitations matchs"
               value={stats.matchInvites}
               icon={Calendar}
-              color="bg-green-500"
+              color="emerald"
             />
           </>
         )}
       </div>
 
-      {/* Actions Urgentes */}
-      {!isReferee &&
-        (stats.validations > 0 ||
-          stats.playerInvites > 0 ||
-          stats.matchInvites > 0 ||
-          stats.pendingParticipations > 0) && (
-          <div className="bg-orange-50 border border-orange-100 rounded-2xl p-6">
-            <h2 className="font-bold text-orange-800 flex items-center mb-4">
-              <Bell className="w-5 h-5 mr-2" /> Actions requises
-            </h2>
-            <div className="flex flex-wrap gap-3">
-              {stats.validations > 0 && (
-                <Link
-                  to="/pending-validations"
-                  className="flex items-center px-4 py-2 bg-white text-orange-700 border border-orange-200 rounded-lg hover:bg-orange-100 transition font-medium text-sm"
-                >
-                  <CheckCircle className="w-4 h-4 mr-2 text-orange-500" />{" "}
-                  {stats.validations} matchs à valider
-                </Link>
-              )}
-              {stats.matchInvites > 0 && (
-                <Link
-                  to="/invitations"
-                  className="flex items-center px-4 py-2 bg-white text-blue-700 border border-blue-200 rounded-lg hover:bg-blue-50 transition font-medium text-sm"
-                >
-                  <Calendar className="w-4 h-4 mr-2 text-blue-500" />{" "}
-                  {stats.matchInvites} invitations de match
-                </Link>
-              )}
-              {stats.playerInvites > 0 && (
-                <Link
-                  to="/player-invitations"
-                  className="flex items-center px-4 py-2 bg-white text-purple-700 border border-purple-200 rounded-lg hover:bg-purple-50 transition font-medium text-sm"
-                >
-                  <UserPlus className="w-4 h-4 mr-2 text-purple-500" />{" "}
-                  {stats.playerInvites} invitations d'équipe
-                </Link>
-              )}
-              {stats.pendingParticipations > 0 && (
-                <Link
-                  to="/participations"
-                  className="flex items-center px-4 py-2 bg-white text-green-700 border border-green-200 rounded-lg hover:bg-green-50 transition font-medium text-sm"
-                >
-                  <CheckCircle className="w-4 h-4 mr-2 text-green-500" />{" "}
-                  {stats.pendingParticipations} participations à confirmer
-                </Link>
-              )}
-            </div>
-          </div>
-        )}
-
-      {/* Main Grid Actions (Reste inchangé) */}
+      {/* Quick Actions */}
       <div>
-        <h2 className="text-xl font-bold text-gray-900 mb-6">Accès Rapide</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {/* Actions Arbitre */}
-          {isReferee && <></>}
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-semibold text-gray-900">Accès rapide</h2>
+        </div>
 
-          {/* Actions Manager */}
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          {/* Referee Actions */}
+          {isReferee && (
+            <>
+              <ActionCard
+                to="/referee/matches"
+                icon={ShieldCheck}
+                title="Mes matchs"
+                desc="Consultez vos matchs assignés et à venir."
+                color="blue"
+              />
+              <ActionCard
+                to="/referee/reports"
+                icon={FileText}
+                title="Rapports"
+                desc="Rédigez et consultez vos rapports de match."
+                color="violet"
+              />
+              <ActionCard
+                to="/calendar"
+                icon={Calendar}
+                title="Calendrier"
+                desc="Visualisez votre planning de matchs."
+                color="emerald"
+              />
+            </>
+          )}
+
+          {/* Manager Actions */}
           {isManager && (
             <>
               <ActionCard
@@ -387,109 +362,202 @@ const Dashboard = () => {
                 icon={PlusCircle}
                 title="Organiser un match"
                 desc="Créez un match et invitez une équipe adverse."
-                color="bg-green-500"
+                color="emerald"
               />
               <ActionCard
                 to="/teams"
                 icon={Shield}
-                title="Gestion d'Équipes"
-                desc="Gérez vos équipes, effectif, logo et statistiques."
-                color="bg-blue-600"
+                title="Mes équipes"
+                desc="Gérez vos équipes, effectif et statistiques."
+                color="blue"
               />
               <ActionCard
                 to="/recruitment"
                 icon={UserPlus}
                 title="Recrutement"
-                desc="Trouvez des joueurs libres pour renforcer vos équipes."
-                color="bg-purple-500"
+                desc="Trouvez des joueurs pour renforcer vos équipes."
+                color="violet"
               />
               <ActionCard
                 to="/venues"
                 icon={MapPin}
-                title="Réserver un Terrain"
-                desc="Recherchez et réservez un terrain pour vos matchs."
-                color="bg-teal-500"
+                title="Réserver un terrain"
+                desc="Recherchez et réservez un terrain."
+                color="teal"
               />
               <ActionCard
                 to="/referees"
                 icon={Award}
-                title="Trouver un Arbitre"
-                desc="Recherchez un arbitre qualifié pour vos matchs."
-                color="bg-indigo-600"
+                title="Trouver un arbitre"
+                desc="Recherchez un arbitre pour vos matchs."
+                color="indigo"
               />
             </>
           )}
 
-          {/* Actions Player */}
+          {/* Player Actions */}
           {isPlayer && (
             <>
               <ActionCard
                 to="/teams"
                 icon={Users}
-                title="Mes Équipes"
+                title="Mes équipes"
                 desc="Consultez les équipes dont vous êtes membre."
-                color="bg-blue-600"
+                color="blue"
               />
               <ActionCard
                 to="/teams/search"
                 icon={Search}
                 title="Trouver une équipe"
                 desc="Rejoignez une nouvelle équipe pour jouer."
-                color="bg-purple-500"
+                color="violet"
               />
               <ActionCard
                 to="/player-invitations"
                 icon={UserPlus}
-                title="Invitations d'Équipe"
+                title="Invitations d'équipe"
                 desc="Consultez vos invitations à rejoindre des équipes."
-                color="bg-green-500"
-                count={stats.playerInvites}
+                color="emerald"
+                badge={stats.playerInvites}
               />
               <ActionCard
                 to="/participations"
                 icon={CheckCircle}
-                title="Mes Participations"
+                title="Mes participations"
                 desc="Confirmez votre présence aux prochains matchs."
-                color="bg-emerald-600"
-                count={stats.pendingParticipations}
+                color="teal"
+                badge={stats.pendingParticipations}
               />
               <ActionCard
                 to="/venues"
                 icon={MapPin}
                 title="Terrains"
-                desc="Découvrez les terrains disponibles dans votre région."
-                color="bg-teal-500"
+                desc="Découvrez les terrains disponibles."
+                color="amber"
               />
             </>
           )}
 
-          {/* Actions Communes */}
+          {/* Common Actions */}
           <ActionCard
             to="/calendar"
             icon={Calendar}
             title="Calendrier"
             desc="Vos prochains matchs et disponibilités."
-            color="bg-indigo-500"
+            color="indigo"
           />
-
+          <ActionCard
+            to="/feed"
+            icon={Hash}
+            title="Le Terrain"
+            desc="Fil d'actualité de la communauté."
+            color="pink"
+          />
           <ActionCard
             to="/profile"
             icon={Trophy}
-            title="Mon Profil"
-            desc="Vos informations personnelles et historique."
-            color="bg-orange-500"
-          />
-
-          <ActionCard
-            to="/feed"
-            icon={MessageSquare}
-            title="Le Terrain"
-            desc="Fil d'actualité de la communauté."
-            color="bg-pink-500"
+            title="Mon profil"
+            desc="Vos informations et statistiques."
+            color="amber"
           />
         </div>
       </div>
+
+      {/* Quick Links Footer */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <Link
+          to="/calendar"
+          className="bg-white rounded-xl border border-gray-200 p-5 hover:border-gray-300 transition-colors group"
+        >
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="font-semibold text-gray-900">Voir le calendrier</h3>
+              <p className="text-sm text-gray-500 mt-1">
+                Consultez tous vos événements à venir
+              </p>
+            </div>
+            <ArrowRight className="w-5 h-5 text-gray-400 group-hover:text-gray-600 group-hover:translate-x-1 transition-all" />
+          </div>
+        </Link>
+
+        <Link
+          to="/feed"
+          className="bg-white rounded-xl border border-gray-200 p-5 hover:border-gray-300 transition-colors group"
+        >
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="font-semibold text-gray-900">Actualités</h3>
+              <p className="text-sm text-gray-500 mt-1">
+                Découvrez les dernières publications
+              </p>
+            </div>
+            <ArrowRight className="w-5 h-5 text-gray-400 group-hover:text-gray-600 group-hover:translate-x-1 transition-all" />
+          </div>
+        </Link>
+      </div>
     </div>
+  );
+};
+
+// Stat Card Component
+const StatCard = ({ label, value, icon: Icon, color }) => {
+  const colorClasses = {
+    blue: "bg-blue-50 text-blue-600",
+    emerald: "bg-emerald-50 text-emerald-600",
+    amber: "bg-amber-50 text-amber-600",
+    violet: "bg-violet-50 text-violet-600",
+    indigo: "bg-indigo-50 text-indigo-600",
+    pink: "bg-pink-50 text-pink-600",
+    teal: "bg-teal-50 text-teal-600",
+  };
+
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 p-5">
+      <div className="flex items-center justify-between mb-3">
+        <div className={`p-2 rounded-lg ${colorClasses[color]}`}>
+          <Icon className="w-5 h-5" />
+        </div>
+      </div>
+      <p className="text-2xl font-semibold text-gray-900">{value}</p>
+      <p className="text-sm text-gray-500 mt-1">{label}</p>
+    </div>
+  );
+};
+
+// Action Card Component
+const ActionCard = ({ to, icon: Icon, title, desc, color, badge }) => {
+  const colorClasses = {
+    blue: "bg-blue-600",
+    emerald: "bg-emerald-600",
+    amber: "bg-amber-500",
+    violet: "bg-violet-600",
+    indigo: "bg-indigo-600",
+    pink: "bg-pink-500",
+    teal: "bg-teal-600",
+  };
+
+  return (
+    <Link
+      to={to}
+      className="bg-white rounded-xl border border-gray-200 p-5 hover:border-gray-300 transition-colors group"
+    >
+      <div className="flex items-start justify-between mb-4">
+        <div className={`p-2.5 rounded-xl ${colorClasses[color]}`}>
+          <Icon className="w-5 h-5 text-white" />
+        </div>
+        {badge > 0 && (
+          <span className="px-2 py-1 text-xs font-medium bg-red-100 text-red-600 rounded-full">
+            {badge}
+          </span>
+        )}
+      </div>
+      <h3 className="font-semibold text-gray-900 mb-1">{title}</h3>
+      <p className="text-sm text-gray-500 mb-4">{desc}</p>
+      <div className="flex items-center text-sm font-medium text-gray-400 group-hover:text-emerald-600 transition-colors">
+        <span>Accéder</span>
+        <ArrowUpRight className="w-4 h-4 ml-1 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+      </div>
+    </Link>
   );
 };
 

@@ -757,15 +757,12 @@ router.patch("/:id/mercato", authenticateToken, async (req, res) => {
       });
     }
 
-    // Vérifier que l'utilisateur est manager de l'équipe
-    const [membership] = await db.execute(
-      "SELECT role FROM team_members WHERE team_id = ? AND user_id = ? AND role = 'manager' AND is_active = true",
-      [teamId, req.user.id]
-    );
+    // Vérifier que l'utilisateur est manager ou captain de l'équipe
+    const hasPermission = await checkTeamAdminPermission(req.user.id, teamId);
 
-    if (membership.length === 0) {
+    if (!hasPermission) {
       return res.status(403).json({
-        error: "Seuls les managers peuvent gérer le statut du mercato"
+        error: "Seuls les managers ou capitaines peuvent gérer le statut du mercato"
       });
     }
 

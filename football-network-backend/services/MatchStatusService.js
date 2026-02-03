@@ -70,13 +70,15 @@ class MatchStatusService {
 
   /**
    * Vérifie et démarre automatiquement les matchs dont l'heure de début est atteinte
+   * Utilise des transactions avec verrouillage pour éviter les race conditions
    */
   async checkMatchesToStart() {
+    const connection = await db.getConnection();
     try {
       const now = new Date();
 
       // Récupérer les matchs confirmés dont l'heure de début est passée
-      const [matchesToStart] = await db.execute(
+      const [matchesToStart] = await connection.execute(
         `SELECT m.id, m.match_date,
                 ht.name as home_team_name, ht.captain_id as home_captain_id,
                 at.name as away_team_name, at.captain_id as away_captain_id
@@ -97,18 +99,35 @@ class MatchStatusService {
 
       for (const match of matchesToStart) {
         try {
-          // Mettre à jour le statut
-          await db.execute(
-            `UPDATE matches
-             SET status = 'in_progress',
-                 started_at = NOW()
-             WHERE id = ?`,
+          await connection.beginTransaction();
+
+          // Verrouiller la ligne pour éviter les mises à jour concurrentes
+          const [lockedMatch] = await connection.execute(
+            `SELECT id, status FROM matches WHERE id = ? AND status = 'confirmed' FOR UPDATE`,
             [match.id]
           );
 
+          // Vérifier que le match est toujours en status 'confirmed' (pas modifié entre-temps)
+          if (lockedMatch.length === 0) {
+            await connection.rollback();
+            continue; // Le match a déjà été traité par un autre processus
+          }
+
+          // Mettre à jour le statut
+          await connection.execute(
+            `UPDATE matches
+             SET status = 'in_progress',
+                 started_at = NOW(),
+                 updated_at = NOW()
+             WHERE id = ? AND status = 'confirmed'`,
+            [match.id]
+          );
+
+          await connection.commit();
+
           console.log(`✅ Match ${match.id} started automatically: ${match.home_team_name} vs ${match.away_team_name}`);
 
-          // Notifier les managers
+          // Notifier les managers (en dehors de la transaction)
           await this.notifyCaptains(
             match.home_captain_id,
             match.away_captain_id,
@@ -119,6 +138,7 @@ class MatchStatusService {
           );
 
         } catch (error) {
+          await connection.rollback();
           console.error(`❌ Error starting match ${match.id}:`, error);
         }
       }
@@ -126,19 +146,23 @@ class MatchStatusService {
     } catch (error) {
       console.error("❌ Error in checkMatchesToStart:", error);
       throw error;
+    } finally {
+      connection.release();
     }
   }
 
   /**
    * Vérifie et complète automatiquement les matchs qui ont dépassé 120 minutes
+   * Utilise des transactions avec verrouillage pour éviter les race conditions
    */
   async checkMatchesToComplete() {
+    const connection = await db.getConnection();
     try {
       const now = new Date();
       const completionTime = new Date(now.getTime() - this.MATCH_DURATION * 60 * 1000);
 
       // Récupérer les matchs en cours qui ont dépassé 120 minutes
-      const [matchesToComplete] = await db.execute(
+      const [matchesToComplete] = await connection.execute(
         `SELECT m.id, m.match_date, m.started_at,
                 ht.name as home_team_name, ht.captain_id as home_captain_id,
                 at.name as away_team_name, at.captain_id as away_captain_id
@@ -162,18 +186,35 @@ class MatchStatusService {
 
       for (const match of matchesToComplete) {
         try {
-          // Mettre à jour le statut
-          await db.execute(
-            `UPDATE matches
-             SET status = 'completed',
-                 completed_at = NOW()
-             WHERE id = ?`,
+          await connection.beginTransaction();
+
+          // Verrouiller la ligne pour éviter les mises à jour concurrentes
+          const [lockedMatch] = await connection.execute(
+            `SELECT id, status FROM matches WHERE id = ? AND status = 'in_progress' FOR UPDATE`,
             [match.id]
           );
 
+          // Vérifier que le match est toujours en status 'in_progress'
+          if (lockedMatch.length === 0) {
+            await connection.rollback();
+            continue; // Le match a déjà été traité par un autre processus
+          }
+
+          // Mettre à jour le statut
+          await connection.execute(
+            `UPDATE matches
+             SET status = 'completed',
+                 completed_at = NOW(),
+                 updated_at = NOW()
+             WHERE id = ? AND status = 'in_progress'`,
+            [match.id]
+          );
+
+          await connection.commit();
+
           console.log(`✅ Match ${match.id} completed automatically: ${match.home_team_name} vs ${match.away_team_name}`);
 
-          // Notifier les managers pour qu'ils saisissent le score
+          // Notifier les managers pour qu'ils saisissent le score (en dehors de la transaction)
           await this.notifyCaptains(
             match.home_captain_id,
             match.away_captain_id,
@@ -184,6 +225,7 @@ class MatchStatusService {
           );
 
         } catch (error) {
+          await connection.rollback();
           console.error(`❌ Error completing match ${match.id}:`, error);
         }
       }
@@ -191,6 +233,8 @@ class MatchStatusService {
     } catch (error) {
       console.error("❌ Error in checkMatchesToComplete:", error);
       throw error;
+    } finally {
+      connection.release();
     }
   }
 

@@ -136,21 +136,38 @@ router.patch(
       await connection.beginTransaction();
 
       try {
-        // CORRECTION MAJEURE : Si on accepte, on supprime les anciennes invitations 'accepted'
-        // pour cette équipe et ce joueur afin d'éviter l'erreur 'Duplicate entry'
+        // VERROUILLAGE: Récupérer et verrouiller l'invitation pour éviter le traitement concurrent
+        const [lockedInvitation] = await connection.execute(
+          `SELECT id, status FROM player_invitations WHERE id = ? AND status = 'pending' FOR UPDATE`,
+          [invitationId]
+        );
+
+        // Vérifier que l'invitation est toujours disponible (pas traitée entre-temps)
+        if (lockedInvitation.length === 0) {
+          await connection.rollback();
+          return res.status(400).json({ error: "Invitation already processed or no longer available" });
+        }
+
+        // Si on accepte, supprime les anciennes invitations 'accepted' pour éviter les doublons
         if (response === "accepted") {
           await connection.execute(
-            `DELETE FROM player_invitations 
+            `DELETE FROM player_invitations
              WHERE team_id = ? AND user_id = ? AND status = 'accepted' AND id != ?`,
             [invitation.team_id, req.user.id, invitationId]
           );
         }
 
-        // Mettre à jour l'invitation actuelle
-        await connection.execute(
-          "UPDATE player_invitations SET status = ?, response_message = ?, responded_at = CURRENT_TIMESTAMP WHERE id = ?",
+        // Mettre à jour l'invitation actuelle (avec condition de sécurité supplémentaire)
+        const [updateResult] = await connection.execute(
+          "UPDATE player_invitations SET status = ?, response_message = ?, responded_at = CURRENT_TIMESTAMP WHERE id = ? AND status = 'pending'",
           [response, responseMessage || null, invitationId]
         );
+
+        // Vérifier que la mise à jour a réussi
+        if (updateResult.affectedRows === 0) {
+          await connection.rollback();
+          return res.status(400).json({ error: "Failed to update invitation - may have been processed already" });
+        }
 
         let teamMemberIds = [];
 
