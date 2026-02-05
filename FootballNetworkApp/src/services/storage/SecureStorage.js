@@ -1,11 +1,12 @@
 // ====== src/services/storage/SecureStorage.js ======
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as ExpoSecureStore from 'expo-secure-store';
 
 class SecureStorageService {
   // Clés de stockage
   static KEYS = {
-    TOKEN: '@auth_token',
-    REFRESH_TOKEN: '@refresh_token',
+    TOKEN: 'auth_token',
+    REFRESH_TOKEN: 'refresh_token',
     USER: '@user_data',
     THEME: '@app_theme',
     LANGUAGE: '@app_language',
@@ -14,6 +15,48 @@ class SecureStorageService {
     CACHED_MATCHES: '@cached_matches',
     LAST_SYNC: '@last_sync',
   };
+
+  // ==================== SECURE STORAGE (for tokens) ====================
+
+  /**
+   * Save a value securely (for sensitive data like tokens)
+   */
+  async setSecure(key, value) {
+    try {
+      await ExpoSecureStore.setItemAsync(key, value);
+      return { success: true };
+    } catch (error) {
+      console.error(`Error saving secure ${key}:`, error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
+   * Get a secure value
+   */
+  async getSecure(key) {
+    try {
+      return await ExpoSecureStore.getItemAsync(key);
+    } catch (error) {
+      console.error(`Error getting secure ${key}:`, error);
+      return null;
+    }
+  }
+
+  /**
+   * Delete a secure value
+   */
+  async removeSecure(key) {
+    try {
+      await ExpoSecureStore.deleteItemAsync(key);
+      return { success: true };
+    } catch (error) {
+      console.error(`Error removing secure ${key}:`, error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  // ==================== ASYNC STORAGE (for non-sensitive data) ====================
 
   /**
    * Sauvegarder une valeur
@@ -82,6 +125,9 @@ class SecureStorageService {
   async clearAll() {
     try {
       await AsyncStorage.clear();
+      // Also clear secure storage tokens
+      await this.removeSecure(SecureStorageService.KEYS.TOKEN);
+      await this.removeSecure(SecureStorageService.KEYS.REFRESH_TOKEN);
       return { success: true };
     } catch (error) {
       console.error('Error clearing storage:', error);
@@ -89,26 +135,26 @@ class SecureStorageService {
     }
   }
 
-  // ==================== AUTH ====================
+  // ==================== AUTH (uses secure storage) ====================
 
   async setToken(token) {
-    return await this.set(SecureStorageService.KEYS.TOKEN, token);
+    return await this.setSecure(SecureStorageService.KEYS.TOKEN, token);
   }
 
   async getToken() {
-    return await this.get(SecureStorageService.KEYS.TOKEN);
+    return await this.getSecure(SecureStorageService.KEYS.TOKEN);
   }
 
   async removeToken() {
-    return await this.remove(SecureStorageService.KEYS.TOKEN);
+    return await this.removeSecure(SecureStorageService.KEYS.TOKEN);
   }
 
   async setRefreshToken(token) {
-    return await this.set(SecureStorageService.KEYS.REFRESH_TOKEN, token);
+    return await this.setSecure(SecureStorageService.KEYS.REFRESH_TOKEN, token);
   }
 
   async getRefreshToken() {
-    return await this.get(SecureStorageService.KEYS.REFRESH_TOKEN);
+    return await this.getSecure(SecureStorageService.KEYS.REFRESH_TOKEN);
   }
 
   // Méthode pour sauvegarder les deux tokens en une seule fois
@@ -266,9 +312,12 @@ class SecureStorageService {
    * Nettoyer toutes les données d'authentification et utilisateur
    */
   async logout() {
+    // Remove secure tokens
+    await this.removeSecure(SecureStorageService.KEYS.TOKEN);
+    await this.removeSecure(SecureStorageService.KEYS.REFRESH_TOKEN);
+
+    // Remove async storage data
     const keysToRemove = [
-      SecureStorageService.KEYS.TOKEN,
-      SecureStorageService.KEYS.REFRESH_TOKEN,
       SecureStorageService.KEYS.USER,
       SecureStorageService.KEYS.CACHED_TEAMS,
       SecureStorageService.KEYS.CACHED_MATCHES,

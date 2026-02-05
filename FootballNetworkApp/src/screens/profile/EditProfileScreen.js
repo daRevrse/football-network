@@ -14,8 +14,8 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { useSelector } from 'react-redux';
-import Icon from 'react-native-vector-icons/Feather';
-import { launchImageLibrary } from 'react-native-image-picker';
+import { Feather as Icon } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 import { UserApi } from '../../services/api';
 
 const THEME = {
@@ -88,11 +88,12 @@ export const EditProfileScreen = ({ navigation }) => {
   };
 
   const handlePhoto = async () => {
-    const result = await launchImageLibrary({
-      mediaType: 'photo',
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
       quality: 0.5,
+      allowsEditing: true,
     });
-    if (result.assets?.[0]?.uri) {
+    if (!result.canceled && result.assets?.[0]?.uri) {
       setUploadingImage(true);
       // Simulation d'upload
       setTimeout(() => {

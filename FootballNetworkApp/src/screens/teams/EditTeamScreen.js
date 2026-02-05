@@ -12,9 +12,9 @@ import {
   Platform,
   ActivityIndicator,
 } from 'react-native';
-import Icon from 'react-native-vector-icons/Feather';
-import LinearGradient from 'react-native-linear-gradient';
-import { launchImageLibrary } from 'react-native-image-picker';
+import { Feather as Icon } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
+import * as ImagePicker from 'expo-image-picker';
 import { teamsApi } from '../../services/api';
 
 const THEME = {
@@ -75,12 +75,13 @@ export const EditTeamScreen = ({ route, navigation }) => {
 
   // Gestion Upload Image (Générique)
   const handleImagePick = async type => {
-    const result = await launchImageLibrary({
-      mediaType: 'photo',
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
       quality: 0.7,
+      allowsEditing: true,
     });
 
-    if (result.assets && result.assets.length > 0) {
+    if (!result.canceled && result.assets && result.assets.length > 0) {
       const uri = result.assets[0].uri;
       setUploading(p => ({ ...p, [type]: true }));
 

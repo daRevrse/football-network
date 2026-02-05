@@ -16,8 +16,8 @@ import {
   Platform,
 } from 'react-native';
 import { useSelector } from 'react-redux';
-import Icon from 'react-native-vector-icons/Feather';
-import LinearGradient from 'react-native-linear-gradient';
+import { Feather as Icon } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { API_CONFIG } from '../../utils/constants/api';
 
 // Thème "Night Mode"

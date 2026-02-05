@@ -21,7 +21,15 @@
       "Bash(xargs:*)",
       "Bash(Get-ChildItem -Path \"C:\\\\football-network\" -Filter \"*.md\" -Recurse)",
       "Bash(Where-Object { $_FullName -notlike \"*node_modules*\" })",
-      "Bash(Select-Object -ExpandProperty FullName)"
+      "Bash(Select-Object -ExpandProperty FullName)",
+      "Bash(npx expo install:*)",
+      "Bash(powershell -Command \"Get-ChildItem -Path src -Recurse -Filter *.js | ForEach-Object { \\(Get-Content $_FullName\\) -replace \"\"import LinearGradient from ''react-native-linear-gradient''\"\", \"\"import { LinearGradient } from ''expo-linear-gradient''\"\" | Set-Content $_FullName }\")",
+      "Bash(npx expo start:*)",
+      "Bash(npm uninstall:*)",
+      "Bash(npx expo doctor)",
+      "Bash(npx expo-doctor)",
+      "Bash(curl:*)",
+      "Bash(powershell -Command:*)"
     ],
     "deny": [],
     "ask": []

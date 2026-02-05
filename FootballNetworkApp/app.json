@@ -1,4 +1,76 @@
 {
-  "name": "FootballNetworkApp",
-  "displayName": "FootballNetworkApp"
+  "expo": {
+    "name": "Foot Connect",
+    "slug": "foot-connect",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./src/assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./src/assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#22C55E"
+    },
+    "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "bundleIdentifier": "com.footconnect.app",
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "FootConnect a besoin de votre position pour trouver des terrains près de vous.",
+        "NSLocationAlwaysUsageDescription": "FootConnect a besoin de votre position pour trouver des terrains près de vous.",
+        "NSCameraUsageDescription": "FootConnect a besoin d'accéder à votre caméra pour prendre des photos de profil.",
+        "NSPhotoLibraryUsageDescription": "FootConnect a besoin d'accéder à vos photos pour définir votre photo de profil."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./src/assets/adaptive-icon.png",
+        "backgroundColor": "#22C55E"
+      },
+      "package": "com.footconnect.app",
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE"
+      ],
+      "config": {
+        "googleMaps": {
+          "apiKey": "YOUR_GOOGLE_MAPS_API_KEY"
+        }
+      }
+    },
+    "web": {
+      "favicon": "./src/assets/favicon.png",
+      "bundler": "metro"
+    },
+    "plugins": [
+      "expo-secure-store",
+      "expo-image-picker",
+      "expo-location",
+      [
+        "expo-notifications",
+        {
+          "icon": "./src/assets/notification-icon.png",
+          "color": "#22C55E"
+        }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "usesCleartextTraffic": true
+          }
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "your-project-id"
+      }
+    },
+    "scheme": "footconnect"
+  }
 }

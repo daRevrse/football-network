@@ -15,7 +15,7 @@ import {
   Keyboard,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import Icon from 'react-native-vector-icons/Feather';
+import { Feather as Icon } from '@expo/vector-icons';
 import { searchApi } from '../../services/api/searchApi';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 

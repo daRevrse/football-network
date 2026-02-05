@@ -1,7 +1,7 @@
 // ====== src/components/common/StepIndicator.js ======
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import Icon from 'react-native-vector-icons/Feather';
+import { Feather as Icon } from '@expo/vector-icons';
 import { COLORS, DIMENSIONS, FONTS } from '../../styles/theme';
 
 export const StepIndicator = ({ steps, currentStep }) => {

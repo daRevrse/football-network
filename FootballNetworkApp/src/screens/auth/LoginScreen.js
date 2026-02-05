@@ -5,7 +5,6 @@ import {
   Text,
   ScrollView,
   KeyboardAvoidingView,
-  Platform,
   Alert,
   TouchableOpacity,
   StatusBar,
@@ -15,9 +14,10 @@ import {
   ImageBackground,
   ActivityIndicator,
   Image,
+  Platform,
 } from 'react-native';
-import Icon from 'react-native-vector-icons/Feather';
-import LinearGradient from 'react-native-linear-gradient';
+import { Feather as Icon } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useAuthImproved } from '../../utils/hooks/useAuthImproved';
 
 const { height, width } = Dimensions.get('window');
@@ -74,7 +74,11 @@ export const LoginScreen = ({ navigation }) => {
       >
         {/* Overlay gradient vert-noir comme le web */}
         <LinearGradient
-          colors={['rgba(22, 101, 52, 0.9)', 'rgba(0, 0, 0, 0.8)', 'rgba(0, 0, 0, 0.9)']}
+          colors={[
+            'rgba(22, 101, 52, 0.9)',
+            'rgba(0, 0, 0, 0.8)',
+            'rgba(0, 0, 0, 0.9)',
+          ]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={styles.overlay}
@@ -115,7 +119,7 @@ export const LoginScreen = ({ navigation }) => {
                     <TextInput
                       style={[styles.input, errors.email && styles.inputError]}
                       value={email}
-                      onChangeText={(text) => {
+                      onChangeText={text => {
                         setEmail(text);
                         if (errors.email) setErrors({ ...errors, email: null });
                       }}
@@ -138,7 +142,9 @@ export const LoginScreen = ({ navigation }) => {
                 <View style={styles.inputGroup}>
                   <View style={styles.labelRow}>
                     <Text style={styles.label}>Mot de passe</Text>
-                    <TouchableOpacity onPress={() => navigation.navigate('ForgotPassword')}>
+                    <TouchableOpacity
+                      onPress={() => navigation.navigate('ForgotPassword')}
+                    >
                       <Text style={styles.forgotLink}>Oublié ?</Text>
                     </TouchableOpacity>
                   </View>
@@ -150,11 +156,15 @@ export const LoginScreen = ({ navigation }) => {
                       style={styles.inputIcon}
                     />
                     <TextInput
-                      style={[styles.input, errors.password && styles.inputError]}
+                      style={[
+                        styles.input,
+                        errors.password && styles.inputError,
+                      ]}
                       value={password}
-                      onChangeText={(text) => {
+                      onChangeText={text => {
                         setPassword(text);
-                        if (errors.password) setErrors({ ...errors, password: null });
+                        if (errors.password)
+                          setErrors({ ...errors, password: null });
                       }}
                       placeholder="••••••••"
                       placeholderTextColor="#6B7280"
@@ -183,7 +193,10 @@ export const LoginScreen = ({ navigation }) => {
 
                 {/* Bouton de connexion */}
                 <TouchableOpacity
-                  style={[styles.loginButton, isLoading && styles.loginButtonDisabled]}
+                  style={[
+                    styles.loginButton,
+                    isLoading && styles.loginButtonDisabled,
+                  ]}
                   onPress={handleLogin}
                   disabled={isLoading}
                   activeOpacity={0.8}
@@ -225,7 +238,9 @@ export const LoginScreen = ({ navigation }) => {
                     }}
                     style={styles.googleLogo}
                   />
-                  <Text style={styles.googleButtonText}>Continuer avec Google</Text>
+                  <Text style={styles.googleButtonText}>
+                    Continuer avec Google
+                  </Text>
                 </TouchableOpacity>
 
                 {/* Divider simple */}
@@ -236,7 +251,9 @@ export const LoginScreen = ({ navigation }) => {
                 {/* Lien d'inscription */}
                 <View style={styles.signupRow}>
                   <Text style={styles.signupText}>Pas encore de compte ? </Text>
-                  <TouchableOpacity onPress={() => navigation.navigate('Register')}>
+                  <TouchableOpacity
+                    onPress={() => navigation.navigate('Register')}
+                  >
                     <Text style={styles.signupLink}>Créer un compte</Text>
                   </TouchableOpacity>
                 </View>

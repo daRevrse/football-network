@@ -1,94 +1,66 @@
-import React, { useEffect } from 'react';
-import { StatusBar, View, Text } from 'react-native';
+import React, { useEffect, useCallback } from 'react';
+import { View, StyleSheet } from 'react-native';
+import { StatusBar } from 'expo-status-bar';
 import { Provider } from 'react-redux';
-import { store } from './src/store/store'; // Import direct du store
+import * as SplashScreen from 'expo-splash-screen';
+import { store } from './src/store/store';
 import { AppNavigator } from './src/navigation/AppNavigator';
 
-// Constantes en dur pour éviter les erreurs d'imports
+// Keep the splash screen visible while we fetch resources
+SplashScreen.preventAutoHideAsync();
+
+// Theme colors
 const COLORS = {
   PRIMARY: '#22C55E',
-  SUCCESS: '#10B981',
-  ERROR: '#EF4444',
-  TEXT_WHITE: '#FFFFFF',
-};
-
-// Configuration du Toast simple
-const ToastConfig = {
-  success: ({ text1, text2 }) => (
-    <View
-      style={{
-        height: 60,
-        width: '90%',
-        backgroundColor: COLORS.SUCCESS,
-        borderRadius: 8,
-        paddingHorizontal: 16,
-        justifyContent: 'center',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.25,
-        shadowRadius: 3.84,
-        elevation: 5,
-      }}
-    >
-      <Text style={{ color: COLORS.TEXT_WHITE, fontWeight: 'bold' }}>
-        {text1}
-      </Text>
-      {text2 && (
-        <Text style={{ color: COLORS.TEXT_WHITE, fontSize: 12 }}>{text2}</Text>
-      )}
-    </View>
-  ),
-  error: ({ text1, text2 }) => (
-    <View
-      style={{
-        height: 60,
-        width: '90%',
-        backgroundColor: COLORS.ERROR,
-        borderRadius: 8,
-        paddingHorizontal: 16,
-        justifyContent: 'center',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.25,
-        shadowRadius: 3.84,
-        elevation: 5,
-      }}
-    >
-      <Text style={{ color: COLORS.TEXT_WHITE, fontWeight: 'bold' }}>
-        {text1}
-      </Text>
-      {text2 && (
-        <Text style={{ color: COLORS.TEXT_WHITE, fontSize: 12 }}>{text2}</Text>
-      )}
-    </View>
-  ),
 };
 
 const App = () => {
+  const [appIsReady, setAppIsReady] = React.useState(false);
+
   useEffect(() => {
-    // Initialiser les services
-    initializeServices();
+    async function prepare() {
+      try {
+        // Pre-load any resources or data here
+        console.log('App initializing...');
+
+        // Simulate a small delay for splash screen
+        await new Promise(resolve => setTimeout(resolve, 500));
+      } catch (e) {
+        console.warn('Error during app initialization:', e);
+      } finally {
+        setAppIsReady(true);
+      }
+    }
+
+    prepare();
   }, []);
 
-  const initializeServices = async () => {
-    try {
-      // Initialiser les services (version simplifiée pour l'instant)
-      console.log('Services initialisés');
-    } catch (error) {
-      console.error("Erreur lors de l'initialisation des services:", error);
+  const onLayoutRootView = useCallback(async () => {
+    if (appIsReady) {
+      // Hide splash screen once the app is ready
+      await SplashScreen.hideAsync();
     }
-  };
+  }, [appIsReady]);
+
+  if (!appIsReady) {
+    return null;
+  }
 
   return (
     <Provider store={store}>
-      <StatusBar
-        barStyle="light-content"
-        backgroundColor={COLORS.PRIMARY}
-        translucent={false}
-      />
-      <AppNavigator />
+      <View style={styles.container} onLayout={onLayoutRootView}>
+        <StatusBar style="light" backgroundColor={COLORS.PRIMARY} />
+        <AppNavigator />
+      </View>
     </Provider>
   );
 };
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#F8FAFC',
+  },
+});
 
 export default App;

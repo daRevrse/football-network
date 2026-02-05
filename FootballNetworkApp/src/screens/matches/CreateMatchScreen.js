@@ -18,9 +18,9 @@ import {
   Keyboard,
   StatusBar,
 } from 'react-native';
-import Icon from 'react-native-vector-icons/Feather';
+import { Feather as Icon } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import LinearGradient from 'react-native-linear-gradient';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useSelector } from 'react-redux';
 import { matchesApi, teamsApi } from '../../services/api';
 import { DIMENSIONS, SHADOWS } from '../../styles/theme';

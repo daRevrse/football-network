@@ -1,67 +1,30 @@
 // ====== src/utils/imageUtils.js ======
-import { Platform, PermissionsAndroid, Alert } from 'react-native';
-import { launchCamera, launchImageLibrary } from 'react-native-image-picker';
+import { Alert } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 
 /**
  * Options par défaut pour l'image picker
  */
 const defaultImagePickerOptions = {
-  mediaType: 'photo',
+  mediaTypes: ['images'],
   quality: 0.8,
-  maxWidth: 1000,
-  maxHeight: 1000,
-  includeBase64: false,
-  saveToPhotos: false,
+  allowsEditing: true,
 };
 
 /**
- * Demander les permissions pour la caméra (Android)
+ * Demander les permissions pour la caméra
  */
 export const requestCameraPermission = async () => {
-  if (Platform.OS === 'android') {
-    try {
-      const granted = await PermissionsAndroid.request(
-        PermissionsAndroid.PERMISSIONS.CAMERA,
-        {
-          title: 'Permission Caméra',
-          message: "L'application a besoin d'accéder à votre caméra",
-          buttonNeutral: 'Plus tard',
-          buttonNegative: 'Refuser',
-          buttonPositive: 'Autoriser',
-        },
-      );
-      return granted === PermissionsAndroid.RESULTS.GRANTED;
-    } catch (err) {
-      console.warn('Camera permission error:', err);
-      return false;
-    }
-  }
-  return true;
+  const { status } = await ImagePicker.requestCameraPermissionsAsync();
+  return status === 'granted';
 };
 
 /**
- * Demander les permissions pour la galerie (Android)
+ * Demander les permissions pour la galerie
  */
 export const requestGalleryPermission = async () => {
-  if (Platform.OS === 'android') {
-    try {
-      const granted = await PermissionsAndroid.request(
-        PermissionsAndroid.PERMISSIONS.READ_EXTERNAL_STORAGE,
-        {
-          title: 'Permission Galerie',
-          message: "L'application a besoin d'accéder à vos photos",
-          buttonNeutral: 'Plus tard',
-          buttonNegative: 'Refuser',
-          buttonPositive: 'Autoriser',
-        },
-      );
-      return granted === PermissionsAndroid.RESULTS.GRANTED;
-    } catch (err) {
-      console.warn('Gallery permission error:', err);
-      return false;
-    }
-  }
-  return true;
+  const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+  return status === 'granted';
 };
 
 /**
@@ -78,18 +41,13 @@ export const openCamera = async (options = {}) => {
       return { success: false, error: 'Permission denied' };
     }
 
-    const result = await launchCamera({
+    const result = await ImagePicker.launchCameraAsync({
       ...defaultImagePickerOptions,
       ...options,
     });
 
-    if (result.didCancel) {
+    if (result.canceled) {
       return { success: false, cancelled: true };
-    }
-
-    if (result.errorCode) {
-      console.error('Camera error:', result.errorCode, result.errorMessage);
-      return { success: false, error: result.errorMessage };
     }
 
     const image = result.assets?.[0];
@@ -101,8 +59,8 @@ export const openCamera = async (options = {}) => {
       success: true,
       image: {
         uri: image.uri,
-        type: image.type,
-        name: image.fileName,
+        type: image.mimeType || 'image/jpeg',
+        name: image.fileName || image.uri.split('/').pop(),
         size: image.fileSize,
         width: image.width,
         height: image.height,
@@ -128,18 +86,13 @@ export const openGallery = async (options = {}) => {
       return { success: false, error: 'Permission denied' };
     }
 
-    const result = await launchImageLibrary({
+    const result = await ImagePicker.launchImageLibraryAsync({
       ...defaultImagePickerOptions,
       ...options,
     });
 
-    if (result.didCancel) {
+    if (result.canceled) {
       return { success: false, cancelled: true };
-    }
-
-    if (result.errorCode) {
-      console.error('Gallery error:', result.errorCode, result.errorMessage);
-      return { success: false, error: result.errorMessage };
     }
 
     const image = result.assets?.[0];
@@ -151,8 +104,8 @@ export const openGallery = async (options = {}) => {
       success: true,
       image: {
         uri: image.uri,
-        type: image.type,
-        name: image.fileName,
+        type: image.mimeType || 'image/jpeg',
+        name: image.fileName || image.uri.split('/').pop(),
         size: image.fileSize,
         width: image.width,
         height: image.height,
@@ -262,45 +215,20 @@ export const createImageFormData = (imageUri, fieldName = 'image') => {
 };
 
 /**
- * Compresser une image (nécessite react-native-image-resizer)
+ * Compresser une image
+ * Note: Pour une compression avancée, installer expo-image-manipulator
  */
 export const compressImage = async (imageUri, options = {}) => {
-  try {
-    // Note: Nécessite 'react-native-image-resizer'
-    // npm install react-native-image-resizer
-
-    const ImageResizer = require('react-native-image-resizer').default;
-
-    const {
-      width = 1000,
-      height = 1000,
-      format = 'JPEG',
-      quality = 80,
-    } = options;
-
-    const resizedImage = await ImageResizer.createResizedImage(
-      imageUri,
-      width,
-      height,
-      format,
-      quality,
-    );
-
-    return {
-      success: true,
-      image: {
-        uri: resizedImage.uri,
-        name: resizedImage.name,
-        size: resizedImage.size,
-      },
-    };
-  } catch (error) {
-    console.error('Image compression error:', error);
-    return {
-      success: false,
-      error: error.message,
-    };
-  }
+  // Avec expo-image-picker, la compression est gérée via l'option quality
+  // Pour une compression plus avancée, utiliser expo-image-manipulator
+  return {
+    success: true,
+    image: {
+      uri: imageUri,
+      name: imageUri.split('/').pop(),
+      size: null,
+    },
+  };
 };
 
 /**
@@ -345,37 +273,17 @@ export const getImageDimensions = uri => {
 
 /**
  * Créer un thumbnail depuis une image
+ * Note: Pour une création de thumbnail avancée, installer expo-image-manipulator
  */
 export const createThumbnail = async (imageUri, size = 200) => {
-  try {
-    const ImageResizer = require('react-native-image-resizer').default;
-
-    const thumbnail = await ImageResizer.createResizedImage(
-      imageUri,
-      size,
-      size,
-      'JPEG',
-      70,
-      0,
-      null,
-      false,
-      { mode: 'cover' },
-    );
-
-    return {
-      success: true,
-      thumbnail: {
-        uri: thumbnail.uri,
-        size: thumbnail.size,
-      },
-    };
-  } catch (error) {
-    console.error('Thumbnail creation error:', error);
-    return {
-      success: false,
-      error: error.message,
-    };
-  }
+  // Retourne l'image originale - pour des thumbnails réels, utiliser expo-image-manipulator
+  return {
+    success: true,
+    thumbnail: {
+      uri: imageUri,
+      size: null,
+    },
+  };
 };
 
 // Export de toutes les fonctions

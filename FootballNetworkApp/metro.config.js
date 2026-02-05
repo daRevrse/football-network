@@ -1,19 +1,17 @@
-const { getDefaultConfig, mergeConfig } = require('@react-native/metro-config');
-const path = require('path');
+const { getDefaultConfig } = require('expo/metro-config');
 
-const config = {
-  resolver: {
-    alias: {
-      '@': path.resolve(__dirname, 'src'),
-      '@components': path.resolve(__dirname, 'src/components'),
-      '@screens': path.resolve(__dirname, 'src/screens'),
-      '@services': path.resolve(__dirname, 'src/services'),
-      '@utils': path.resolve(__dirname, 'src/utils'),
-      '@assets': path.resolve(__dirname, 'src/assets'),
-      '@store': path.resolve(__dirname, 'src/store'),
-      '@navigation': path.resolve(__dirname, 'src/navigation'),
-    },
-  },
+const config = getDefaultConfig(__dirname);
+
+// Add any custom configurations
+config.resolver.alias = {
+  '@': './src',
+  '@components': './src/components',
+  '@screens': './src/screens',
+  '@services': './src/services',
+  '@utils': './src/utils',
+  '@assets': './src/assets',
+  '@store': './src/store',
+  '@navigation': './src/navigation',
 };
 
-module.exports = mergeConfig(getDefaultConfig(__dirname), config);
+module.exports = config;

@@ -15,8 +15,8 @@ import {
   Dimensions,
 } from 'react-native';
 import { useSelector, useDispatch } from 'react-redux';
-import Icon from 'react-native-vector-icons/Feather';
-import LinearGradient from 'react-native-linear-gradient';
+import { Feather as Icon } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { UserApi } from '../../services/api';
 import { useAuthImproved } from '../../utils/hooks/useAuthImproved';
 import { SHADOWS } from '../../styles/theme';

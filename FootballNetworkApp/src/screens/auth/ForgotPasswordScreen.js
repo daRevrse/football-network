@@ -13,8 +13,8 @@ import {
   TextInput,
   ActivityIndicator,
 } from 'react-native';
-import Icon from 'react-native-vector-icons/Feather';
-import LinearGradient from 'react-native-linear-gradient';
+import { Feather as Icon } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 
 const THEME = {
   ACCENT: '#22C55E',

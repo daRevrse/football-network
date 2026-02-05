@@ -8,8 +8,9 @@ import {
   TouchableOpacity,
   StatusBar,
   ActivityIndicator,
+  Platform,
 } from 'react-native';
-import Icon from 'react-native-vector-icons/Feather';
+import { Feather as Icon } from '@expo/vector-icons';
 import { useSelector } from 'react-redux';
 import { NotificationsApi } from '../../services/api';
 import { DIMENSIONS } from '../../styles/theme';

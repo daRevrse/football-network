@@ -12,7 +12,7 @@ import {
   Image,
   Share,
 } from 'react-native';
-import Icon from 'react-native-vector-icons/Feather';
+import { Feather as Icon } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { matchesApi } from '../../services/api';
 import { API_CONFIG } from '../../utils/constants/api';
