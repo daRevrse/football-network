@@ -3,3 +3,4 @@ export * from './CreateTeamScreen';
 export * from './TeamDetailScreen';
 export * from './EditTeamScreen';
 export * from './TeamMembersScreen';
+export * from './JerseyAssignmentScreen';

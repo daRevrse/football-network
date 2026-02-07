@@ -29,7 +29,9 @@
       "Bash(npx expo doctor)",
       "Bash(npx expo-doctor)",
       "Bash(curl:*)",
-      "Bash(powershell -Command:*)"
+      "Bash(powershell -Command:*)",
+      "Bash(dir \"C:\\\\football-network\")",
+      "Bash(dir:*)"
     ],
     "deny": [],
     "ask": []

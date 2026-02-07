@@ -1,5 +1,9 @@
-// ====== src/screens/search/SearchScreen.js ======
-import React, { useState, useCallback, useEffect, useRef } from 'react';
+/**
+ * SearchScreen - Recherche
+ * Design Foot Connect Premium
+ */
+
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -9,27 +13,15 @@ import {
   TextInput,
   StatusBar,
   ActivityIndicator,
-  RefreshControl,
   Dimensions,
   Platform,
   Keyboard,
 } from 'react-native';
-import { useFocusEffect } from '@react-navigation/native';
 import { Feather as Icon } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { searchApi } from '../../services/api/searchApi';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-
-// Thème Premium Night
-const THEME = {
-  BG: '#0F172A',
-  SURFACE: '#1E293B',
-  INPUT_BG: '#334155',
-  TEXT: '#F8FAFC',
-  TEXT_SEC: '#94A3B8',
-  ACCENT: '#22C55E',
-  BORDER: '#334155',
-  PRIMARY: '#3B82F6',
-};
+import { COLORS, GRADIENTS, SHADOWS, RADIUS } from '../../theme/colors';
 
 const { width } = Dimensions.get('window');
 
@@ -40,11 +32,11 @@ const FilterChip = ({ label, icon, active, onPress }) => (
     onPress={onPress}
     style={[styles.filterChip, active && styles.filterChipActive]}
   >
-    <Icon name={icon} size={14} color={active ? '#000' : THEME.TEXT_SEC} />
+    <Icon name={icon} size={14} color={active ? COLORS.DARK : COLORS.WHITE} />
     <Text
       style={[
         styles.filterText,
-        active && { color: '#000', fontWeight: 'bold' },
+        active && { color: COLORS.DARK, fontWeight: 'bold' },
       ]}
     >
       {label}
@@ -53,15 +45,14 @@ const FilterChip = ({ label, icon, active, onPress }) => (
 );
 
 const ResultCard = ({ title, subtitle, icon, type, onPress, badge }) => {
-  // Déterminer la couleur en fonction du type
   const getTypeColor = () => {
     switch (type) {
       case 'player':
-        return { bg: '#3B82F620', color: '#3B82F6' };
+        return { bg: `${COLORS.INFO}20`, color: COLORS.INFO };
       case 'match':
-        return { bg: '#F59E0B20', color: '#F59E0B' };
+        return { bg: `${COLORS.WARNING}20`, color: COLORS.WARNING };
       default:
-        return { bg: '#22C55E20', color: THEME.ACCENT };
+        return { bg: `${COLORS.PRIMARY}20`, color: COLORS.PRIMARY };
     }
   };
 
@@ -89,7 +80,7 @@ const ResultCard = ({ title, subtitle, icon, type, onPress, badge }) => {
         </View>
         <Text style={styles.resultSub}>{subtitle}</Text>
       </View>
-      <Icon name="chevron-right" size={20} color={THEME.TEXT_SEC} />
+      <Icon name="chevron-right" size={20} color={COLORS.WHITE} />
     </TouchableOpacity>
   );
 };
@@ -97,7 +88,7 @@ const ResultCard = ({ title, subtitle, icon, type, onPress, badge }) => {
 const EmptyState = ({ icon, title, message }) => (
   <View style={styles.emptyState}>
     <View style={styles.emptyIconBox}>
-      <Icon name={icon} size={32} color={THEME.TEXT_SEC} />
+      <Icon name={icon} size={32} color={COLORS.PRIMARY} />
     </View>
     <Text style={styles.emptyTitle}>{title}</Text>
     <Text style={styles.emptyMessage}>{message}</Text>
@@ -122,12 +113,10 @@ export const SearchScreen = ({ navigation }) => {
 
   const searchTimeout = useRef(null);
 
-  // Charger les recherches récentes au montage
   useEffect(() => {
     loadRecentSearches();
   }, []);
 
-  // Gestion de la recherche avec Debounce
   useEffect(() => {
     if (searchTimeout.current) clearTimeout(searchTimeout.current);
 
@@ -140,7 +129,6 @@ export const SearchScreen = ({ navigation }) => {
     }
   }, [query, activeFilter, mercatoFilter]);
 
-  // Charger les recherches récentes depuis AsyncStorage
   const loadRecentSearches = async () => {
     try {
       const saved = await AsyncStorage.getItem('recentSearches');
@@ -153,13 +141,11 @@ export const SearchScreen = ({ navigation }) => {
     }
   };
 
-  // Sauvegarder une recherche dans les recherches récentes
   const saveToRecentSearches = async searchQuery => {
     try {
       const trimmedQuery = searchQuery.trim();
       if (!trimmedQuery) return;
 
-      // Éviter les doublons et limiter à 10 recherches
       const updatedSearches = [
         trimmedQuery,
         ...recentSearches.filter(s => s !== trimmedQuery),
@@ -182,16 +168,12 @@ export const SearchScreen = ({ navigation }) => {
     try {
       setLoading(true);
 
-      // Mapper le filtre actif au type d'API
       const searchType = activeFilter;
-
-      // Appel à l'API de recherche
       const response = await searchApi.search(query, searchType);
 
       if (response.success) {
         let teams = response.results.teams || [];
 
-        // Filtrer par mercato si activé
         if (mercatoFilter && teams.length > 0) {
           teams = teams.filter(team => team.mercatoActif === true);
         }
@@ -202,7 +184,6 @@ export const SearchScreen = ({ navigation }) => {
           matches: response.results.matches || [],
         });
 
-        // Sauvegarder dans les recherches récentes
         saveToRecentSearches(query);
       } else {
         setResults({ teams: [], matches: [], players: [] });
@@ -228,29 +209,32 @@ export const SearchScreen = ({ navigation }) => {
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={THEME.BG} />
+      <StatusBar barStyle="light-content" backgroundColor={COLORS.DARK} />
 
       {/* HEADER RECHERCHE */}
-      <View style={styles.header}>
+      <LinearGradient
+        colors={[COLORS.PRIMARY, COLORS.PRIMARY_DARK, COLORS.DARK]}
+        style={styles.header}
+      >
         <View style={styles.searchBarRow}>
           <TouchableOpacity
             onPress={() => navigation.goBack()}
             style={styles.backBtn}
           >
-            <Icon name="arrow-left" size={24} color={THEME.TEXT} />
+            <Icon name="arrow-left" size={24} color={COLORS.WHITE} />
           </TouchableOpacity>
 
           <View style={styles.searchInputContainer}>
             <Icon
               name="search"
               size={20}
-              color={THEME.TEXT_SEC}
-              style={{ marginRight: 10 }}
+              color={COLORS.WHITE}
+              style={{ marginRight: 10, opacity: 0.7 }}
             />
             <TextInput
               style={styles.searchInput}
               placeholder="Équipes, joueurs, matchs..."
-              placeholderTextColor={THEME.TEXT_SEC}
+              placeholderTextColor={`${COLORS.WHITE}60`}
               value={query}
               onChangeText={setQuery}
               autoFocus={false}
@@ -258,7 +242,7 @@ export const SearchScreen = ({ navigation }) => {
             />
             {query.length > 0 && (
               <TouchableOpacity onPress={handleClear}>
-                <Icon name="x" size={18} color={THEME.TEXT} />
+                <Icon name="x" size={18} color={COLORS.WHITE} />
               </TouchableOpacity>
             )}
           </View>
@@ -305,7 +289,7 @@ export const SearchScreen = ({ navigation }) => {
             )}
           </ScrollView>
         </View>
-      </View>
+      </LinearGradient>
 
       {/* CONTENU */}
       <ScrollView
@@ -315,7 +299,7 @@ export const SearchScreen = ({ navigation }) => {
       >
         {loading ? (
           <View style={{ marginTop: 50 }}>
-            <ActivityIndicator size="large" color={THEME.ACCENT} />
+            <ActivityIndicator size="large" color={COLORS.PRIMARY} />
           </View>
         ) : query.length < 3 ? (
           // VUE INITIALE (Recherches récentes)
@@ -327,9 +311,9 @@ export const SearchScreen = ({ navigation }) => {
                 style={styles.recentItem}
                 onPress={() => setQuery(item)}
               >
-                <Icon name="clock" size={16} color={THEME.TEXT_SEC} />
+                <Icon name="clock" size={16} color={COLORS.WHITE} />
                 <Text style={styles.recentText}>{item}</Text>
-                <Icon name="arrow-up-left" size={16} color={THEME.BORDER} />
+                <Icon name="arrow-up-left" size={16} color={COLORS.BORDER} />
               </TouchableOpacity>
             ))}
 
@@ -404,7 +388,6 @@ export const SearchScreen = ({ navigation }) => {
                           : null
                       }
                       onPress={() => {
-                        // Navigation vers le profil du joueur (à implémenter)
                         console.log('Navigation vers profil joueur:', player.id);
                       }}
                     />
@@ -426,7 +409,6 @@ export const SearchScreen = ({ navigation }) => {
                       type="match"
                       badge={match.status}
                       onPress={() => {
-                        // Navigation vers le détail du match
                         console.log('Navigation vers match:', match.id);
                       }}
                     />
@@ -441,15 +423,17 @@ export const SearchScreen = ({ navigation }) => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: THEME.BG },
+  container: {
+    flex: 1,
+    backgroundColor: COLORS.DARK,
+  },
 
   // Header
   header: {
-    paddingTop: Platform.OS === 'ios' ? 60 : 30,
-    backgroundColor: THEME.BG,
-    borderBottomWidth: 1,
-    borderBottomColor: THEME.BORDER,
-    paddingBottom: 12,
+    paddingTop: Platform.OS === 'ios' ? 60 : 40,
+    paddingBottom: 16,
+    borderBottomLeftRadius: RADIUS.xl,
+    borderBottomRightRadius: RADIUS.xl,
   },
   searchBarRow: {
     flexDirection: 'row',
@@ -457,22 +441,32 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     marginBottom: 16,
   },
-  backBtn: { marginRight: 16 },
+  backBtn: {
+    marginRight: 16,
+    width: 44,
+    height: 44,
+    borderRadius: RADIUS.md,
+    backgroundColor: COLORS.GLASS,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.GLASS_BORDER,
+  },
   searchInputContainer: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: THEME.INPUT_BG,
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    height: 46,
+    backgroundColor: COLORS.GLASS,
+    borderRadius: RADIUS.md,
+    paddingHorizontal: 14,
+    height: 48,
     borderWidth: 1,
-    borderColor: THEME.BORDER,
+    borderColor: COLORS.GLASS_BORDER,
   },
   searchInput: {
     flex: 1,
     fontSize: 16,
-    color: THEME.TEXT,
+    color: COLORS.WHITE,
     height: '100%',
   },
 
@@ -485,28 +479,33 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: THEME.SURFACE,
+    borderRadius: RADIUS.full,
+    backgroundColor: COLORS.GLASS,
     borderWidth: 1,
-    borderColor: THEME.BORDER,
+    borderColor: COLORS.GLASS_BORDER,
     marginRight: 8,
     gap: 6,
   },
   filterChipActive: {
-    backgroundColor: THEME.ACCENT,
-    borderColor: THEME.ACCENT,
+    backgroundColor: COLORS.PRIMARY_LIGHT,
+    borderColor: COLORS.PRIMARY_LIGHT,
   },
   filterText: {
-    color: THEME.TEXT_SEC,
+    color: COLORS.WHITE,
     fontSize: 13,
     fontWeight: '600',
   },
 
   // Content
-  content: { flex: 1 },
-  section: { paddingHorizontal: 20, paddingTop: 24 },
+  content: {
+    flex: 1,
+  },
+  section: {
+    paddingHorizontal: 20,
+    paddingTop: 24,
+  },
   sectionTitle: {
-    color: THEME.ACCENT,
+    color: COLORS.PRIMARY,
     fontSize: 12,
     fontWeight: 'bold',
     textTransform: 'uppercase',
@@ -518,13 +517,13 @@ const styles = StyleSheet.create({
   recentItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 12,
+    paddingVertical: 14,
     borderBottomWidth: 1,
-    borderBottomColor: THEME.BORDER,
+    borderBottomColor: COLORS.BORDER,
   },
   recentText: {
     flex: 1,
-    color: THEME.TEXT,
+    color: COLORS.WHITE,
     fontSize: 15,
     marginLeft: 12,
   },
@@ -536,38 +535,41 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   tag: {
-    backgroundColor: THEME.SURFACE,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 8,
+    backgroundColor: COLORS.DARK_CARD,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: RADIUS.md,
     borderWidth: 1,
-    borderColor: THEME.BORDER,
+    borderColor: COLORS.PRIMARY,
   },
   tagText: {
-    color: THEME.PRIMARY,
+    color: COLORS.PRIMARY_LIGHT,
     fontWeight: '600',
   },
 
   // Results
+  resultsContainer: {},
   resultCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: THEME.SURFACE,
-    padding: 12,
-    borderRadius: 16,
+    backgroundColor: COLORS.DARK_CARD,
+    padding: 14,
+    borderRadius: RADIUS.lg,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: THEME.BORDER,
+    borderColor: COLORS.BORDER,
   },
   iconBox: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
+    width: 48,
+    height: 48,
+    borderRadius: RADIUS.md,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 12,
+    marginRight: 14,
   },
-  resultContent: { flex: 1 },
+  resultContent: {
+    flex: 1,
+  },
   titleRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -576,41 +578,54 @@ const styles = StyleSheet.create({
   resultTitle: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: THEME.TEXT,
+    color: COLORS.WHITE,
     marginBottom: 2,
+    flex: 1,
   },
   resultSub: {
     fontSize: 13,
-    color: THEME.TEXT_SEC,
+    color: COLORS.WHITE,
+    opacity: 0.7,
   },
   badge: {
-    backgroundColor: THEME.BORDER,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-    marginRight: 10,
+    backgroundColor: COLORS.BORDER,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    marginLeft: 8,
   },
   badgeText: {
     fontSize: 10,
-    color: THEME.TEXT,
+    color: COLORS.WHITE,
+    fontWeight: '600',
   },
 
   // Empty
-  emptyState: { alignItems: 'center', paddingHorizontal: 40 },
+  emptyState: {
+    alignItems: 'center',
+    paddingHorizontal: 40,
+  },
   emptyIconBox: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: THEME.SURFACE,
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: `${COLORS.PRIMARY}15`,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 16,
+    borderWidth: 1,
+    borderColor: COLORS.PRIMARY,
   },
   emptyTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: THEME.TEXT,
+    color: COLORS.WHITE,
     marginBottom: 8,
   },
-  emptyMessage: { fontSize: 14, color: THEME.TEXT_SEC, textAlign: 'center' },
+  emptyMessage: {
+    fontSize: 14,
+    color: COLORS.WHITE,
+    textAlign: 'center',
+    opacity: 0.7,
+  },
 });

@@ -1,5 +1,9 @@
-// ====== src/screens/auth/RegisterScreen.js ======
-import React, { useState, useCallback } from 'react';
+/**
+ * RegisterScreen - Inscription multi-étapes premium
+ * Design cohérent avec le flow d'onboarding
+ */
+
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -12,165 +16,160 @@ import {
   StyleSheet,
   ImageBackground,
   ActivityIndicator,
-  TextInput,
   Image,
+  Animated,
 } from 'react-native';
 import { Feather as Icon } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAuthImproved } from '../../utils/hooks/useAuthImproved';
+import { PremiumInput, PremiumButton, StepIndicatorCompact, RoleCardHorizontal } from '../../components/premium';
+import { COLORS, GRADIENTS, SHADOWS, RADIUS } from '../../theme/colors';
 
-const THEME = {
-  ACCENT: '#22C55E', // Green 500
-  TEXT: '#F8FAFC',
-  TEXT_SEC: '#94A3B8',
-  ERROR: '#EF4444',
-};
+// Configuration des positions et niveaux
+const POSITIONS = [
+  { id: 'goalkeeper', label: 'Gardien' },
+  { id: 'defender', label: 'Défenseur' },
+  { id: 'midfielder', label: 'Milieu' },
+  { id: 'forward', label: 'Attaquant' },
+  { id: 'any', label: 'Polyvalent' },
+];
 
-// Import des composants d'étapes
-import {
-  PersonalInfoStep,
-  FootballProfileStep,
-  SummaryStep,
-  UserTypeStep,
-  TeamInfoStep,
-} from './RegisterSteps';
+const SKILL_LEVELS = [
+  { id: 'beginner', label: 'Débutant' },
+  { id: 'amateur', label: 'Amateur' },
+  { id: 'intermediate', label: 'Intermédiaire' },
+  { id: 'advanced', label: 'Avancé' },
+];
 
-export const RegisterScreen = ({ navigation }) => {
-  const [currentStep, setCurrentStep] = useState(1);
+const LICENSE_LEVELS = [
+  { id: 'trainee', label: 'Stagiaire' },
+  { id: 'regional', label: 'Régional' },
+  { id: 'national', label: 'National' },
+  { id: 'international', label: 'International' },
+];
+
+export const RegisterScreen = ({ navigation, route }) => {
+  // Récupérer le type d'utilisateur depuis RoleSelection
+  const initialUserType = route?.params?.userType || 'player';
+
+  const [currentStep, setCurrentStep] = useState(0);
   const [formData, setFormData] = useState({
-    userType: 'player', // 'player' | 'manager' | 'referee'
-
-    // Étape : Informations personnelles
+    userType: initialUserType,
     firstName: '',
     lastName: '',
     email: '',
     password: '',
     confirmPassword: '',
     phone: '',
-    birthDate: '',
-
-    // Étape : Football (Joueur)
     position: 'any',
     skillLevel: 'amateur',
-
-    // Étape : Équipe (Manager)
     teamName: '',
-
-    // Étape : Arbitre (Referee)
     licenseNumber: '',
     licenseLevel: '',
     experienceYears: '',
-
-    // Étape : Localisation
     locationCity: '',
-    locationLatitude: null,
-    locationLongitude: null,
   });
 
   const [errors, setErrors] = useState({});
   const { signup, isLoading, error: authError } = useAuthImproved();
+  const buttonScale = useRef(new Animated.Value(1)).current;
+  const progressAnim = useRef(new Animated.Value(0)).current;
 
-  // Définition dynamique des étapes selon le rôle
-  const getSteps = () => {
+  // Définir les étapes selon le rôle
+  const getSteps = useCallback(() => {
     const baseSteps = [
-      { id: 'role', label: 'Rôle', icon: 'users' },
-      { id: 'personal', label: 'Personnel', icon: 'user' },
+      { id: 'personal', label: 'Personnel' },
     ];
 
     if (formData.userType === 'manager') {
-      baseSteps.push({ id: 'team', label: 'Équipe', icon: 'shield' });
+      baseSteps.push({ id: 'team', label: 'Équipe' });
     } else if (formData.userType === 'referee') {
-      baseSteps.push({ id: 'referee', label: 'Arbitre', icon: 'flag' });
+      baseSteps.push({ id: 'referee', label: 'Licence' });
+    } else if (formData.userType === 'venue_owner') {
+      baseSteps.push({ id: 'venue', label: 'Terrain' });
     } else {
-      baseSteps.push({ id: 'football', label: 'Football', icon: 'activity' });
+      baseSteps.push({ id: 'football', label: 'Football' });
     }
 
-    baseSteps.push({ id: 'location', label: 'Localisation', icon: 'map-pin' });
-    baseSteps.push({ id: 'confirm', label: 'Fin', icon: 'check-circle' });
+    baseSteps.push({ id: 'location', label: 'Localisation' });
+    baseSteps.push({ id: 'confirm', label: 'Confirmation' });
 
     return baseSteps;
-  };
+  }, [formData.userType]);
 
   const STEPS = getSteps();
 
-  const updateField = useCallback(
-    (field, value) => {
-      setFormData(prev => ({ ...prev, [field]: value }));
-      if (errors[field]) {
-        setErrors(prev => ({ ...prev, [field]: null }));
-      }
-    },
-    [errors],
-  );
+  useEffect(() => {
+    Animated.timing(progressAnim, {
+      toValue: (currentStep + 1) / STEPS.length,
+      duration: 300,
+      useNativeDriver: false,
+    }).start();
+  }, [currentStep, STEPS.length]);
 
-  const validateStep = useCallback(
-    step => {
-      const newErrors = {};
+  const updateField = useCallback((field, value) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+    if (errors[field]) {
+      setErrors(prev => ({ ...prev, [field]: null }));
+    }
+  }, [errors]);
 
-      switch (step) {
-        case 1: // Rôle
-          break;
+  const validateStep = useCallback((step) => {
+    const newErrors = {};
 
-        case 2: // Informations personnelles
-          if (!formData.firstName?.trim()) newErrors.firstName = 'Requis';
-          if (!formData.lastName?.trim()) newErrors.lastName = 'Requis';
-          if (!formData.email?.trim()) {
-            newErrors.email = 'Requis';
-          } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
-            newErrors.email = 'Invalide';
+    switch (step) {
+      case 0: // Informations personnelles
+        if (!formData.firstName?.trim()) newErrors.firstName = 'Prénom requis';
+        if (!formData.lastName?.trim()) newErrors.lastName = 'Nom requis';
+        if (!formData.email?.trim()) {
+          newErrors.email = 'Email requis';
+        } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
+          newErrors.email = 'Email invalide';
+        }
+        if (!formData.password) {
+          newErrors.password = 'Mot de passe requis';
+        } else if (formData.password.length < 6) {
+          newErrors.password = 'Minimum 6 caractères';
+        }
+        if (formData.password !== formData.confirmPassword) {
+          newErrors.confirmPassword = 'Les mots de passe ne correspondent pas';
+        }
+        break;
+
+      case 1: // Profil spécifique
+        if (formData.userType === 'manager') {
+          if (!formData.teamName?.trim()) {
+            newErrors.teamName = "Le nom de l'équipe est requis";
+          } else if (formData.teamName.length < 3) {
+            newErrors.teamName = 'Minimum 3 caractères';
           }
-          if (!formData.password) {
-            newErrors.password = 'Requis';
-          } else if (formData.password.length < 6) {
-            newErrors.password = 'Min 6 car.';
-          }
-          if (formData.password !== formData.confirmPassword) {
-            newErrors.confirmPassword = 'Ne correspond pas';
-          }
-          break;
+        }
+        break;
 
-        case 3: // Football OU Équipe OU Arbitre
-          if (formData.userType === 'manager') {
-            if (!formData.teamName?.trim()) {
-              newErrors.teamName = "Le nom de l'équipe est requis";
-            } else if (formData.teamName.length < 3) {
-              newErrors.teamName = 'Min 3 caractères';
-            }
-          } else if (formData.userType === 'referee') {
-            // Validation pour arbitre (optionnelle)
-          } else {
-            if (!formData.position) newErrors.position = 'Requis';
-            if (!formData.skillLevel) newErrors.skillLevel = 'Requis';
-          }
-          break;
+      case 2: // Localisation
+        if (!formData.locationCity?.trim()) {
+          newErrors.locationCity = 'La ville est requise';
+        }
+        break;
+    }
 
-        case 4: // Localisation
-          if (!formData.locationCity?.trim()) {
-            newErrors.locationCity = 'La ville est requise';
-          }
-          break;
-      }
-
-      setErrors(newErrors);
-      return Object.keys(newErrors).length === 0;
-    },
-    [formData],
-  );
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  }, [formData]);
 
   const nextStep = useCallback(() => {
     if (validateStep(currentStep)) {
-      setCurrentStep(prev => Math.min(prev + 1, STEPS.length));
+      setCurrentStep(prev => Math.min(prev + 1, STEPS.length - 1));
     }
   }, [currentStep, validateStep, STEPS.length]);
 
   const previousStep = useCallback(() => {
-    setCurrentStep(prev => Math.max(prev - 1, 1));
+    setCurrentStep(prev => Math.max(prev - 1, 0));
   }, []);
 
   const handleSignup = useCallback(async () => {
-    if (!validateStep(STEPS.length)) return;
+    if (!validateStep(STEPS.length - 2)) return;
 
-    // Préparer les données
     const userData = {
       userType: formData.userType,
       firstName: formData.firstName.trim(),
@@ -187,7 +186,7 @@ export const RegisterScreen = ({ navigation }) => {
       userData.licenseNumber = formData.licenseNumber?.trim() || '';
       userData.licenseLevel = formData.licenseLevel || '';
       userData.experienceYears = formData.experienceYears ? parseInt(formData.experienceYears) : 0;
-    } else {
+    } else if (formData.userType === 'player') {
       userData.position = formData.position;
       userData.skillLevel = formData.skillLevel;
     }
@@ -202,254 +201,141 @@ export const RegisterScreen = ({ navigation }) => {
         message = 'Compte arbitre créé avec succès !';
       }
 
-      Alert.alert('Bienvenue !', message, [{ text: 'Commencer', onPress: () => {} }]);
-    } else {
-      Alert.alert('Erreur', result.error || 'Impossible de créer le compte', [
-        { text: 'OK' },
+      Alert.alert('Bienvenue sur Foot Connect !', message, [
+        { text: 'Commencer', onPress: () => {} },
       ]);
+    } else {
+      Alert.alert('Erreur', result.error || 'Impossible de créer le compte');
     }
   }, [formData, validateStep, signup, STEPS.length]);
 
-  // Rendu du contenu de l'étape
+  const handlePressIn = () => {
+    Animated.spring(buttonScale, {
+      toValue: 0.97,
+      useNativeDriver: true,
+      speed: 50,
+    }).start();
+  };
+
+  const handlePressOut = () => {
+    Animated.spring(buttonScale, {
+      toValue: 1,
+      useNativeDriver: true,
+      speed: 50,
+    }).start();
+  };
+
+  const getRoleLabel = () => {
+    switch (formData.userType) {
+      case 'manager': return 'Manager';
+      case 'referee': return 'Arbitre';
+      case 'venue_owner': return 'Propriétaire';
+      default: return 'Joueur';
+    }
+  };
+
+  const getPositionLabel = (id) => POSITIONS.find(p => p.id === id)?.label || id;
+  const getSkillLabel = (id) => SKILL_LEVELS.find(s => s.id === id)?.label || id;
+  const getLicenseLabel = (id) => LICENSE_LEVELS.find(l => l.id === id)?.label || id;
+
+  // Rendu du contenu de chaque étape
   const renderStepContent = () => {
     switch (currentStep) {
-      case 1:
-        return (
-          <View style={styles.stepContent}>
-            <Text style={styles.stepTitle}>Choisissez votre rôle</Text>
-            <Text style={styles.stepSubtitle}>
-              Sélectionnez le type de profil que vous souhaitez créer
-            </Text>
-
-            <View style={styles.roleGrid}>
-              <TouchableOpacity
-                style={[
-                  styles.roleCard,
-                  formData.userType === 'player' && styles.roleCardActive,
-                ]}
-                onPress={() => updateField('userType', 'player')}
-              >
-                <View
-                  style={[
-                    styles.roleIconBox,
-                    formData.userType === 'player' && styles.roleIconBoxActive,
-                  ]}
-                >
-                  <Icon
-                    name="user"
-                    size={28}
-                    color={formData.userType === 'player' ? THEME.ACCENT : THEME.TEXT_SEC}
-                  />
-                </View>
-                <Text
-                  style={[
-                    styles.roleLabel,
-                    formData.userType === 'player' && styles.roleLabelActive,
-                  ]}
-                >
-                  Joueur
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[
-                  styles.roleCard,
-                  formData.userType === 'manager' && styles.roleCardActive,
-                ]}
-                onPress={() => updateField('userType', 'manager')}
-              >
-                <View
-                  style={[
-                    styles.roleIconBox,
-                    formData.userType === 'manager' && styles.roleIconBoxActive,
-                  ]}
-                >
-                  <Icon
-                    name="briefcase"
-                    size={28}
-                    color={formData.userType === 'manager' ? THEME.ACCENT : THEME.TEXT_SEC}
-                  />
-                </View>
-                <Text
-                  style={[
-                    styles.roleLabel,
-                    formData.userType === 'manager' && styles.roleLabelActive,
-                  ]}
-                >
-                  Manager
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[
-                  styles.roleCard,
-                  formData.userType === 'referee' && styles.roleCardActive,
-                ]}
-                onPress={() => updateField('userType', 'referee')}
-              >
-                <View
-                  style={[
-                    styles.roleIconBox,
-                    formData.userType === 'referee' && styles.roleIconBoxActive,
-                  ]}
-                >
-                  <Icon
-                    name="flag"
-                    size={28}
-                    color={formData.userType === 'referee' ? THEME.ACCENT : THEME.TEXT_SEC}
-                  />
-                </View>
-                <Text
-                  style={[
-                    styles.roleLabel,
-                    formData.userType === 'referee' && styles.roleLabelActive,
-                  ]}
-                >
-                  Arbitre
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        );
-
-      case 2:
+      case 0: // Informations personnelles
         return (
           <View style={styles.stepContent}>
             <Text style={styles.stepTitle}>Informations personnelles</Text>
             <Text style={styles.stepSubtitle}>
-              Créez votre identité sur le terrain
+              Crée ton identité sur le terrain
             </Text>
 
             <View style={styles.inputRow}>
               <View style={styles.inputHalf}>
-                <Text style={styles.label}>Prénom *</Text>
-                <View style={styles.inputWrapper}>
-                  <Icon name="user" size={20} color={THEME.TEXT_SEC} style={styles.inputIcon} />
-                  <TextInput
-                    style={[styles.input, errors.firstName && styles.inputError]}
-                    value={formData.firstName}
-                    onChangeText={text => updateField('firstName', text)}
-                    placeholder="Jude"
-                    placeholderTextColor="#6B7280"
-                  />
-                </View>
-                {errors.firstName && (
-                  <Text style={styles.errorText}>{errors.firstName}</Text>
-                )}
+                <PremiumInput
+                  label="Prénom"
+                  placeholder="Jude"
+                  value={formData.firstName}
+                  onChangeText={text => updateField('firstName', text)}
+                  icon="user"
+                  error={errors.firstName}
+                />
               </View>
-
               <View style={styles.inputHalf}>
-                <Text style={styles.label}>Nom *</Text>
-                <View style={styles.inputWrapper}>
-                  <Icon name="user" size={20} color={THEME.TEXT_SEC} style={styles.inputIcon} />
-                  <TextInput
-                    style={[styles.input, errors.lastName && styles.inputError]}
-                    value={formData.lastName}
-                    onChangeText={text => updateField('lastName', text)}
-                    placeholder="Bellingham"
-                    placeholderTextColor="#6B7280"
-                  />
-                </View>
-                {errors.lastName && (
-                  <Text style={styles.errorText}>{errors.lastName}</Text>
-                )}
-              </View>
-            </View>
-
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Email *</Text>
-              <View style={styles.inputWrapper}>
-                <Icon name="mail" size={20} color={THEME.TEXT_SEC} style={styles.inputIcon} />
-                <TextInput
-                  style={[styles.input, errors.email && styles.inputError]}
-                  value={formData.email}
-                  onChangeText={text => updateField('email', text)}
-                  placeholder="email@exemple.com"
-                  placeholderTextColor="#6B7280"
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                />
-              </View>
-              {errors.email && <Text style={styles.errorText}>{errors.email}</Text>}
-            </View>
-
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Téléphone</Text>
-              <View style={styles.inputWrapper}>
-                <Icon name="phone" size={20} color={THEME.TEXT_SEC} style={styles.inputIcon} />
-                <TextInput
-                  style={styles.input}
-                  value={formData.phone}
-                  onChangeText={text => updateField('phone', text)}
-                  placeholder="90 90 90 90"
-                  placeholderTextColor="#6B7280"
-                  keyboardType="phone-pad"
+                <PremiumInput
+                  label="Nom"
+                  placeholder="Bellingham"
+                  value={formData.lastName}
+                  onChangeText={text => updateField('lastName', text)}
+                  icon="user"
+                  error={errors.lastName}
                 />
               </View>
             </View>
 
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Mot de passe *</Text>
-              <View style={styles.inputWrapper}>
-                <Icon name="lock" size={20} color={THEME.TEXT_SEC} style={styles.inputIcon} />
-                <TextInput
-                  style={[styles.input, errors.password && styles.inputError]}
-                  value={formData.password}
-                  onChangeText={text => updateField('password', text)}
-                  placeholder="••••••••"
-                  placeholderTextColor="#6B7280"
-                  secureTextEntry
-                  autoCapitalize="none"
-                />
-              </View>
-              {errors.password && <Text style={styles.errorText}>{errors.password}</Text>}
-            </View>
+            <PremiumInput
+              label="Email"
+              placeholder="ton@email.com"
+              value={formData.email}
+              onChangeText={text => updateField('email', text)}
+              icon="mail"
+              keyboardType="email-address"
+              autoCapitalize="none"
+              error={errors.email}
+            />
 
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Confirmer le mot de passe *</Text>
-              <View style={styles.inputWrapper}>
-                <Icon name="lock" size={20} color={THEME.TEXT_SEC} style={styles.inputIcon} />
-                <TextInput
-                  style={[styles.input, errors.confirmPassword && styles.inputError]}
-                  value={formData.confirmPassword}
-                  onChangeText={text => updateField('confirmPassword', text)}
-                  placeholder="••••••••"
-                  placeholderTextColor="#6B7280"
-                  secureTextEntry
-                  autoCapitalize="none"
-                />
-              </View>
-              {errors.confirmPassword && (
-                <Text style={styles.errorText}>{errors.confirmPassword}</Text>
-              )}
-            </View>
+            <PremiumInput
+              label="Téléphone (optionnel)"
+              placeholder="06 12 34 56 78"
+              value={formData.phone}
+              onChangeText={text => updateField('phone', text)}
+              icon="phone"
+              keyboardType="phone-pad"
+            />
+
+            <PremiumInput
+              label="Mot de passe"
+              placeholder="••••••••"
+              value={formData.password}
+              onChangeText={text => updateField('password', text)}
+              icon="lock"
+              secureTextEntry
+              error={errors.password}
+            />
+
+            <PremiumInput
+              label="Confirmer le mot de passe"
+              placeholder="••••••••"
+              value={formData.confirmPassword}
+              onChangeText={text => updateField('confirmPassword', text)}
+              icon="lock"
+              secureTextEntry
+              error={errors.confirmPassword}
+            />
           </View>
         );
 
-      case 3:
+      case 1: // Profil spécifique selon le rôle
         if (formData.userType === 'manager') {
           return (
             <View style={styles.stepContent}>
-              <Text style={styles.stepTitle}>Votre équipe</Text>
+              <Text style={styles.stepTitle}>Ton équipe</Text>
               <Text style={styles.stepSubtitle}>
-                Créez votre équipe et devenez manager
+                Crée ton équipe et deviens manager
               </Text>
 
-              <View style={styles.inputGroup}>
-                <Text style={styles.label}>Nom de l'équipe *</Text>
-                <View style={styles.inputWrapper}>
-                  <Icon name="shield" size={20} color={THEME.TEXT_SEC} style={styles.inputIcon} />
-                  <TextInput
-                    style={[styles.input, errors.teamName && styles.inputError]}
-                    value={formData.teamName}
-                    onChangeText={text => updateField('teamName', text)}
-                    placeholder="FC Paris..."
-                    placeholderTextColor="#6B7280"
-                  />
-                </View>
-                {errors.teamName && <Text style={styles.errorText}>{errors.teamName}</Text>}
-                <Text style={styles.helperText}>
-                  * Vous serez automatiquement désigné manager de cette équipe.
+              <PremiumInput
+                label="Nom de l'équipe"
+                placeholder="FC Paris United"
+                value={formData.teamName}
+                onChangeText={text => updateField('teamName', text)}
+                icon="shield"
+                error={errors.teamName}
+              />
+
+              <View style={styles.infoBox}>
+                <Icon name="info" size={16} color={COLORS.PRIMARY} />
+                <Text style={styles.infoText}>
+                  Tu seras automatiquement désigné manager de cette équipe et pourras inviter des joueurs.
                 </Text>
               </View>
             </View>
@@ -459,196 +345,170 @@ export const RegisterScreen = ({ navigation }) => {
             <View style={styles.stepContent}>
               <Text style={styles.stepTitle}>Profil arbitre</Text>
               <Text style={styles.stepSubtitle}>
-                Informations sur votre licence et expérience
+                Informations sur ta licence
               </Text>
 
-              <View style={styles.inputGroup}>
-                <Text style={styles.label}>Numéro de licence</Text>
-                <View style={styles.inputWrapper}>
-                  <Icon name="credit-card" size={20} color={THEME.TEXT_SEC} style={styles.inputIcon} />
-                  <TextInput
-                    style={styles.input}
-                    value={formData.licenseNumber}
-                    onChangeText={text => updateField('licenseNumber', text)}
-                    placeholder="REF-2024-001"
-                    placeholderTextColor="#6B7280"
-                  />
-                </View>
-              </View>
+              <PremiumInput
+                label="Numéro de licence (optionnel)"
+                placeholder="REF-2025-001"
+                value={formData.licenseNumber}
+                onChangeText={text => updateField('licenseNumber', text)}
+                icon="credit-card"
+              />
 
-              <View style={styles.inputGroup}>
-                <Text style={styles.label}>Niveau de licence</Text>
-                <View style={styles.inputWrapper}>
-                  <Icon name="award" size={20} color={THEME.TEXT_SEC} style={styles.inputIcon} />
-                  <View style={styles.pickerWrapper}>
+              <View style={styles.optionGroup}>
+                <Text style={styles.optionLabel}>Niveau de licence</Text>
+                <View style={styles.optionsGrid}>
+                  {LICENSE_LEVELS.map((level) => (
                     <TouchableOpacity
-                      style={styles.picker}
-                      onPress={() => {
-                        Alert.alert('Niveau de licence', 'Sélectionnez votre niveau', [
-                          { text: 'Stagiaire', onPress: () => updateField('licenseLevel', 'trainee') },
-                          { text: 'Régional', onPress: () => updateField('licenseLevel', 'regional') },
-                          { text: 'National', onPress: () => updateField('licenseLevel', 'national') },
-                          { text: 'International', onPress: () => updateField('licenseLevel', 'international') },
-                          { text: 'Annuler', style: 'cancel' },
-                        ]);
-                      }}
+                      key={level.id}
+                      style={[
+                        styles.optionButton,
+                        formData.licenseLevel === level.id && styles.optionButtonActive,
+                      ]}
+                      onPress={() => updateField('licenseLevel', level.id)}
                     >
-                      <Text style={styles.pickerText}>
-                        {formData.licenseLevel === 'trainee'
-                          ? 'Stagiaire'
-                          : formData.licenseLevel === 'regional'
-                          ? 'Régional'
-                          : formData.licenseLevel === 'national'
-                          ? 'National'
-                          : formData.licenseLevel === 'international'
-                          ? 'International'
-                          : 'Choisir...'}
+                      <Text
+                        style={[
+                          styles.optionButtonText,
+                          formData.licenseLevel === level.id && styles.optionButtonTextActive,
+                        ]}
+                      >
+                        {level.label}
                       </Text>
-                      <Icon name="chevron-down" size={20} color={THEME.TEXT_SEC} />
                     </TouchableOpacity>
-                  </View>
+                  ))}
                 </View>
               </View>
 
-              <View style={styles.inputGroup}>
-                <Text style={styles.label}>Années d'expérience</Text>
-                <View style={styles.inputWrapper}>
-                  <Icon name="clock" size={20} color={THEME.TEXT_SEC} style={styles.inputIcon} />
-                  <TextInput
-                    style={styles.input}
-                    value={formData.experienceYears}
-                    onChangeText={text => updateField('experienceYears', text)}
-                    placeholder="5"
-                    placeholderTextColor="#6B7280"
-                    keyboardType="number-pad"
-                  />
-                </View>
+              <PremiumInput
+                label="Années d'expérience"
+                placeholder="5"
+                value={formData.experienceYears}
+                onChangeText={text => updateField('experienceYears', text)}
+                icon="clock"
+                keyboardType="number-pad"
+              />
+            </View>
+          );
+        } else if (formData.userType === 'venue_owner') {
+          return (
+            <View style={styles.stepContent}>
+              <Text style={styles.stepTitle}>Ton terrain</Text>
+              <Text style={styles.stepSubtitle}>
+                Tu pourras ajouter les détails de ton terrain plus tard
+              </Text>
+
+              <View style={styles.infoBox}>
+                <Icon name="info" size={16} color={COLORS.PRIMARY} />
+                <Text style={styles.infoText}>
+                  Après l'inscription, tu pourras ajouter ton terrain avec photos, tarifs et disponibilités.
+                </Text>
               </View>
             </View>
           );
         } else {
+          // Player
           return (
             <View style={styles.stepContent}>
               <Text style={styles.stepTitle}>Profil joueur</Text>
               <Text style={styles.stepSubtitle}>
-                Parlez-nous de votre style de jeu
+                Parle-nous de ton style de jeu
               </Text>
 
-              <View style={styles.inputGroup}>
-                <Text style={styles.label}>Position</Text>
-                <View style={styles.inputWrapper}>
-                  <Icon name="target" size={20} color={THEME.TEXT_SEC} style={styles.inputIcon} />
-                  <View style={styles.pickerWrapper}>
+              <View style={styles.optionGroup}>
+                <Text style={styles.optionLabel}>Position</Text>
+                <View style={styles.optionsGrid}>
+                  {POSITIONS.map((pos) => (
                     <TouchableOpacity
-                      style={styles.picker}
-                      onPress={() => {
-                        Alert.alert('Position', 'Sélectionnez votre position', [
-                          { text: 'Gardien', onPress: () => updateField('position', 'goalkeeper') },
-                          { text: 'Défenseur', onPress: () => updateField('position', 'defender') },
-                          { text: 'Milieu', onPress: () => updateField('position', 'midfielder') },
-                          { text: 'Attaquant', onPress: () => updateField('position', 'forward') },
-                          { text: 'Polyvalent', onPress: () => updateField('position', 'any') },
-                          { text: 'Annuler', style: 'cancel' },
-                        ]);
-                      }}
+                      key={pos.id}
+                      style={[
+                        styles.optionButton,
+                        formData.position === pos.id && styles.optionButtonActive,
+                      ]}
+                      onPress={() => updateField('position', pos.id)}
                     >
-                      <Text style={styles.pickerText}>
-                        {formData.position === 'goalkeeper'
-                          ? 'Gardien'
-                          : formData.position === 'defender'
-                          ? 'Défenseur'
-                          : formData.position === 'midfielder'
-                          ? 'Milieu'
-                          : formData.position === 'forward'
-                          ? 'Attaquant'
-                          : 'Polyvalent'}
+                      <Text
+                        style={[
+                          styles.optionButtonText,
+                          formData.position === pos.id && styles.optionButtonTextActive,
+                        ]}
+                      >
+                        {pos.label}
                       </Text>
-                      <Icon name="chevron-down" size={20} color={THEME.TEXT_SEC} />
                     </TouchableOpacity>
-                  </View>
+                  ))}
                 </View>
               </View>
 
-              <View style={styles.inputGroup}>
-                <Text style={styles.label}>Niveau</Text>
-                <View style={styles.inputWrapper}>
-                  <Icon name="award" size={20} color={THEME.TEXT_SEC} style={styles.inputIcon} />
-                  <View style={styles.pickerWrapper}>
+              <View style={styles.optionGroup}>
+                <Text style={styles.optionLabel}>Niveau</Text>
+                <View style={styles.optionsGrid}>
+                  {SKILL_LEVELS.map((level) => (
                     <TouchableOpacity
-                      style={styles.picker}
-                      onPress={() => {
-                        Alert.alert('Niveau', 'Sélectionnez votre niveau', [
-                          { text: 'Débutant', onPress: () => updateField('skillLevel', 'beginner') },
-                          { text: 'Amateur', onPress: () => updateField('skillLevel', 'amateur') },
-                          { text: 'Intermédiaire', onPress: () => updateField('skillLevel', 'intermediate') },
-                          { text: 'Avancé', onPress: () => updateField('skillLevel', 'advanced') },
-                          { text: 'Annuler', style: 'cancel' },
-                        ]);
-                      }}
+                      key={level.id}
+                      style={[
+                        styles.optionButton,
+                        formData.skillLevel === level.id && styles.optionButtonActive,
+                      ]}
+                      onPress={() => updateField('skillLevel', level.id)}
                     >
-                      <Text style={styles.pickerText}>
-                        {formData.skillLevel === 'beginner'
-                          ? 'Débutant'
-                          : formData.skillLevel === 'amateur'
-                          ? 'Amateur'
-                          : formData.skillLevel === 'intermediate'
-                          ? 'Intermédiaire'
-                          : 'Avancé'}
+                      <Text
+                        style={[
+                          styles.optionButtonText,
+                          formData.skillLevel === level.id && styles.optionButtonTextActive,
+                        ]}
+                      >
+                        {level.label}
                       </Text>
-                      <Icon name="chevron-down" size={20} color={THEME.TEXT_SEC} />
                     </TouchableOpacity>
-                  </View>
+                  ))}
                 </View>
               </View>
             </View>
           );
         }
 
-      case 4:
+      case 2: // Localisation
         return (
           <View style={styles.stepContent}>
             <Text style={styles.stepTitle}>Localisation</Text>
             <Text style={styles.stepSubtitle}>
-              Où {formData.userType === 'manager' ? 'est basée votre équipe' : 'jouez-vous'} ?
+              Où {formData.userType === 'manager' ? 'est basée ton équipe' : 'joues-tu'} ?
             </Text>
 
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Ville *</Text>
-              <View style={styles.inputWrapper}>
-                <Icon name="map-pin" size={20} color={THEME.TEXT_SEC} style={styles.inputIcon} />
-                <TextInput
-                  style={[styles.input, errors.locationCity && styles.inputError]}
-                  value={formData.locationCity}
-                  onChangeText={text => updateField('locationCity', text)}
-                  placeholder="Paris"
-                  placeholderTextColor="#6B7280"
-                />
-              </View>
-              {errors.locationCity && (
-                <Text style={styles.errorText}>{errors.locationCity}</Text>
-              )}
+            <PremiumInput
+              label="Ville"
+              placeholder="Paris"
+              value={formData.locationCity}
+              onChangeText={text => updateField('locationCity', text)}
+              icon="map-pin"
+              error={errors.locationCity}
+            />
+
+            <View style={styles.infoBox}>
+              <Icon name="map" size={16} color={COLORS.PRIMARY} />
+              <Text style={styles.infoText}>
+                Cette information nous aide à te montrer les terrains et équipes près de chez toi.
+              </Text>
             </View>
           </View>
         );
 
-      case 5:
+      case 3: // Récapitulatif
         return (
           <View style={styles.stepContent}>
             <Text style={styles.stepTitle}>Récapitulatif</Text>
             <Text style={styles.stepSubtitle}>
-              Vérifiez vos informations avant de continuer
+              Vérifie tes informations avant de continuer
             </Text>
 
             <View style={styles.summaryCard}>
               <View style={styles.summaryRow}>
                 <Text style={styles.summaryLabel}>Type de compte</Text>
-                <Text style={styles.summaryValue}>
-                  {formData.userType === 'manager'
-                    ? 'Manager'
-                    : formData.userType === 'referee'
-                    ? 'Arbitre'
-                    : 'Joueur'}
-                </Text>
+                <View style={styles.summaryBadge}>
+                  <Text style={styles.summaryBadgeText}>{getRoleLabel()}</Text>
+                </View>
               </View>
 
               <View style={styles.summaryRow}>
@@ -663,72 +523,34 @@ export const RegisterScreen = ({ navigation }) => {
                 <Text style={styles.summaryValue}>{formData.email}</Text>
               </View>
 
-              {formData.userType === 'manager' ? (
+              {formData.userType === 'manager' && (
                 <View style={styles.summaryRow}>
                   <Text style={styles.summaryLabel}>Équipe</Text>
                   <Text style={styles.summaryValue}>{formData.teamName}</Text>
                 </View>
-              ) : formData.userType === 'referee' ? (
-                <>
-                  {formData.licenseNumber && (
-                    <View style={styles.summaryRow}>
-                      <Text style={styles.summaryLabel}>Licence</Text>
-                      <Text style={styles.summaryValue}>{formData.licenseNumber}</Text>
-                    </View>
-                  )}
-                  {formData.licenseLevel && (
-                    <View style={styles.summaryRow}>
-                      <Text style={styles.summaryLabel}>Niveau</Text>
-                      <Text style={styles.summaryValue}>
-                        {formData.licenseLevel === 'trainee'
-                          ? 'Stagiaire'
-                          : formData.licenseLevel === 'regional'
-                          ? 'Régional'
-                          : formData.licenseLevel === 'national'
-                          ? 'National'
-                          : 'International'}
-                      </Text>
-                    </View>
-                  )}
-                  {formData.experienceYears && (
-                    <View style={styles.summaryRow}>
-                      <Text style={styles.summaryLabel}>Expérience</Text>
-                      <Text style={styles.summaryValue}>{formData.experienceYears} ans</Text>
-                    </View>
-                  )}
-                </>
-              ) : (
+              )}
+
+              {formData.userType === 'player' && (
                 <>
                   <View style={styles.summaryRow}>
                     <Text style={styles.summaryLabel}>Position</Text>
-                    <Text style={styles.summaryValue}>
-                      {formData.position === 'goalkeeper'
-                        ? 'Gardien'
-                        : formData.position === 'defender'
-                        ? 'Défenseur'
-                        : formData.position === 'midfielder'
-                        ? 'Milieu'
-                        : formData.position === 'forward'
-                        ? 'Attaquant'
-                        : 'Polyvalent'}
-                    </Text>
+                    <Text style={styles.summaryValue}>{getPositionLabel(formData.position)}</Text>
                   </View>
                   <View style={styles.summaryRow}>
                     <Text style={styles.summaryLabel}>Niveau</Text>
-                    <Text style={styles.summaryValue}>
-                      {formData.skillLevel === 'beginner'
-                        ? 'Débutant'
-                        : formData.skillLevel === 'amateur'
-                        ? 'Amateur'
-                        : formData.skillLevel === 'intermediate'
-                        ? 'Intermédiaire'
-                        : 'Avancé'}
-                    </Text>
+                    <Text style={styles.summaryValue}>{getSkillLabel(formData.skillLevel)}</Text>
                   </View>
                 </>
               )}
 
-              <View style={styles.summaryRow}>
+              {formData.userType === 'referee' && formData.licenseLevel && (
+                <View style={styles.summaryRow}>
+                  <Text style={styles.summaryLabel}>Licence</Text>
+                  <Text style={styles.summaryValue}>{getLicenseLabel(formData.licenseLevel)}</Text>
+                </View>
+              )}
+
+              <View style={[styles.summaryRow, { borderBottomWidth: 0 }]}>
                 <Text style={styles.summaryLabel}>Ville</Text>
                 <Text style={styles.summaryValue}>{formData.locationCity}</Text>
               </View>
@@ -743,19 +565,24 @@ export const RegisterScreen = ({ navigation }) => {
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="#000" translucent />
+      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
 
+      {/* Background */}
       <ImageBackground
         source={{
-          uri: 'https://images.unsplash.com/photo-1517927033932-b3d18e61fb3a?q=80&w=2500&auto=format&fit=crop',
+          uri: 'https://images.unsplash.com/photo-1517927033932-b3d18e61fb3a?w=800&q=80',
         }}
         style={styles.backgroundImage}
         resizeMode="cover"
       >
         <LinearGradient
-          colors={['rgba(22, 101, 52, 0.9)', 'rgba(0, 0, 0, 0.8)', 'rgba(0, 0, 0, 0.9)']}
+          colors={[
+            'rgba(0, 123, 64, 0.85)',
+            'rgba(0, 60, 32, 0.9)',
+            'rgba(10, 10, 10, 0.98)',
+          ]}
           start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
+          end={{ x: 0.3, y: 1 }}
           style={styles.overlay}
         >
           <KeyboardAvoidingView
@@ -770,81 +597,41 @@ export const RegisterScreen = ({ navigation }) => {
             >
               {/* Header */}
               <View style={styles.header}>
-                <View style={styles.logoBox}>
-                  <Text style={styles.logoText}>FN</Text>
-                </View>
-                <Text style={styles.title}>Rejoignez le terrain</Text>
-                <Text style={styles.subtitle}>
-                  Créez votre profil et connectez-vous avec des milliers de passionnés.
-                </Text>
-              </View>
+                <TouchableOpacity
+                  style={styles.backButton}
+                  onPress={() => currentStep > 0 ? previousStep() : navigation.goBack()}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
+                  <Icon name="arrow-left" size={22} color={COLORS.WHITE} />
+                </TouchableOpacity>
 
-              {/* Step Indicator */}
-              <View style={styles.stepIndicator}>
-                {STEPS.map((step, index) => (
-                  <View key={step.id} style={styles.stepDot}>
-                    <View
-                      style={[
-                        styles.dot,
-                        index + 1 === currentStep && styles.dotActive,
-                        index + 1 < currentStep && styles.dotCompleted,
-                      ]}
-                    >
-                      {index + 1 < currentStep ? (
-                        <Icon name="check" size={12} color="#FFF" />
-                      ) : (
-                        <Text
-                          style={[
-                            styles.dotText,
-                            index + 1 === currentStep && styles.dotTextActive,
-                          ]}
-                        >
-                          {index + 1}
-                        </Text>
-                      )}
-                    </View>
-                    {index < STEPS.length - 1 && <View style={styles.stepLine} />}
+                <View style={styles.headerContent}>
+                  <Image
+                    source={require('../../assets/icon.png')}
+                    style={styles.logo}
+                    resizeMode="contain"
+                  />
+                  <Text style={styles.title}>Rejoins le terrain</Text>
+                  <View style={styles.roleBadge}>
+                    <Text style={styles.roleBadgeText}>{getRoleLabel()}</Text>
                   </View>
-                ))}
+                </View>
               </View>
 
-              {/* Card glassmorphism */}
+              {/* Progress Bar */}
+              <StepIndicatorCompact
+                totalSteps={STEPS.length}
+                currentStep={currentStep}
+                style={styles.stepIndicator}
+              />
+
+              {/* Card */}
               <View style={styles.card}>
                 {authError && (
                   <View style={styles.errorBanner}>
-                    <Icon name="alert-circle" size={16} color={THEME.ERROR} />
+                    <Icon name="alert-circle" size={16} color={COLORS.ERROR} />
                     <Text style={styles.errorBannerText}>{authError}</Text>
                   </View>
-                )}
-
-                {/* Google Sign-In à l'étape 2 (infos personnelles) */}
-                {currentStep === 2 && (
-                  <>
-                    <TouchableOpacity
-                      style={styles.googleButton}
-                      onPress={() => {
-                        Alert.alert(
-                          'Google Sign-In',
-                          'Cette fonctionnalité sera bientôt disponible. Veuillez remplir le formulaire ci-dessous.',
-                        );
-                      }}
-                      activeOpacity={0.8}
-                    >
-                      <Image
-                        source={{
-                          uri: 'https://www.google.com/images/branding/googleg/1x/googleg_standard_color_128dp.png',
-                        }}
-                        style={styles.googleLogo}
-                      />
-                      <Text style={styles.googleButtonText}>S'inscrire avec Google</Text>
-                    </TouchableOpacity>
-
-                    <View style={styles.divider}>
-                      <View style={styles.dividerLine} />
-                      <Text style={styles.dividerText}>OU</Text>
-                      <View style={styles.dividerLine} />
-                    </View>
-                  </>
                 )}
 
                 {renderStepContent()}
@@ -853,59 +640,87 @@ export const RegisterScreen = ({ navigation }) => {
               {/* Footer avec boutons */}
               <View style={styles.footer}>
                 <View style={styles.buttonRow}>
-                  {currentStep > 1 && (
+                  {currentStep > 0 && (
                     <TouchableOpacity
-                      style={styles.backButton}
+                      style={styles.prevButton}
                       onPress={previousStep}
                       disabled={isLoading}
                     >
-                      <Icon name="arrow-left" size={20} color={THEME.TEXT} />
-                      <Text style={styles.backButtonText}>Précédent</Text>
+                      <Icon name="arrow-left" size={20} color={COLORS.WHITE} />
+                      <Text style={styles.prevButtonText}>Retour</Text>
                     </TouchableOpacity>
                   )}
 
                   <View style={{ flex: 1 }} />
 
-                  {currentStep < STEPS.length ? (
-                    <TouchableOpacity
-                      style={styles.nextButton}
-                      onPress={nextStep}
-                      disabled={isLoading}
-                    >
-                      <Text style={styles.nextButtonText}>Suivant</Text>
-                      <Icon name="arrow-right" size={20} color="#FFF" />
-                    </TouchableOpacity>
-                  ) : (
-                    <TouchableOpacity
-                      style={[styles.submitButton, isLoading && styles.submitButtonDisabled]}
-                      onPress={handleSignup}
-                      disabled={isLoading}
-                    >
-                      {isLoading ? (
-                        <>
-                          <ActivityIndicator color="#FFF" size="small" />
-                          <Text style={styles.submitButtonText}>Création...</Text>
-                        </>
-                      ) : (
-                        <>
-                          <Text style={styles.submitButtonText}>
-                            {formData.userType === 'manager'
-                              ? 'Créer mon équipe'
-                              : "S'inscrire et jouer"}
-                          </Text>
-                          <Icon name="check" size={20} color="#FFF" />
-                        </>
-                      )}
-                    </TouchableOpacity>
-                  )}
+                  <Animated.View
+                    style={[
+                      styles.nextButtonWrapper,
+                      { transform: [{ scale: buttonScale }] },
+                      !isLoading && SHADOWS.glow,
+                    ]}
+                  >
+                    {currentStep < STEPS.length - 1 ? (
+                      <TouchableOpacity
+                        onPress={nextStep}
+                        onPressIn={handlePressIn}
+                        onPressOut={handlePressOut}
+                        disabled={isLoading}
+                        activeOpacity={0.9}
+                      >
+                        <LinearGradient
+                          colors={GRADIENTS.button}
+                          start={{ x: 0, y: 0 }}
+                          end={{ x: 1, y: 1 }}
+                          style={styles.nextButton}
+                        >
+                          <Text style={styles.nextButtonText}>Suivant</Text>
+                          <Icon name="arrow-right" size={20} color={COLORS.WHITE} />
+                        </LinearGradient>
+                      </TouchableOpacity>
+                    ) : (
+                      <TouchableOpacity
+                        onPress={handleSignup}
+                        onPressIn={handlePressIn}
+                        onPressOut={handlePressOut}
+                        disabled={isLoading}
+                        activeOpacity={0.9}
+                      >
+                        <LinearGradient
+                          colors={isLoading ? [COLORS.BORDER, COLORS.BORDER] : GRADIENTS.button}
+                          start={{ x: 0, y: 0 }}
+                          end={{ x: 1, y: 1 }}
+                          style={styles.nextButton}
+                        >
+                          {isLoading ? (
+                            <>
+                              <ActivityIndicator color={COLORS.WHITE} size="small" />
+                              <Text style={styles.nextButtonText}>Création...</Text>
+                            </>
+                          ) : (
+                            <>
+                              <Text style={styles.nextButtonText}>
+                                {formData.userType === 'manager' ? 'Créer mon équipe' : "S'inscrire"}
+                              </Text>
+                              <Icon name="check" size={20} color={COLORS.WHITE} />
+                            </>
+                          )}
+                        </LinearGradient>
+                      </TouchableOpacity>
+                    )}
+                  </Animated.View>
                 </View>
 
-                <View style={styles.loginLink}>
-                  <Text style={styles.loginLinkText}>Vous avez déjà un compte ? </Text>
-                  <TouchableOpacity onPress={() => navigation.navigate('Login')}>
-                    <Text style={styles.loginLinkButton}>Connectez-vous</Text>
-                  </TouchableOpacity>
-                </View>
+                <TouchableOpacity
+                  style={styles.loginLink}
+                  onPress={() => navigation.navigate('Login')}
+                  hitSlop={{ top: 10, bottom: 10, left: 20, right: 20 }}
+                >
+                  <Text style={styles.loginLinkText}>
+                    Déjà un compte ?{' '}
+                    <Text style={styles.loginLinkBold}>Se connecter</Text>
+                  </Text>
+                </TouchableOpacity>
               </View>
             </ScrollView>
           </KeyboardAvoidingView>
@@ -918,7 +733,7 @@ export const RegisterScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#000',
+    backgroundColor: COLORS.DARK,
   },
   backgroundImage: {
     flex: 1,
@@ -931,159 +746,77 @@ const styles = StyleSheet.create({
   scrollContent: {
     flexGrow: 1,
     paddingHorizontal: 24,
-    paddingTop: Platform.OS === 'ios' ? 60 : 40,
+    paddingTop: Platform.OS === 'ios' ? 60 : 50,
     paddingBottom: 40,
   },
 
-  // HEADER
+  // Header
   header: {
-    alignItems: 'center',
-    marginBottom: 24,
-  },
-  logoBox: {
-    width: 64,
-    height: 64,
-    borderRadius: 16,
-    backgroundColor: THEME.ACCENT,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 16,
-    transform: [{ rotate: '3deg' }],
-    shadowColor: THEME.ACCENT,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.3,
-    shadowRadius: 16,
-    elevation: 8,
-  },
-  logoText: {
-    fontSize: 24,
-    fontWeight: '900',
-    color: '#FFF',
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: THEME.TEXT,
-    marginBottom: 8,
-    textAlign: 'center',
-  },
-  subtitle: {
-    fontSize: 14,
-    color: '#D1D5DB',
-    textAlign: 'center',
-    paddingHorizontal: 20,
-  },
-
-  // STEP INDICATOR
-  stepIndicator: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 24,
-    paddingHorizontal: 20,
-  },
-  stepDot: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  dot: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: 'rgba(255, 255, 255, 0.3)',
-  },
-  dotActive: {
-    backgroundColor: THEME.ACCENT,
-    borderColor: THEME.ACCENT,
-  },
-  dotCompleted: {
-    backgroundColor: '#10B981',
-    borderColor: '#10B981',
-  },
-  dotText: {
-    fontSize: 12,
-    fontWeight: 'bold',
-    color: '#9CA3AF',
-  },
-  dotTextActive: {
-    color: '#FFF',
-  },
-  stepLine: {
-    width: 20,
-    height: 2,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    marginHorizontal: 4,
-  },
-
-  // CARD GLASSMORPHISM
-  card: {
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    borderRadius: 16,
-    padding: 24,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 20 },
-    shadowOpacity: 0.3,
-    shadowRadius: 30,
-    elevation: 10,
-    marginBottom: 24,
-  },
-
-  // GOOGLE BUTTON
-  googleButton: {
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
-    borderRadius: 12,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 12,
     marginBottom: 20,
   },
-  googleLogo: {
-    width: 20,
-    height: 20,
+  backButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: COLORS.GLASS,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.GLASS_BORDER,
+    marginBottom: 16,
   },
-  googleButtonText: {
-    fontSize: 15,
+  headerContent: {
+    alignItems: 'center',
+  },
+  logo: {
+    width: 60,
+    height: 60,
+    marginBottom: 12,
+  },
+  title: {
+    fontSize: 26,
+    fontWeight: '800',
+    color: COLORS.WHITE,
+    marginBottom: 8,
+    textAlign: 'center',
+    letterSpacing: -0.5,
+  },
+  roleBadge: {
+    backgroundColor: COLORS.PRIMARY,
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    borderRadius: RADIUS.full,
+  },
+  roleBadgeText: {
+    color: COLORS.WHITE,
+    fontSize: 13,
     fontWeight: '600',
-    color: THEME.TEXT,
   },
 
-  // DIVIDER
-  divider: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  // Step indicator
+  stepIndicator: {
+    marginBottom: 20,
+  },
+
+  // Card
+  card: {
+    backgroundColor: COLORS.GLASS,
+    borderRadius: RADIUS.lg,
+    padding: 24,
+    borderWidth: 1,
+    borderColor: COLORS.GLASS_BORDER,
+    ...SHADOWS.medium,
     marginBottom: 24,
   },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-  },
-  dividerText: {
-    fontSize: 12,
-    color: '#9CA3AF',
-    fontWeight: '600',
-    marginHorizontal: 16,
-  },
 
-  // ERROR BANNER
+  // Error banner
   errorBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+    backgroundColor: 'rgba(255, 61, 0, 0.1)',
     borderWidth: 1,
-    borderColor: THEME.ERROR,
-    borderRadius: 12,
+    borderColor: COLORS.ERROR,
+    borderRadius: RADIUS.md,
     padding: 12,
     marginBottom: 20,
     gap: 8,
@@ -1091,246 +824,179 @@ const styles = StyleSheet.create({
   errorBannerText: {
     flex: 1,
     fontSize: 13,
-    color: THEME.ERROR,
+    color: COLORS.ERROR,
   },
 
-  // STEP CONTENT
-  stepContent: {
-    marginBottom: 8,
-  },
+  // Step content
+  stepContent: {},
   stepTitle: {
     fontSize: 22,
-    fontWeight: 'bold',
-    color: THEME.TEXT,
+    fontWeight: '700',
+    color: COLORS.WHITE,
     marginBottom: 8,
   },
   stepSubtitle: {
     fontSize: 14,
-    color: '#D1D5DB',
+    color: COLORS.TEXT_SECONDARY,
     marginBottom: 24,
   },
 
-  // ROLE SELECTION
-  roleGrid: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  roleCard: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.2)',
-    borderWidth: 2,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
-    borderRadius: 12,
-    paddingVertical: 16,
-    paddingHorizontal: 8,
-    alignItems: 'center',
-    gap: 8,
-  },
-  roleCardActive: {
-    backgroundColor: 'rgba(34, 197, 94, 0.1)',
-    borderColor: THEME.ACCENT,
-  },
-  roleIconBox: {
-    width: 48,
-    height: 48,
-    borderRadius: 10,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  roleIconBoxActive: {
-    backgroundColor: 'rgba(34, 197, 94, 0.2)',
-  },
-  roleLabel: {
-    fontSize: 12,
-    fontWeight: 'bold',
-    color: THEME.TEXT_SEC,
-  },
-  roleLabelActive: {
-    color: THEME.ACCENT,
-  },
-
-  // INPUTS
-  inputGroup: {
-    marginBottom: 20,
-  },
+  // Inputs
   inputRow: {
     flexDirection: 'row',
     gap: 12,
-    marginBottom: 20,
   },
   inputHalf: {
     flex: 1,
   },
-  label: {
+
+  // Option groups
+  optionGroup: {
+    marginBottom: 24,
+  },
+  optionLabel: {
     fontSize: 14,
     fontWeight: '500',
-    color: '#E5E7EB',
-    marginBottom: 8,
+    color: COLORS.TEXT_SECONDARY,
+    marginBottom: 12,
   },
-  inputWrapper: {
-    position: 'relative',
-  },
-  inputIcon: {
-    position: 'absolute',
-    left: 12,
-    top: 14,
-    zIndex: 1,
-  },
-  input: {
-    backgroundColor: 'rgba(0, 0, 0, 0.2)',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
-    borderRadius: 12,
-    paddingLeft: 44,
-    paddingRight: 12,
-    paddingVertical: 12,
-    fontSize: 16,
-    color: THEME.TEXT,
-  },
-  inputError: {
-    borderColor: THEME.ERROR,
-  },
-  errorText: {
-    fontSize: 12,
-    color: THEME.ERROR,
-    marginTop: 6,
-  },
-  helperText: {
-    fontSize: 12,
-    color: '#9CA3AF',
-    marginTop: 6,
-  },
-
-  // PICKER
-  pickerWrapper: {
-    paddingLeft: 44,
-  },
-  picker: {
-    backgroundColor: 'rgba(0, 0, 0, 0.2)',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
+  optionsGrid: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 10,
   },
-  pickerText: {
-    fontSize: 16,
-    color: THEME.TEXT,
+  optionButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: RADIUS.md,
+    backgroundColor: COLORS.GLASS,
+    borderWidth: 1,
+    borderColor: COLORS.GLASS_BORDER,
+  },
+  optionButtonActive: {
+    backgroundColor: 'rgba(0, 123, 64, 0.2)',
+    borderColor: COLORS.PRIMARY,
+  },
+  optionButtonText: {
+    fontSize: 14,
+    color: COLORS.TEXT_SECONDARY,
+    fontWeight: '500',
+  },
+  optionButtonTextActive: {
+    color: COLORS.PRIMARY,
+    fontWeight: '600',
   },
 
-  // SUMMARY
+  // Info box
+  infoBox: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: 'rgba(0, 123, 64, 0.1)',
+    borderRadius: RADIUS.md,
+    padding: 14,
+    gap: 10,
+    marginTop: 8,
+  },
+  infoText: {
+    flex: 1,
+    fontSize: 13,
+    color: COLORS.TEXT_SECONDARY,
+    lineHeight: 18,
+  },
+
+  // Summary
   summaryCard: {
-    backgroundColor: 'rgba(0, 0, 0, 0.2)',
-    borderRadius: 12,
+    backgroundColor: COLORS.GLASS_LIGHT,
+    borderRadius: RADIUS.md,
     padding: 16,
-    gap: 16,
   },
   summaryRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingBottom: 12,
+    paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
+    borderBottomColor: COLORS.BORDER,
   },
   summaryLabel: {
     fontSize: 14,
-    color: '#9CA3AF',
+    color: COLORS.TEXT_MUTED,
   },
   summaryValue: {
     fontSize: 14,
     fontWeight: '600',
-    color: THEME.TEXT,
+    color: COLORS.WHITE,
+  },
+  summaryBadge: {
+    backgroundColor: COLORS.PRIMARY,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: RADIUS.full,
+  },
+  summaryBadgeText: {
+    color: COLORS.WHITE,
+    fontSize: 12,
+    fontWeight: '600',
   },
 
-  // FOOTER BUTTONS
-  footer: {
-    marginTop: 8,
-  },
+  // Footer
+  footer: {},
   buttonRow: {
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 20,
   },
-  backButton: {
+  prevButton: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
     paddingHorizontal: 20,
-    paddingVertical: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    borderRadius: 12,
+    paddingVertical: 14,
+    backgroundColor: COLORS.GLASS,
+    borderRadius: RADIUS.md,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
+    borderColor: COLORS.GLASS_BORDER,
   },
-  backButtonText: {
-    fontSize: 16,
+  prevButtonText: {
+    fontSize: 15,
     fontWeight: '600',
-    color: THEME.TEXT,
+    color: COLORS.WHITE,
+  },
+  nextButtonWrapper: {
+    borderRadius: RADIUS.md,
+    overflow: 'hidden',
   },
   nextButton: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 8,
-    paddingHorizontal: 24,
-    paddingVertical: 14,
-    backgroundColor: THEME.ACCENT,
-    borderRadius: 12,
-    shadowColor: THEME.ACCENT,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
+    paddingHorizontal: 28,
+    paddingVertical: 16,
+    borderRadius: RADIUS.md,
   },
   nextButtonText: {
     fontSize: 16,
-    fontWeight: 'bold',
-    color: '#FFF',
-  },
-  submitButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingHorizontal: 24,
-    paddingVertical: 14,
-    backgroundColor: '#16A34A',
-    borderRadius: 12,
-    shadowColor: '#16A34A',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  submitButtonDisabled: {
-    opacity: 0.5,
-  },
-  submitButtonText: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#FFF',
+    fontWeight: '600',
+    color: COLORS.WHITE,
+    letterSpacing: 0.5,
   },
 
-  // LOGIN LINK
+  // Login link
   loginLink: {
-    flexDirection: 'row',
-    justifyContent: 'center',
     alignItems: 'center',
-    paddingTop: 20,
+    paddingTop: 16,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 255, 255, 0.1)',
+    borderTopColor: COLORS.BORDER,
   },
   loginLinkText: {
     fontSize: 14,
-    color: '#9CA3AF',
+    color: COLORS.TEXT_MUTED,
   },
-  loginLinkButton: {
-    fontSize: 14,
-    color: THEME.ACCENT,
-    fontWeight: 'bold',
+  loginLinkBold: {
+    color: COLORS.PRIMARY,
+    fontWeight: '600',
   },
 });
+
+export default RegisterScreen;

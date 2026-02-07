@@ -678,6 +678,139 @@ class TeamsApiService {
       return this.handleApiError(error);
     }
   }
+
+  // ==================== DOSSARDS ET ROSTER ====================
+
+  /**
+   * Récupérer le roster complet avec dossards
+   */
+  async getTeamRoster(teamId) {
+    try {
+      const token = await SecureStorage.getToken();
+      if (!token) {
+        return { success: false, error: 'Non authentifié' };
+      }
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), this.timeout);
+
+      const response = await fetch(`${this.baseURL}/teams/${teamId}/roster`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        throw {
+          response: { status: response.status, data: await response.json() },
+        };
+      }
+
+      const data = await response.json();
+
+      return {
+        success: true,
+        data: data,
+      };
+    } catch (error) {
+      return this.handleApiError(error);
+    }
+  }
+
+  /**
+   * Assigner un dossard à un joueur
+   */
+  async assignJersey(teamId, userId, jerseyNumber) {
+    try {
+      const token = await SecureStorage.getToken();
+      if (!token) {
+        return { success: false, error: 'Non authentifié' };
+      }
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), this.timeout);
+
+      const response = await fetch(
+        `${this.baseURL}/teams/${teamId}/members/${userId}/jersey`,
+        {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ jerseyNumber }),
+          signal: controller.signal,
+        },
+      );
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        throw {
+          response: { status: response.status, data: await response.json() },
+        };
+      }
+
+      const data = await response.json();
+
+      return {
+        success: true,
+        data: data,
+      };
+    } catch (error) {
+      return this.handleApiError(error);
+    }
+  }
+
+  /**
+   * Désigner/retirer le capitaine
+   */
+  async setCaptain(teamId, userId, isCaptain) {
+    try {
+      const token = await SecureStorage.getToken();
+      if (!token) {
+        return { success: false, error: 'Non authentifié' };
+      }
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), this.timeout);
+
+      const response = await fetch(
+        `${this.baseURL}/teams/${teamId}/members/${userId}/captain`,
+        {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ isCaptain }),
+          signal: controller.signal,
+        },
+      );
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        throw {
+          response: { status: response.status, data: await response.json() },
+        };
+      }
+
+      const data = await response.json();
+
+      return {
+        success: true,
+        data: data,
+      };
+    } catch (error) {
+      return this.handleApiError(error);
+    }
+  }
 }
 
 // Export une instance unique (singleton)

@@ -1,4 +1,8 @@
-// ====== src/screens/dashboard/RefereeDashboardScreen.js ======
+/**
+ * RefereeDashboardScreen - Dashboard Arbitre Premium
+ * Design Foot Connect avec textes blancs
+ */
+
 import React, { useRef, useState, useCallback } from 'react';
 import {
   View,
@@ -13,6 +17,7 @@ import {
   Dimensions,
   Platform,
   ActivityIndicator,
+  Image,
 } from 'react-native';
 import { useSelector, useDispatch } from 'react-redux';
 import { Feather as Icon } from '@expo/vector-icons';
@@ -20,51 +25,22 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { logout } from '../../store/slices/authSlice';
 import { useFocusEffect } from '@react-navigation/native';
 import { matchesApi } from '../../services/api/matchesApi';
+import { COLORS, GRADIENTS, SHADOWS, RADIUS } from '../../theme/colors';
 
 const { width } = Dimensions.get('window');
-const HEADER_MAX_HEIGHT = 260;
+const HEADER_MAX_HEIGHT = 280;
 const HEADER_MIN_HEIGHT = Platform.OS === 'ios' ? 110 : 90;
 const HEADER_SCROLL_DISTANCE = HEADER_MAX_HEIGHT - HEADER_MIN_HEIGHT;
 
-const THEME = {
-  BG: '#0F172A',
-  SURFACE: '#1E293B',
-  SURFACE_LIGHT: '#334155',
-  TEXT: '#F8FAFC',
-  TEXT_SEC: '#94A3B8',
-  ACCENT: '#22C55E',
-  BORDER: '#334155',
-  WARNING: '#F59E0B',
-  INFO: '#3B82F6',
-};
-
-// Composant StatCard
-const StatCard = ({ icon, value, label, color, onPress }) => (
-  <TouchableOpacity
-    style={[styles.statCard, { borderColor: color }]}
-    onPress={onPress}
-    activeOpacity={0.7}
-  >
-    <View style={[styles.statIconBox, { backgroundColor: `${color}20` }]}>
-      <Icon name={icon} size={20} color={color} />
-    </View>
-    <View>
-      <Text style={styles.statValue}>{value}</Text>
-      <Text style={styles.statLabel}>{label}</Text>
-    </View>
-    <View style={[styles.statGlow, { backgroundColor: color }]} />
-  </TouchableOpacity>
-);
-
 // Composant QuickAction pour arbitre
-const QuickAction = ({ icon, label, onPress, color = THEME.ACCENT }) => (
+const QuickAction = ({ icon, label, onPress, color = COLORS.ROLE_REFEREE }) => (
   <TouchableOpacity
     style={styles.quickAction}
     onPress={onPress}
     activeOpacity={0.7}
   >
-    <View style={[styles.quickActionIcon, { backgroundColor: `${color}20` }]}>
-      <Icon name={icon} size={24} color={color} />
+    <View style={[styles.quickActionIcon, { backgroundColor: `${color}15`, borderColor: color }]}>
+      <Icon name={icon} size={22} color={color} />
     </View>
     <Text style={styles.quickActionLabel}>{label}</Text>
   </TouchableOpacity>
@@ -75,15 +51,15 @@ const StatusBadge = ({ status }) => {
   const getStatusStyle = () => {
     switch (status) {
       case 'pending':
-        return { bg: '#F59E0B20', color: '#F59E0B', label: 'En attente' };
+        return { bg: `${COLORS.WARNING}20`, color: COLORS.WARNING, label: 'En attente' };
       case 'confirmed':
-        return { bg: '#3B82F620', color: '#3B82F6', label: 'Confirmé' };
+        return { bg: `${COLORS.INFO}20`, color: COLORS.INFO, label: 'Confirmé' };
       case 'in_progress':
-        return { bg: '#22C55E20', color: '#22C55E', label: 'En cours' };
+        return { bg: `${COLORS.SUCCESS}20`, color: COLORS.SUCCESS, label: 'En cours' };
       case 'completed':
-        return { bg: '#64748B20', color: '#64748B', label: 'Terminé' };
+        return { bg: `${COLORS.TEXT_MUTED}20`, color: COLORS.TEXT_MUTED, label: 'Terminé' };
       default:
-        return { bg: '#64748B20', color: '#64748B', label: status };
+        return { bg: `${COLORS.TEXT_MUTED}20`, color: COLORS.TEXT_MUTED, label: status };
     }
   };
 
@@ -204,12 +180,12 @@ export const RefereeDashboardScreen = ({ navigation }) => {
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={THEME.BG} />
+      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
 
       {/* HEADER DYNAMIQUE */}
       <Animated.View style={[styles.header, { height: headerHeight }]}>
         <LinearGradient
-          colors={['#F59E0B', '#0F172A']} // Orange/Amber vers Slate 900 pour arbitre
+          colors={[COLORS.ROLE_REFEREE, '#5E1A7B', COLORS.DARK]}
           start={{ x: 0, y: 0 }}
           end={{ x: 0, y: 1 }}
           style={styles.headerBackground}
@@ -222,23 +198,30 @@ export const RefereeDashboardScreen = ({ navigation }) => {
         <View style={styles.headerContent}>
           {/* Top Bar */}
           <View style={styles.topBar}>
-            <Text style={styles.logoText}>
-              FOOT<Text style={{ color: THEME.ACCENT }}>NETWORK</Text>
-            </Text>
+            <View style={styles.logoRow}>
+              <Image
+                source={require('../../assets/icon.png')}
+                style={styles.logoImage}
+                resizeMode="contain"
+              />
+              <Text style={styles.logoText}>
+                FOOT <Text style={{ color: COLORS.PRIMARY_LIGHT }}>CONNECT</Text>
+              </Text>
+            </View>
 
             <View style={styles.headerActions}>
               <TouchableOpacity
                 style={styles.iconBtn}
                 onPress={() => navigation.navigate('Profile', { screen: 'Notifications' })}
               >
-                <Icon name="bell" size={22} color={THEME.TEXT} />
+                <Icon name="bell" size={22} color={COLORS.WHITE} />
                 {stats.toValidate > 0 && <View style={styles.badge} />}
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.iconBtn}
                 onPress={() => navigation.navigate('Profile', { screen: 'Settings' })}
               >
-                <Icon name="settings" size={22} color={THEME.TEXT} />
+                <Icon name="settings" size={22} color={COLORS.WHITE} />
               </TouchableOpacity>
             </View>
           </View>
@@ -254,7 +237,10 @@ export const RefereeDashboardScreen = ({ navigation }) => {
             <View>
               <Text style={styles.greeting}>Bienvenue,</Text>
               <Text style={styles.userName}>{user?.firstName || 'Arbitre'}</Text>
-              <Text style={styles.userRole}>Arbitre</Text>
+              <View style={styles.roleBadge}>
+                <Icon name="flag" size={12} color={COLORS.ROLE_REFEREE} />
+                <Text style={styles.userRole}>Arbitre</Text>
+              </View>
             </View>
           </Animated.View>
 
@@ -296,7 +282,7 @@ export const RefereeDashboardScreen = ({ navigation }) => {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            tintColor={THEME.ACCENT}
+            tintColor={COLORS.ROLE_REFEREE}
             progressViewOffset={HEADER_MAX_HEIGHT}
           />
         }
@@ -307,59 +293,26 @@ export const RefereeDashboardScreen = ({ navigation }) => {
           <QuickAction
             icon="calendar"
             label="Mes Matchs"
-            color={THEME.WARNING}
+            color={COLORS.ROLE_REFEREE}
             onPress={() => navigation.navigate('Matches')}
           />
           <QuickAction
             icon="check-square"
             label="À Valider"
-            color={THEME.INFO}
+            color={COLORS.INFO}
             onPress={() => navigation.navigate('Matches')}
           />
           <QuickAction
             icon="bar-chart-2"
-            label="Statistiques"
-            color={THEME.ACCENT}
+            label="Stats"
+            color={COLORS.SUCCESS}
             onPress={() => navigation.navigate('Profile')}
           />
           <QuickAction
             icon="user"
             label="Profil"
-            color="#8B5CF6"
+            color={COLORS.WARNING}
             onPress={() => navigation.navigate('Profile')}
-          />
-        </View>
-
-        {/* Stats Grid */}
-        <Text style={styles.sectionTitle}>Vue d'ensemble</Text>
-        <View style={styles.statsGrid}>
-          <StatCard
-            icon="calendar"
-            value={stats.totalMatches}
-            label="Matchs assignés"
-            color={THEME.WARNING}
-            onPress={() => navigation.navigate('Matches')}
-          />
-          <StatCard
-            icon="clock"
-            value={stats.upcomingMatches}
-            label="À venir"
-            color={THEME.INFO}
-            onPress={() => navigation.navigate('Matches')}
-          />
-          <StatCard
-            icon="check-circle"
-            value={stats.completedMatches}
-            label="Complétés"
-            color={THEME.ACCENT}
-            onPress={() => navigation.navigate('Matches')}
-          />
-          <StatCard
-            icon="alert-circle"
-            value={stats.toValidate}
-            label="À valider"
-            color="#EF4444"
-            onPress={() => navigation.navigate('Matches')}
           />
         </View>
 
@@ -373,11 +326,11 @@ export const RefereeDashboardScreen = ({ navigation }) => {
 
         {loading && !refreshing ? (
           <View style={styles.loadingContainer}>
-            <ActivityIndicator color={THEME.ACCENT} size="large" />
+            <ActivityIndicator color={COLORS.ROLE_REFEREE} size="large" />
           </View>
         ) : upcomingMatches.length === 0 ? (
           <View style={styles.emptyCard}>
-            <Icon name="calendar" size={32} color={THEME.TEXT_SEC} />
+            <Icon name="calendar" size={32} color={COLORS.TEXT_MUTED} />
             <Text style={styles.emptyText}>Aucun match à venir</Text>
           </View>
         ) : (
@@ -393,7 +346,7 @@ export const RefereeDashboardScreen = ({ navigation }) => {
                     {formatDate(match.matchDate).split(' ')[0]}
                   </Text>
                   <Text style={styles.matchMonth}>
-                    {formatDate(match.matchDate).split(' ')[1].toUpperCase()}
+                    {formatDate(match.matchDate).split(' ')[1]?.toUpperCase() || ''}
                   </Text>
                 </View>
                 <View style={styles.matchInfo}>
@@ -402,15 +355,15 @@ export const RefereeDashboardScreen = ({ navigation }) => {
                     {match.awayTeam?.name || 'Équipe B'}
                   </Text>
                   <View style={styles.matchMetaRow}>
-                    <Icon name="map-pin" size={12} color={THEME.TEXT_SEC} />
+                    <Icon name="map-pin" size={12} color={COLORS.WHITE} style={{ opacity: 0.7 }} />
                     <Text style={styles.matchMeta} numberOfLines={1}>
                       {match.location?.name || 'Lieu non défini'}
                     </Text>
                     <Icon
                       name="clock"
                       size={12}
-                      color={THEME.TEXT_SEC}
-                      style={{ marginLeft: 8 }}
+                      color={COLORS.WHITE}
+                      style={{ marginLeft: 8, opacity: 0.7 }}
                     />
                     <Text style={styles.matchMeta}>
                       {formatTime(match.matchDate)}
@@ -432,7 +385,7 @@ export const RefereeDashboardScreen = ({ navigation }) => {
               onPress={() => navigation.navigate('Matches')}
             >
               <View style={styles.validateIcon}>
-                <Icon name="alert-circle" size={24} color="#EF4444" />
+                <Icon name="alert-circle" size={24} color={COLORS.ERROR} />
               </View>
               <View style={styles.validateContent}>
                 <Text style={styles.validateTitle}>
@@ -443,21 +396,21 @@ export const RefereeDashboardScreen = ({ navigation }) => {
                   Des matchs terminés nécessitent votre validation
                 </Text>
               </View>
-              <Icon name="chevron-right" size={20} color={THEME.TEXT_SEC} />
+              <Icon name="chevron-right" size={20} color={COLORS.WHITE} />
             </TouchableOpacity>
           </>
         )}
 
-        <View style={{ height: 40 }} />
+        <View style={{ height: 100 }} />
       </Animated.ScrollView>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: THEME.BG },
+  container: { flex: 1, backgroundColor: COLORS.DARK },
   scrollView: { flex: 1 },
-  scrollContent: { paddingTop: 8, paddingHorizontal: 16, paddingBottom: 20 },
+  scrollContent: { paddingTop: 20, paddingHorizontal: 20, paddingBottom: 20 },
 
   // HEADER
   header: {
@@ -474,6 +427,8 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
+    borderBottomLeftRadius: 30,
+    borderBottomRightRadius: 30,
   },
   headerTexture: {
     position: 'absolute',
@@ -485,7 +440,7 @@ const styles = StyleSheet.create({
   },
   headerContent: {
     flex: 1,
-    paddingTop: Platform.OS === 'ios' ? 50 : 30,
+    paddingTop: Platform.OS === 'ios' ? 60 : 40,
     paddingHorizontal: 20,
   },
   topBar: {
@@ -494,10 +449,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 20,
   },
+  logoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  logoImage: {
+    width: 32,
+    height: 32,
+    marginRight: 8,
+  },
   logoText: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: THEME.TEXT,
+    fontSize: 16,
+    fontWeight: '800',
+    color: COLORS.WHITE,
     letterSpacing: 1,
   },
   headerActions: {
@@ -505,14 +469,14 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   iconBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.1)',
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: COLORS.GLASS,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
+    borderColor: COLORS.GLASS_BORDER,
   },
   badge: {
     position: 'absolute',
@@ -521,7 +485,7 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#EF4444',
+    backgroundColor: COLORS.ERROR,
   },
   userInfo: {
     flexDirection: 'row',
@@ -532,9 +496,9 @@ const styles = StyleSheet.create({
     width: 60,
     height: 60,
     borderRadius: 30,
-    backgroundColor: 'rgba(255,255,255,0.15)',
+    backgroundColor: COLORS.GLASS,
     borderWidth: 2,
-    borderColor: THEME.WARNING,
+    borderColor: COLORS.ROLE_REFEREE,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 16,
@@ -542,55 +506,69 @@ const styles = StyleSheet.create({
   avatarText: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: THEME.TEXT,
+    color: COLORS.WHITE,
   },
   greeting: {
     fontSize: 14,
-    color: 'rgba(255,255,255,0.7)',
+    color: COLORS.WHITE,
+    opacity: 0.8,
     marginBottom: 2,
   },
   userName: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: THEME.TEXT,
+    color: COLORS.WHITE,
+  },
+  roleBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: `${COLORS.ROLE_REFEREE}30`,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: RADIUS.full,
+    marginTop: 4,
+    gap: 4,
   },
   userRole: {
     fontSize: 12,
-    color: THEME.WARNING,
-    marginTop: 2,
+    color: COLORS.WHITE,
+    fontWeight: '600',
   },
   quickStatsRow: {
     flexDirection: 'row',
     justifyContent: 'space-around',
-    backgroundColor: 'rgba(0,0,0,0.2)',
-    borderRadius: 16,
+    backgroundColor: COLORS.GLASS,
+    borderRadius: RADIUS.lg,
     padding: 16,
+    borderWidth: 1,
+    borderColor: COLORS.GLASS_BORDER,
   },
   quickStatItem: {
     alignItems: 'center',
   },
   quickStatNumber: {
     fontSize: 24,
-    fontWeight: 'bold',
-    color: THEME.TEXT,
+    fontWeight: '800',
+    color: COLORS.WHITE,
   },
   quickStatLabel: {
     fontSize: 12,
-    color: 'rgba(255,255,255,0.6)',
+    color: COLORS.WHITE,
+    opacity: 0.8,
     marginTop: 4,
   },
   verticalDivider: {
     width: 1,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    backgroundColor: COLORS.GLASS_BORDER,
   },
 
   // QUICK ACTIONS
   sectionTitle: {
     fontSize: 18,
-    fontWeight: 'bold',
-    color: THEME.TEXT,
+    fontWeight: '700',
+    color: COLORS.WHITE,
     marginTop: 24,
-    marginBottom: 12,
+    marginBottom: 16,
   },
   quickActionsContainer: {
     flexDirection: 'row',
@@ -599,72 +577,23 @@ const styles = StyleSheet.create({
   },
   quickAction: {
     flex: 1,
-    aspectRatio: 1,
-    backgroundColor: THEME.SURFACE,
-    borderRadius: 16,
-    padding: 12,
+    alignItems: 'center',
+  },
+  quickActionIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: 18,
+    backgroundColor: COLORS.DARK_CARD,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: THEME.BORDER,
-  },
-  quickActionIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    justifyContent: 'center',
-    alignItems: 'center',
     marginBottom: 8,
   },
   quickActionLabel: {
     fontSize: 11,
     fontWeight: '600',
-    color: THEME.TEXT,
+    color: COLORS.WHITE,
     textAlign: 'center',
-  },
-
-  // STATS GRID
-  statsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-  },
-  statCard: {
-    flex: 1,
-    minWidth: '47%',
-    backgroundColor: THEME.SURFACE,
-    borderRadius: 16,
-    padding: 16,
-    borderWidth: 1,
-    position: 'relative',
-    overflow: 'hidden',
-  },
-  statIconBox: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  statValue: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: THEME.TEXT,
-    marginBottom: 4,
-  },
-  statLabel: {
-    fontSize: 12,
-    color: THEME.TEXT_SEC,
-  },
-  statGlow: {
-    position: 'absolute',
-    bottom: -10,
-    right: -10,
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    opacity: 0.1,
   },
 
   // SECTION HEADER
@@ -673,11 +602,11 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginTop: 24,
-    marginBottom: 12,
+    marginBottom: 16,
   },
   seeAllText: {
     fontSize: 14,
-    color: THEME.WARNING,
+    color: COLORS.ROLE_REFEREE,
     fontWeight: '600',
   },
 
@@ -689,26 +618,27 @@ const styles = StyleSheet.create({
 
   // EMPTY CARD
   emptyCard: {
-    backgroundColor: THEME.SURFACE,
-    borderRadius: 16,
+    backgroundColor: COLORS.DARK_CARD,
+    borderRadius: RADIUS.lg,
     padding: 32,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: THEME.BORDER,
+    borderColor: COLORS.BORDER,
   },
   emptyText: {
     fontSize: 14,
-    color: THEME.TEXT_SEC,
+    color: COLORS.WHITE,
+    opacity: 0.7,
     marginTop: 12,
   },
 
   // MATCH CARD
   matchCard: {
-    backgroundColor: THEME.SURFACE,
-    borderRadius: 16,
+    backgroundColor: COLORS.DARK_CARD,
+    borderRadius: RADIUS.lg,
     padding: 16,
     borderWidth: 1,
-    borderColor: THEME.BORDER,
+    borderColor: COLORS.BORDER,
     marginBottom: 12,
   },
   matchHeader: {
@@ -718,8 +648,8 @@ const styles = StyleSheet.create({
   matchDateBox: {
     width: 56,
     height: 56,
-    borderRadius: 12,
-    backgroundColor: THEME.WARNING,
+    borderRadius: RADIUS.md,
+    backgroundColor: COLORS.ROLE_REFEREE,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
@@ -727,11 +657,11 @@ const styles = StyleSheet.create({
   matchDay: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#000',
+    color: COLORS.WHITE,
   },
   matchMonth: {
     fontSize: 10,
-    color: '#000',
+    color: COLORS.WHITE,
     fontWeight: '600',
   },
   matchInfo: {
@@ -741,7 +671,7 @@ const styles = StyleSheet.create({
   matchTeams: {
     fontSize: 15,
     fontWeight: '600',
-    color: THEME.TEXT,
+    color: COLORS.WHITE,
     marginBottom: 6,
   },
   matchMetaRow: {
@@ -750,7 +680,8 @@ const styles = StyleSheet.create({
   },
   matchMeta: {
     fontSize: 12,
-    color: THEME.TEXT_SEC,
+    color: COLORS.WHITE,
+    opacity: 0.7,
     marginLeft: 4,
   },
 
@@ -758,7 +689,7 @@ const styles = StyleSheet.create({
   statusBadge: {
     paddingHorizontal: 10,
     paddingVertical: 4,
-    borderRadius: 12,
+    borderRadius: RADIUS.md,
     borderWidth: 1,
   },
   statusText: {
@@ -770,17 +701,17 @@ const styles = StyleSheet.create({
   validateCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: THEME.SURFACE,
-    borderRadius: 16,
+    backgroundColor: COLORS.DARK_CARD,
+    borderRadius: RADIUS.lg,
     padding: 16,
     borderWidth: 1,
-    borderColor: THEME.BORDER,
+    borderColor: COLORS.BORDER,
   },
   validateIcon: {
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: '#EF444420',
+    backgroundColor: `${COLORS.ERROR}15`,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
@@ -791,11 +722,14 @@ const styles = StyleSheet.create({
   validateTitle: {
     fontSize: 15,
     fontWeight: '600',
-    color: THEME.TEXT,
+    color: COLORS.WHITE,
     marginBottom: 4,
   },
   validateDesc: {
     fontSize: 12,
-    color: THEME.TEXT_SEC,
+    color: COLORS.WHITE,
+    opacity: 0.7,
   },
 });
+
+export default RefereeDashboardScreen;

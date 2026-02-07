@@ -68,6 +68,7 @@ import {
 } from "./components/routes/RoleProtectedRoute";
 import PlayerSearch from "./components/teams/PlayerSearch";
 import VerifyEmail from "./components/auth/VerifyEmail";
+import RoleSelectionPage from "./components/onboarding/RoleSelectionPage";
 
 // --- NOUVEAU COMPOSANT : Gestion intelligente de la racine "/" ---
 const RootRoute = () => {
@@ -209,6 +210,14 @@ function App() {
                   element={
                     <PublicRoute>
                       <Login />
+                    </PublicRoute>
+                  }
+                />
+                <Route
+                  path="/get-started"
+                  element={
+                    <PublicRoute>
+                      <RoleSelectionPage />
                     </PublicRoute>
                   }
                 />

@@ -214,6 +214,149 @@ router.get("/partners", async (req, res) => {
 });
 
 /**
+ * GET /api/venues/available
+ * Liste des terrains disponibles à une date/heure donnée
+ * Utilisé lors de la création de match pour proposer uniquement les terrains libres
+ */
+router.get(
+  "/available",
+  [
+    query("date").isISO8601().withMessage("Date valide requise (YYYY-MM-DD)"),
+    query("startTime").matches(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/).withMessage("Heure de début requise (HH:MM)"),
+    query("endTime").optional().matches(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/),
+    query("duration").optional().isInt({ min: 30, max: 180 }),
+    query("city").optional().trim(),
+    query("game_type").optional().isIn(['5v5', '7v7', '11v11', 'futsal', 'training', 'tournament'])
+  ],
+  async (req, res) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ errors: errors.array() });
+      }
+
+      const { date, startTime, endTime, duration = 90, city, game_type } = req.query;
+
+      // Calculer endTime si non fourni
+      let calculatedEndTime = endTime;
+      if (!endTime) {
+        const start = new Date(`2000-01-01 ${startTime}`);
+        start.setMinutes(start.getMinutes() + parseInt(duration));
+        calculatedEndTime = start.toTimeString().slice(0, 5);
+      }
+
+      // Récupérer tous les terrains actifs qui ne sont PAS réservés à ce créneau
+      let query = `
+        SELECT
+          l.id,
+          l.name,
+          l.address,
+          l.city,
+          l.field_type,
+          l.field_surface,
+          l.field_size,
+          l.is_partner,
+          l.partner_discount,
+          l.rating,
+          l.manager_phone,
+          photo.stored_filename as photo_filename
+        FROM locations l
+        LEFT JOIN uploads photo ON l.photo_id = photo.id AND photo.is_active = true
+        WHERE l.is_active = true
+        AND l.id NOT IN (
+          SELECT location_id FROM venue_bookings
+          WHERE booking_date = ?
+          AND status IN ('pending', 'manager_confirmed', 'confirmed')
+          AND (
+            (start_time < ? AND end_time > ?) OR
+            (start_time < ? AND end_time > ?) OR
+            (start_time >= ? AND end_time <= ?)
+          )
+        )
+      `;
+
+      const queryParams = [
+        date,
+        calculatedEndTime, startTime,
+        calculatedEndTime, calculatedEndTime,
+        startTime, calculatedEndTime
+      ];
+
+      if (city) {
+        query += " AND l.city LIKE ?";
+        queryParams.push(`%${city}%`);
+      }
+
+      if (game_type) {
+        query += ` AND EXISTS (
+          SELECT 1 FROM venue_pricing vp
+          WHERE vp.location_id = l.id
+          AND vp.game_type = ?
+          AND vp.is_active = true
+        )`;
+        queryParams.push(game_type);
+      }
+
+      query += " ORDER BY l.is_partner DESC, l.rating DESC LIMIT 50";
+
+      const [venues] = await db.execute(query, queryParams);
+
+      // Récupérer les prix pour chaque terrain si game_type est fourni
+      const bookingDate = new Date(date);
+      const dayOfWeek = bookingDate.getDay();
+      const dayType = (dayOfWeek === 0 || dayOfWeek === 6) ? 'weekend' : 'weekday';
+
+      const formattedVenues = await Promise.all(venues.map(async (venue) => {
+        let pricing = null;
+        if (game_type) {
+          const [pricingResults] = await db.execute(
+            `SELECT price, currency FROM venue_pricing
+             WHERE location_id = ? AND game_type = ? AND duration_minutes = ? AND day_type = ? AND is_active = true
+             LIMIT 1`,
+            [venue.id, game_type, parseInt(duration), dayType]
+          );
+          if (pricingResults.length > 0) {
+            pricing = {
+              price: parseFloat(pricingResults[0].price),
+              currency: pricingResults[0].currency
+            };
+          }
+        }
+
+        return {
+          id: venue.id,
+          name: venue.name,
+          address: venue.address,
+          city: venue.city,
+          fieldType: venue.field_type,
+          fieldSurface: venue.field_surface,
+          fieldSize: venue.field_size,
+          isPartner: Boolean(venue.is_partner),
+          partnerDiscount: venue.partner_discount,
+          rating: parseFloat(venue.rating) || 0,
+          managerPhone: venue.manager_phone,
+          photoUrl: venue.photo_filename ? `/uploads/venues/${venue.photo_filename}` : null,
+          pricing
+        };
+      }));
+
+      res.json({
+        success: true,
+        date,
+        startTime,
+        endTime: calculatedEndTime,
+        duration: parseInt(duration),
+        count: formattedVenues.length,
+        venues: formattedVenues
+      });
+    } catch (error) {
+      console.error("Get available venues error:", error);
+      res.status(500).json({ error: "Erreur serveur" });
+    }
+  }
+);
+
+/**
  * GET /api/venues/:id
  * Détails d'un stade/terrain
  */

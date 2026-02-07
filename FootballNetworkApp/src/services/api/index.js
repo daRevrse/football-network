@@ -5,3 +5,4 @@ export * from './matchesApi';
 export * from './userApi';
 export * from './notificationsApi';
 export * from './searchApi';
+export * from './refereeApi';

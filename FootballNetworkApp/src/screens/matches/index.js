@@ -4,3 +4,6 @@ export * from './PublicMatchDetailScreen';
 export * from './CreateMatchScreen';
 export * from './InvitationsScreen';
 export * from './RefereeMatchesScreen';
+export * from './PlayerRatingScreen';
+export * from './MatchReportScreen';
+export * from './MatchSheetScreen';

@@ -10,7 +10,7 @@
     "splash": {
       "image": "./src/assets/splash.png",
       "resizeMode": "contain",
-      "backgroundColor": "#22C55E"
+      "backgroundColor": "#007b40"
     },
     "assetBundlePatterns": ["**/*"],
     "ios": {
@@ -26,7 +26,7 @@
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./src/assets/adaptive-icon.png",
-        "backgroundColor": "#22C55E"
+        "backgroundColor": "#007b40"
       },
       "package": "com.footconnect.app",
       "permissions": [
@@ -54,7 +54,7 @@
         "expo-notifications",
         {
           "icon": "./src/assets/notification-icon.png",
-          "color": "#22C55E"
+          "color": "#007b40"
         }
       ],
       [

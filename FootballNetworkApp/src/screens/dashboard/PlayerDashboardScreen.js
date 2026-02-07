@@ -1,4 +1,8 @@
-// ====== src/screens/dashboard/PlayerDashboardScreen.js ======
+/**
+ * PlayerDashboardScreen - Dashboard joueur premium
+ * Design Foot Connect avec textes blancs
+ */
+
 import React, { useRef, useState, useCallback } from 'react';
 import {
   View,
@@ -13,6 +17,7 @@ import {
   Dimensions,
   Platform,
   ActivityIndicator,
+  Image,
 } from 'react-native';
 import { useSelector, useDispatch } from 'react-redux';
 import { Feather as Icon } from '@expo/vector-icons';
@@ -20,45 +25,22 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect } from '@react-navigation/native';
 import { logout } from '../../store/slices/authSlice';
 import { matchesApi } from '../../services/api/matchesApi';
+import { COLORS, GRADIENTS, SHADOWS, RADIUS } from '../../theme/colors';
 
 const { width } = Dimensions.get('window');
-const HEADER_MAX_HEIGHT = 260;
+const HEADER_MAX_HEIGHT = 280;
 const HEADER_MIN_HEIGHT = Platform.OS === 'ios' ? 110 : 90;
 const HEADER_SCROLL_DISTANCE = HEADER_MAX_HEIGHT - HEADER_MIN_HEIGHT;
 
-const THEME = {
-  BG: '#0F172A',
-  SURFACE: '#1E293B',
-  SURFACE_LIGHT: '#334155',
-  TEXT: '#F8FAFC',
-  TEXT_SEC: '#94A3B8',
-  ACCENT: '#22C55E',
-  BORDER: '#334155',
-};
-
-// Composant StatCard
-const StatCard = ({ icon, value, label, color }) => (
-  <View style={[styles.statCard, { borderColor: color }]}>
-    <View style={[styles.statIconBox, { backgroundColor: `${color}20` }]}>
-      <Icon name={icon} size={20} color={color} />
-    </View>
-    <View>
-      <Text style={styles.statValue}>{value}</Text>
-      <Text style={styles.statLabel}>{label}</Text>
-    </View>
-    <View style={[styles.statGlow, { backgroundColor: color }]} />
-  </View>
-);
-
 // Composant QuickAction pour joueur
-const QuickAction = ({ icon, label, onPress }) => (
+const QuickAction = ({ icon, label, onPress, color = COLORS.PRIMARY }) => (
   <TouchableOpacity
     style={styles.quickAction}
     onPress={onPress}
     activeOpacity={0.7}
   >
-    <View style={styles.quickActionIcon}>
-      <Icon name={icon} size={24} color={THEME.TEXT} />
+    <View style={[styles.quickActionIcon, { backgroundColor: `${color}15` }]}>
+      <Icon name={icon} size={24} color={color} />
     </View>
     <Text style={styles.quickActionLabel}>{label}</Text>
   </TouchableOpacity>
@@ -68,7 +50,6 @@ export const PlayerDashboardScreen = ({ navigation }) => {
   const dispatch = useDispatch();
   const { user } = useSelector(state => state.auth);
 
-  // État pour les stats dynamiques
   const [stats, setStats] = useState({
     upcomingMatches: 0,
     teamsJoined: 0,
@@ -80,7 +61,6 @@ export const PlayerDashboardScreen = ({ navigation }) => {
   const [refreshing, setRefreshing] = useState(false);
   const scrollY = useRef(new Animated.Value(0)).current;
 
-  // Charger les données
   const loadData = async () => {
     try {
       const result = await matchesApi.getMyMatches();
@@ -88,7 +68,6 @@ export const PlayerDashboardScreen = ({ navigation }) => {
         const matchesData = result.data || [];
         setMatches(matchesData);
 
-        // Calculer les stats
         const now = new Date();
         const upcoming = matchesData.filter(
           m =>
@@ -96,14 +75,11 @@ export const PlayerDashboardScreen = ({ navigation }) => {
             new Date(m.matchDate) > now,
         ).length;
 
-        // Récupérer les invitations depuis Redux
-        const invitationsCount = 0; // TODO: À connecter avec Redux quand disponible
-
         setStats({
           upcomingMatches: upcoming,
           teamsJoined: user?.teams?.length || 0,
-          invitations: invitationsCount,
-          totalGoals: 0, // TODO: À calculer depuis les stats de match
+          invitations: 0,
+          totalGoals: 0,
         });
       }
     } catch (e) {
@@ -151,41 +127,44 @@ export const PlayerDashboardScreen = ({ navigation }) => {
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={THEME.BG} />
+      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
 
       {/* HEADER DYNAMIQUE */}
       <Animated.View style={[styles.header, { height: headerHeight }]}>
         <LinearGradient
-          colors={['#3B82F6', '#0F172A']} // Blue vers Slate 900 pour joueur
+          colors={[COLORS.PRIMARY, COLORS.PRIMARY_DARK, COLORS.DARK]}
           start={{ x: 0, y: 0 }}
           end={{ x: 0, y: 1 }}
           style={styles.headerBackground}
         />
 
-        <Animated.View
-          style={[styles.headerTexture, { opacity: imageOpacity }]}
-        />
-
         <View style={styles.headerContent}>
           {/* Top Bar */}
           <View style={styles.topBar}>
-            <Text style={styles.logoText}>
-              FOOT<Text style={{ color: THEME.ACCENT }}>NETWORK</Text>
-            </Text>
+            <View style={styles.logoContainer}>
+              <Image
+                source={require('../../assets/icon.png')}
+                style={styles.logoImage}
+                resizeMode="contain"
+              />
+              <Text style={styles.logoText}>
+                FOOT<Text style={{ color: COLORS.PRIMARY_LIGHT }}>CONNECT</Text>
+              </Text>
+            </View>
 
             <View style={styles.headerActions}>
               <TouchableOpacity
                 style={styles.iconBtn}
                 onPress={() => navigation.navigate('Profile', { screen: 'Notifications' })}
               >
-                <Icon name="bell" size={22} color={THEME.TEXT} />
+                <Icon name="bell" size={22} color={COLORS.WHITE} />
                 {stats.invitations > 0 && <View style={styles.badge} />}
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.iconBtn}
                 onPress={() => navigation.navigate('Profile', { screen: 'Settings' })}
               >
-                <Icon name="settings" size={22} color={THEME.TEXT} />
+                <Icon name="settings" size={22} color={COLORS.WHITE} />
               </TouchableOpacity>
             </View>
           </View>
@@ -201,7 +180,9 @@ export const PlayerDashboardScreen = ({ navigation }) => {
             <View>
               <Text style={styles.greeting}>Bienvenue,</Text>
               <Text style={styles.userName}>{user?.firstName || 'Joueur'}</Text>
-              <Text style={styles.userRole}>Joueur</Text>
+              <View style={styles.roleBadge}>
+                <Text style={styles.roleText}>Joueur</Text>
+              </View>
             </View>
           </Animated.View>
 
@@ -243,62 +224,37 @@ export const PlayerDashboardScreen = ({ navigation }) => {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            tintColor={THEME.ACCENT}
+            tintColor={COLORS.PRIMARY}
             progressViewOffset={HEADER_MAX_HEIGHT}
           />
         }
       >
-        {/* Quick Actions pour JOUEUR */}
+        {/* Quick Actions */}
         <Text style={styles.sectionTitle}>Actions Rapides</Text>
         <View style={styles.quickActionsContainer}>
           <QuickAction
             icon="calendar"
             label="Mes Matchs"
             onPress={() => navigation.navigate('Matches')}
+            color={COLORS.PRIMARY}
           />
           <QuickAction
             icon="search"
             label="Rechercher"
             onPress={() => navigation.navigate('Search')}
+            color={COLORS.INFO}
           />
           <QuickAction
             icon="users"
             label="Mes Équipes"
             onPress={() => navigation.navigate('Teams')}
+            color={COLORS.WARNING}
           />
           <QuickAction
             icon="user"
             label="Profil"
             onPress={() => navigation.navigate('Profile')}
-          />
-        </View>
-
-        {/* Stats Grid */}
-        <Text style={styles.sectionTitle}>Statistiques</Text>
-        <View style={styles.statsGrid}>
-          <StatCard
-            icon="target"
-            value={stats.totalGoals}
-            label="Buts marqués"
-            color="#3B82F6"
-          />
-          <StatCard
-            icon="award"
-            value="8.5"
-            label="Note moyenne"
-            color="#F59E0B"
-          />
-          <StatCard
-            icon="zap"
-            value="En forme"
-            label="Condition"
-            color={THEME.ACCENT}
-          />
-          <StatCard
-            icon="shield"
-            value={stats.teamsJoined}
-            label="Équipes"
-            color="#8B5CF6"
+            color={COLORS.ROLE_REFEREE}
           />
         </View>
 
@@ -312,12 +268,13 @@ export const PlayerDashboardScreen = ({ navigation }) => {
 
         {loading && !refreshing ? (
           <View style={styles.loadingContainer}>
-            <ActivityIndicator color={THEME.ACCENT} size="small" />
+            <ActivityIndicator color={COLORS.PRIMARY} size="small" />
           </View>
         ) : stats.upcomingMatches === 0 ? (
           <View style={styles.emptyCard}>
-            <Icon name="calendar" size={32} color={THEME.TEXT_SEC} />
+            <Icon name="calendar" size={32} color={COLORS.TEXT_SECONDARY} />
             <Text style={styles.emptyText}>Aucun match à venir</Text>
+            <Text style={styles.emptySubtext}>Rejoins une équipe pour participer aux matchs</Text>
           </View>
         ) : (
           matches
@@ -358,14 +315,15 @@ export const PlayerDashboardScreen = ({ navigation }) => {
                         {match.homeTeam?.name || 'Équipe A'} vs {match.awayTeam?.name || 'Équipe B'}
                       </Text>
                       <View style={styles.matchMetaRow}>
-                        <Icon name="map-pin" size={12} color={THEME.TEXT_SEC} />
+                        <Icon name="map-pin" size={12} color={COLORS.TEXT_SECONDARY} />
                         <Text style={styles.matchMeta} numberOfLines={1}>
                           {match.location?.name || 'Lieu non défini'}
                         </Text>
-                        <Icon name="clock" size={12} color={THEME.TEXT_SEC} style={{ marginLeft: 8 }} />
+                        <Icon name="clock" size={12} color={COLORS.TEXT_SECONDARY} style={{ marginLeft: 8 }} />
                         <Text style={styles.matchMeta}>{dateInfo.time}</Text>
                       </View>
                     </View>
+                    <Icon name="chevron-right" size={20} color={COLORS.TEXT_SECONDARY} />
                   </View>
                 </TouchableOpacity>
               );
@@ -375,9 +333,11 @@ export const PlayerDashboardScreen = ({ navigation }) => {
         {/* Invitations */}
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Invitations</Text>
-          <View style={styles.invitationBadge}>
-            <Text style={styles.invitationBadgeText}>{stats.invitations}</Text>
-          </View>
+          {stats.invitations > 0 && (
+            <View style={styles.invitationBadge}>
+              <Text style={styles.invitationBadgeText}>{stats.invitations}</Text>
+            </View>
+          )}
         </View>
 
         <TouchableOpacity
@@ -385,17 +345,19 @@ export const PlayerDashboardScreen = ({ navigation }) => {
           onPress={() => navigation.navigate('Matches', { screen: 'Invitations' })}
         >
           <View style={styles.invitationIcon}>
-            <Icon name="mail" size={24} color="#3B82F6" />
+            <Icon name="mail" size={24} color={COLORS.INFO} />
           </View>
           <View style={styles.invitationContent}>
             <Text style={styles.invitationTitle}>
-              Vous avez {stats.invitations} invitation{stats.invitations > 1 ? 's' : ''}
+              {stats.invitations > 0
+                ? `${stats.invitations} invitation${stats.invitations > 1 ? 's' : ''} en attente`
+                : 'Aucune invitation'}
             </Text>
             <Text style={styles.invitationDesc}>
               Consultez vos invitations de match
             </Text>
           </View>
-          <Icon name="chevron-right" size={20} color={THEME.TEXT_SEC} />
+          <Icon name="chevron-right" size={20} color={COLORS.TEXT_SECONDARY} />
         </TouchableOpacity>
 
         <View style={{ height: 40 }} />
@@ -405,9 +367,18 @@ export const PlayerDashboardScreen = ({ navigation }) => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: THEME.BG },
-  scrollView: { flex: 1 },
-  scrollContent: { paddingTop: 8, paddingHorizontal: 16, paddingBottom: 20 },
+  container: {
+    flex: 1,
+    backgroundColor: COLORS.DARK,
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingTop: HEADER_MAX_HEIGHT + 16,
+    paddingHorizontal: 16,
+    paddingBottom: 20,
+  },
 
   // HEADER
   header: {
@@ -425,17 +396,9 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
   },
-  headerTexture: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    opacity: 0.1,
-  },
   headerContent: {
     flex: 1,
-    paddingTop: Platform.OS === 'ios' ? 50 : 30,
+    paddingTop: Platform.OS === 'ios' ? 55 : 35,
     paddingHorizontal: 20,
   },
   topBar: {
@@ -444,10 +407,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 20,
   },
+  logoContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  logoImage: {
+    width: 32,
+    height: 32,
+    marginRight: 8,
+  },
   logoText: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: THEME.TEXT,
+    fontSize: 16,
+    fontWeight: '800',
+    color: COLORS.WHITE,
     letterSpacing: 1,
   },
   headerActions: {
@@ -455,23 +427,25 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   iconBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.1)',
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: COLORS.GLASS,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
+    borderColor: COLORS.GLASS_BORDER,
   },
   badge: {
     position: 'absolute',
     top: 8,
     right: 8,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#EF4444',
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: COLORS.ERROR,
+    borderWidth: 2,
+    borderColor: COLORS.DARK,
   },
   userInfo: {
     flexDirection: 'row',
@@ -479,66 +453,78 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   avatarContainer: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: 'rgba(255,255,255,0.15)',
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: COLORS.GLASS,
     borderWidth: 2,
-    borderColor: THEME.ACCENT,
+    borderColor: COLORS.PRIMARY_LIGHT,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 16,
   },
   avatarText: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: THEME.TEXT,
+    fontSize: 22,
+    fontWeight: '700',
+    color: COLORS.WHITE,
   },
   greeting: {
     fontSize: 14,
-    color: 'rgba(255,255,255,0.7)',
+    color: COLORS.WHITE,
+    opacity: 0.8,
     marginBottom: 2,
   },
   userName: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: THEME.TEXT,
+    fontSize: 26,
+    fontWeight: '800',
+    color: COLORS.WHITE,
   },
-  userRole: {
-    fontSize: 12,
-    color: '#3B82F6',
-    marginTop: 2,
+  roleBadge: {
+    backgroundColor: COLORS.ROLE_PLAYER,
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: RADIUS.full,
+    marginTop: 4,
+    alignSelf: 'flex-start',
+  },
+  roleText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: COLORS.WHITE,
   },
   quickStatsRow: {
     flexDirection: 'row',
     justifyContent: 'space-around',
-    backgroundColor: 'rgba(0,0,0,0.2)',
-    borderRadius: 16,
+    backgroundColor: COLORS.GLASS,
+    borderRadius: RADIUS.lg,
     padding: 16,
+    borderWidth: 1,
+    borderColor: COLORS.GLASS_BORDER,
   },
   quickStatItem: {
     alignItems: 'center',
   },
   quickStatNumber: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: THEME.TEXT,
+    fontSize: 26,
+    fontWeight: '800',
+    color: COLORS.WHITE,
   },
   quickStatLabel: {
     fontSize: 12,
-    color: 'rgba(255,255,255,0.6)',
+    color: COLORS.WHITE,
+    opacity: 0.8,
     marginTop: 4,
   },
   verticalDivider: {
     width: 1,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    backgroundColor: COLORS.GLASS_BORDER,
   },
 
   // QUICK ACTIONS
   sectionTitle: {
     fontSize: 18,
-    fontWeight: 'bold',
-    color: THEME.TEXT,
+    fontWeight: '700',
+    color: COLORS.WHITE,
     marginTop: 24,
     marginBottom: 12,
   },
@@ -550,19 +536,18 @@ const styles = StyleSheet.create({
   quickAction: {
     flex: 1,
     aspectRatio: 1,
-    backgroundColor: THEME.SURFACE,
-    borderRadius: 16,
+    backgroundColor: COLORS.DARK_CARD,
+    borderRadius: RADIUS.lg,
     padding: 12,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: THEME.BORDER,
+    borderColor: COLORS.BORDER,
   },
   quickActionIcon: {
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: 'rgba(34, 197, 94, 0.1)',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 8,
@@ -570,52 +555,8 @@ const styles = StyleSheet.create({
   quickActionLabel: {
     fontSize: 11,
     fontWeight: '600',
-    color: THEME.TEXT,
+    color: COLORS.WHITE,
     textAlign: 'center',
-  },
-
-  // STATS GRID
-  statsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-  },
-  statCard: {
-    flex: 1,
-    minWidth: '47%',
-    backgroundColor: THEME.SURFACE,
-    borderRadius: 16,
-    padding: 16,
-    borderWidth: 1,
-    position: 'relative',
-    overflow: 'hidden',
-  },
-  statIconBox: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  statValue: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: THEME.TEXT,
-    marginBottom: 4,
-  },
-  statLabel: {
-    fontSize: 12,
-    color: THEME.TEXT_SEC,
-  },
-  statGlow: {
-    position: 'absolute',
-    bottom: -10,
-    right: -10,
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    opacity: 0.1,
   },
 
   // SECTION HEADER
@@ -628,41 +569,42 @@ const styles = StyleSheet.create({
   },
   seeAllText: {
     fontSize: 14,
-    color: '#3B82F6',
+    color: COLORS.PRIMARY,
     fontWeight: '600',
   },
 
   // MATCH CARD
   matchCard: {
-    backgroundColor: THEME.SURFACE,
-    borderRadius: 16,
+    backgroundColor: COLORS.DARK_CARD,
+    borderRadius: RADIUS.lg,
     padding: 16,
     borderWidth: 1,
-    borderColor: THEME.BORDER,
+    borderColor: COLORS.BORDER,
     marginBottom: 12,
   },
   matchHeader: {
     flexDirection: 'row',
-    marginBottom: 12,
+    alignItems: 'center',
   },
   matchDateBox: {
     width: 56,
     height: 56,
-    borderRadius: 12,
-    backgroundColor: '#3B82F6',
+    borderRadius: RADIUS.md,
+    backgroundColor: COLORS.PRIMARY,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
   },
   matchDay: {
     fontSize: 20,
-    fontWeight: 'bold',
-    color: '#FFF',
+    fontWeight: '800',
+    color: COLORS.WHITE,
   },
   matchMonth: {
     fontSize: 10,
-    color: '#FFF',
+    color: COLORS.WHITE,
     fontWeight: '600',
+    opacity: 0.9,
   },
   matchInfo: {
     flex: 1,
@@ -670,7 +612,7 @@ const styles = StyleSheet.create({
   matchTeams: {
     fontSize: 15,
     fontWeight: '600',
-    color: THEME.TEXT,
+    color: COLORS.WHITE,
     marginBottom: 6,
   },
   matchMetaRow: {
@@ -679,54 +621,36 @@ const styles = StyleSheet.create({
   },
   matchMeta: {
     fontSize: 12,
-    color: THEME.TEXT_SEC,
+    color: COLORS.TEXT_SECONDARY,
     marginLeft: 4,
-  },
-  matchActions: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  matchActionBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(34, 197, 94, 0.1)',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 8,
-    gap: 6,
-  },
-  matchActionText: {
-    fontSize: 13,
-    color: THEME.ACCENT,
-    fontWeight: '600',
   },
 
   // INVITATION CARD
   invitationBadge: {
-    backgroundColor: '#EF4444',
+    backgroundColor: COLORS.ERROR,
     borderRadius: 12,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
+    paddingHorizontal: 10,
+    paddingVertical: 3,
   },
   invitationBadgeText: {
-    color: '#FFF',
+    color: COLORS.WHITE,
     fontSize: 12,
-    fontWeight: 'bold',
+    fontWeight: '700',
   },
   invitationCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: THEME.SURFACE,
-    borderRadius: 16,
+    backgroundColor: COLORS.DARK_CARD,
+    borderRadius: RADIUS.lg,
     padding: 16,
     borderWidth: 1,
-    borderColor: THEME.BORDER,
+    borderColor: COLORS.BORDER,
   },
   invitationIcon: {
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: '#3B82F620',
+    backgroundColor: `${COLORS.INFO}15`,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
@@ -737,12 +661,12 @@ const styles = StyleSheet.create({
   invitationTitle: {
     fontSize: 15,
     fontWeight: '600',
-    color: THEME.TEXT,
+    color: COLORS.WHITE,
     marginBottom: 4,
   },
   invitationDesc: {
-    fontSize: 12,
-    color: THEME.TEXT_SEC,
+    fontSize: 13,
+    color: COLORS.TEXT_SECONDARY,
   },
 
   // LOADING & EMPTY STATES
@@ -751,17 +675,26 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   emptyCard: {
-    backgroundColor: THEME.SURFACE,
-    borderRadius: 16,
+    backgroundColor: COLORS.DARK_CARD,
+    borderRadius: RADIUS.lg,
     padding: 32,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: THEME.BORDER,
+    borderColor: COLORS.BORDER,
     marginBottom: 12,
   },
   emptyText: {
-    fontSize: 14,
-    color: THEME.TEXT_SEC,
+    fontSize: 16,
+    fontWeight: '600',
+    color: COLORS.WHITE,
     marginTop: 12,
   },
+  emptySubtext: {
+    fontSize: 13,
+    color: COLORS.TEXT_SECONDARY,
+    marginTop: 4,
+    textAlign: 'center',
+  },
 });
+
+export default PlayerDashboardScreen;

@@ -269,6 +269,107 @@ router.get(
 );
 
 /**
+ * GET /api/referees/available
+ * Liste des arbitres disponibles à une date donnée
+ * Utilisé lors de la création de match pour proposer uniquement les arbitres libres
+ */
+router.get(
+  "/available",
+  [
+    query("date").isISO8601().withMessage("Date valide requise (YYYY-MM-DD)"),
+    query("city").optional().trim(),
+    query("license_level").optional().isIn(['regional', 'national', 'international', 'trainee'])
+  ],
+  async (req, res) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ errors: errors.array() });
+      }
+
+      const { date, city, license_level } = req.query;
+
+      // Récupérer les arbitres qui:
+      // 1. Sont actifs
+      // 2. Sont disponibles généralement (is_available = true)
+      // 3. Ont marqué leur disponibilité pour cette date (referee_availability)
+      // 4. N'ont pas déjà un match assigné ce jour
+      let query = `
+        SELECT
+          r.id,
+          r.first_name,
+          r.last_name,
+          r.license_level,
+          r.experience_years,
+          r.location_city,
+          r.rating,
+          r.total_matches,
+          r.hourly_rate,
+          r.currency,
+          photo.stored_filename as photo_filename,
+          ra.start_time as available_from,
+          ra.end_time as available_until
+        FROM referees r
+        LEFT JOIN uploads photo ON r.profile_picture_id = photo.id AND photo.is_active = true
+        LEFT JOIN referee_availability ra ON r.id = ra.referee_id AND ra.date = ? AND ra.is_available = true
+        WHERE r.is_active = true
+        AND r.is_available = true
+        AND r.id NOT IN (
+          SELECT mra.referee_id FROM match_referee_assignments mra
+          JOIN matches m ON mra.match_id = m.id
+          WHERE DATE(m.match_date) = ?
+          AND mra.status IN ('pending', 'confirmed')
+        )
+      `;
+
+      const queryParams = [date, date];
+
+      if (city) {
+        query += " AND r.location_city LIKE ?";
+        queryParams.push(`%${city}%`);
+      }
+
+      if (license_level) {
+        query += " AND r.license_level = ?";
+        queryParams.push(license_level);
+      }
+
+      query += " ORDER BY r.rating DESC, r.total_matches DESC LIMIT 50";
+
+      const [referees] = await db.execute(query, queryParams);
+
+      const formattedReferees = referees.map(r => ({
+        id: r.id,
+        firstName: r.first_name,
+        lastName: r.last_name,
+        licenseLevel: r.license_level,
+        experienceYears: r.experience_years,
+        city: r.location_city,
+        rating: parseFloat(r.rating) || 0,
+        totalMatches: r.total_matches,
+        hourlyRate: r.hourly_rate ? parseFloat(r.hourly_rate) : null,
+        currency: r.currency,
+        photoUrl: r.photo_filename ? `/uploads/referees/${r.photo_filename}` : null,
+        availability: r.available_from ? {
+          from: r.available_from,
+          until: r.available_until
+        } : null
+      }));
+
+      res.json({
+        success: true,
+        date,
+        count: formattedReferees.length,
+        referees: formattedReferees
+      });
+    } catch (error) {
+      console.error("Get available referees error:", error);
+      res.status(500).json({ error: "Erreur serveur" });
+    }
+  }
+);
+
+/**
  * GET /api/referees/:id
  * Détails d'un arbitre
  */

@@ -289,8 +289,80 @@ router.get("/:id", authenticateToken, async (req, res) => {
 });
 
 /**
+ * PATCH /api/bookings/:id/manager-confirm
+ * Phase 1: Le manager de l'équipe à domicile confirme la réservation
+ * Transition: pending -> manager_confirmed
+ */
+router.patch("/:id/manager-confirm", authenticateToken, async (req, res) => {
+  try {
+    const bookingId = req.params.id;
+
+    const [bookings] = await db.execute(
+      `SELECT vb.*, t.captain_id, t.id as team_id,
+              m.home_team_id, m.away_team_id
+       FROM venue_bookings vb
+       JOIN teams t ON vb.team_id = t.id
+       LEFT JOIN matches m ON vb.match_id = m.id
+       WHERE vb.id = ?`,
+      [bookingId]
+    );
+
+    if (bookings.length === 0) {
+      return res.status(404).json({ error: "Réservation non trouvée" });
+    }
+
+    const booking = bookings[0];
+
+    // Vérifier que l'utilisateur est le manager de l'équipe à domicile
+    const [managerCheck] = await db.execute(
+      `SELECT tm.role FROM team_members tm
+       WHERE tm.team_id = ? AND tm.user_id = ? AND tm.is_active = true AND tm.role = 'manager'`,
+      [booking.team_id, req.user.id]
+    );
+
+    if (managerCheck.length === 0) {
+      return res.status(403).json({
+        error: "Seul le manager de l'équipe à domicile peut confirmer la réservation"
+      });
+    }
+
+    // Si c'est un match, vérifier que c'est l'équipe à domicile
+    if (booking.match_id && booking.home_team_id !== booking.team_id) {
+      return res.status(403).json({
+        error: "Seul le manager de l'équipe à domicile peut confirmer la réservation du terrain"
+      });
+    }
+
+    if (booking.status !== 'pending') {
+      return res.status(400).json({
+        error: `Impossible de confirmer. Statut actuel: ${booking.status}`,
+        currentStatus: booking.status
+      });
+    }
+
+    await db.execute(
+      `UPDATE venue_bookings
+       SET status = 'manager_confirmed',
+           manager_confirmed_at = NOW(),
+           manager_confirmed_by = ?
+       WHERE id = ?`,
+      [req.user.id, bookingId]
+    );
+
+    res.json({
+      success: true,
+      message: "Réservation confirmée par le manager. En attente de validation par le propriétaire du terrain.",
+      status: "manager_confirmed"
+    });
+  } catch (error) {
+    console.error("Manager confirm booking error:", error);
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+
+/**
  * PATCH /api/bookings/:id/confirm
- * Confirmer une réservation
+ * Legacy endpoint - redirige vers manager-confirm pour compatibilité
  */
 router.patch("/:id/confirm", authenticateToken, async (req, res) => {
   try {
@@ -310,23 +382,35 @@ router.patch("/:id/confirm", authenticateToken, async (req, res) => {
 
     const booking = bookings[0];
 
-    // Seul le manager ou celui qui a réservé peut confirmer
-    if (booking.captain_id !== req.user.id && booking.booked_by !== req.user.id) {
-      return res.status(403).json({ error: "Only team captain or booking creator can confirm" });
+    // Vérifier permissions (manager de l'équipe)
+    const [managerCheck] = await db.execute(
+      `SELECT tm.role FROM team_members tm
+       WHERE tm.team_id = ? AND tm.user_id = ? AND tm.is_active = true AND tm.role = 'manager'`,
+      [booking.team_id, req.user.id]
+    );
+
+    if (managerCheck.length === 0 && booking.booked_by !== req.user.id) {
+      return res.status(403).json({ error: "Only team manager or booking creator can confirm" });
     }
 
     if (booking.status !== 'pending') {
       return res.status(400).json({ error: "Only pending bookings can be confirmed" });
     }
 
+    // Workflow 2 phases: passe à manager_confirmed
     await db.execute(
-      "UPDATE venue_bookings SET status = 'confirmed' WHERE id = ?",
-      [bookingId]
+      `UPDATE venue_bookings
+       SET status = 'manager_confirmed',
+           manager_confirmed_at = NOW(),
+           manager_confirmed_by = ?
+       WHERE id = ?`,
+      [req.user.id, bookingId]
     );
 
     res.json({
       success: true,
-      message: "Booking confirmed successfully"
+      message: "Réservation confirmée. En attente de validation par le propriétaire.",
+      status: "manager_confirmed"
     });
   } catch (error) {
     console.error("Confirm booking error:", error);

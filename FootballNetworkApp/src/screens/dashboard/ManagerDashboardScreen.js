@@ -1,4 +1,8 @@
-// ====== src/screens/dashboard/ManagerDashboardScreen.js ======
+/**
+ * ManagerDashboardScreen - Dashboard Manager Premium
+ * Design Foot Connect avec textes blancs
+ */
+
 import React, { useRef, useState, useCallback } from 'react';
 import {
   View,
@@ -13,6 +17,7 @@ import {
   Dimensions,
   Platform,
   ActivityIndicator,
+  Image,
 } from 'react-native';
 import { useSelector, useDispatch } from 'react-redux';
 import { Feather as Icon } from '@expo/vector-icons';
@@ -21,49 +26,22 @@ import { useFocusEffect } from '@react-navigation/native';
 import { logout } from '../../store/slices/authSlice';
 import { matchesApi } from '../../services/api/matchesApi';
 import { teamsApi } from '../../services/api/teamsApi';
+import { COLORS, GRADIENTS, SHADOWS, RADIUS } from '../../theme/colors';
 
 const { width } = Dimensions.get('window');
-const HEADER_MAX_HEIGHT = 260;
+const HEADER_MAX_HEIGHT = 280;
 const HEADER_MIN_HEIGHT = Platform.OS === 'ios' ? 110 : 90;
 const HEADER_SCROLL_DISTANCE = HEADER_MAX_HEIGHT - HEADER_MIN_HEIGHT;
 
-const THEME = {
-  BG: '#0F172A',
-  SURFACE: '#1E293B',
-  SURFACE_LIGHT: '#334155',
-  TEXT: '#F8FAFC',
-  TEXT_SEC: '#94A3B8',
-  ACCENT: '#22C55E',
-  BORDER: '#334155',
-};
-
-// Composant StatCard
-const StatCard = ({ icon, value, label, color, onPress }) => (
-  <TouchableOpacity
-    style={[styles.statCard, { borderColor: color }]}
-    onPress={onPress}
-    activeOpacity={0.7}
-  >
-    <View style={[styles.statIconBox, { backgroundColor: `${color}20` }]}>
-      <Icon name={icon} size={20} color={color} />
-    </View>
-    <View>
-      <Text style={styles.statValue}>{value}</Text>
-      <Text style={styles.statLabel}>{label}</Text>
-    </View>
-    <View style={[styles.statGlow, { backgroundColor: color }]} />
-  </TouchableOpacity>
-);
-
 // Composant QuickAction pour manager
-const QuickAction = ({ icon, label, onPress, color = THEME.ACCENT }) => (
+const QuickAction = ({ icon, label, onPress, color = COLORS.PRIMARY }) => (
   <TouchableOpacity
     style={styles.quickAction}
     onPress={onPress}
     activeOpacity={0.7}
   >
-    <View style={[styles.quickActionIcon, { backgroundColor: `${color}20` }]}>
-      <Icon name={icon} size={24} color={color} />
+    <View style={[styles.quickActionIcon, { backgroundColor: `${color}15`, borderColor: color }]}>
+      <Icon name={icon} size={22} color={color} />
     </View>
     <Text style={styles.quickActionLabel}>{label}</Text>
   </TouchableOpacity>
@@ -89,7 +67,6 @@ export const ManagerDashboardScreen = ({ navigation }) => {
   // Charger les données
   const loadData = async () => {
     try {
-      // Charger les équipes gérées
       const teamsResult = await teamsApi.getMyTeams();
       const matchesResult = await matchesApi.getMyMatches();
 
@@ -97,13 +74,11 @@ export const ManagerDashboardScreen = ({ navigation }) => {
         const teamsData = teamsResult.data || [];
         setTeams(teamsData);
 
-        // Calculer le nombre total de joueurs
         const totalPlayers = teamsData.reduce(
           (sum, team) => sum + (team.memberCount || 0),
           0,
         );
 
-        // Calculer les matchs à venir
         const now = new Date();
         const matchesData = matchesResult.success ? matchesResult.data || [] : [];
         setMatches(matchesData);
@@ -117,7 +92,7 @@ export const ManagerDashboardScreen = ({ navigation }) => {
         setStats({
           teamsManaged: teamsData.length,
           upcomingMatches: upcoming,
-          pendingInvitations: 0, // TODO: À connecter avec Redux
+          pendingInvitations: 0,
           totalPlayers: totalPlayers,
         });
       }
@@ -166,12 +141,12 @@ export const ManagerDashboardScreen = ({ navigation }) => {
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={THEME.BG} />
+      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
 
       {/* HEADER DYNAMIQUE */}
       <Animated.View style={[styles.header, { height: headerHeight }]}>
         <LinearGradient
-          colors={['#166534', '#0F172A']} // Green 800 vers Slate 900 pour manager
+          colors={[COLORS.PRIMARY, COLORS.PRIMARY_DARK, COLORS.DARK]}
           start={{ x: 0, y: 0 }}
           end={{ x: 0, y: 1 }}
           style={styles.headerBackground}
@@ -184,23 +159,30 @@ export const ManagerDashboardScreen = ({ navigation }) => {
         <View style={styles.headerContent}>
           {/* Top Bar */}
           <View style={styles.topBar}>
-            <Text style={styles.logoText}>
-              FOOT<Text style={{ color: THEME.ACCENT }}>NETWORK</Text>
-            </Text>
+            <View style={styles.logoRow}>
+              <Image
+                source={require('../../assets/icon.png')}
+                style={styles.logoImage}
+                resizeMode="contain"
+              />
+              <Text style={styles.logoText}>
+                FOOT <Text style={{ color: COLORS.PRIMARY_LIGHT }}>CONNECT</Text>
+              </Text>
+            </View>
 
             <View style={styles.headerActions}>
               <TouchableOpacity
                 style={styles.iconBtn}
                 onPress={() => navigation.navigate('Profile', { screen: 'Notifications' })}
               >
-                <Icon name="bell" size={22} color={THEME.TEXT} />
+                <Icon name="bell" size={22} color={COLORS.WHITE} />
                 {stats.pendingInvitations > 0 && <View style={styles.badge} />}
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.iconBtn}
                 onPress={() => navigation.navigate('Profile', { screen: 'Settings' })}
               >
-                <Icon name="settings" size={22} color={THEME.TEXT} />
+                <Icon name="settings" size={22} color={COLORS.WHITE} />
               </TouchableOpacity>
             </View>
           </View>
@@ -216,7 +198,10 @@ export const ManagerDashboardScreen = ({ navigation }) => {
             <View>
               <Text style={styles.greeting}>Bienvenue,</Text>
               <Text style={styles.userName}>{user?.firstName || 'Manager'}</Text>
-              <Text style={styles.userRole}>Manager</Text>
+              <View style={styles.roleBadge}>
+                <Icon name="briefcase" size={12} color={COLORS.PRIMARY} />
+                <Text style={styles.userRole}>Manager</Text>
+              </View>
             </View>
           </Animated.View>
 
@@ -258,7 +243,7 @@ export const ManagerDashboardScreen = ({ navigation }) => {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            tintColor={THEME.ACCENT}
+            tintColor={COLORS.PRIMARY}
             progressViewOffset={HEADER_MAX_HEIGHT}
           />
         }
@@ -269,7 +254,7 @@ export const ManagerDashboardScreen = ({ navigation }) => {
           <QuickAction
             icon="calendar"
             label="Créer Match"
-            color={THEME.ACCENT}
+            color={COLORS.PRIMARY}
             onPress={() =>
               navigation.navigate('Matches', { screen: 'CreateMatch' })
             }
@@ -277,7 +262,7 @@ export const ManagerDashboardScreen = ({ navigation }) => {
           <QuickAction
             icon="users"
             label="Créer Équipe"
-            color="#3B82F6"
+            color={COLORS.INFO}
             onPress={() =>
               navigation.navigate('Teams', { screen: 'CreateTeam' })
             }
@@ -285,47 +270,14 @@ export const ManagerDashboardScreen = ({ navigation }) => {
           <QuickAction
             icon="user-plus"
             label="Recruter"
-            color="#8B5CF6"
+            color={COLORS.ROLE_REFEREE}
             onPress={() => navigation.navigate('Search')}
           />
           <QuickAction
             icon="bar-chart-2"
-            label="Statistiques"
-            color="#F59E0B"
+            label="Stats"
+            color={COLORS.WARNING}
             onPress={() => navigation.navigate('Teams')}
-          />
-        </View>
-
-        {/* Stats Grid */}
-        <Text style={styles.sectionTitle}>Vue d'ensemble</Text>
-        <View style={styles.statsGrid}>
-          <StatCard
-            icon="shield"
-            value={stats.teamsManaged}
-            label="Équipes gérées"
-            color={THEME.ACCENT}
-            onPress={() => navigation.navigate('Teams')}
-          />
-          <StatCard
-            icon="calendar"
-            value={stats.upcomingMatches}
-            label="Matchs à venir"
-            color="#3B82F6"
-            onPress={() => navigation.navigate('Matches')}
-          />
-          <StatCard
-            icon="users"
-            value={stats.totalPlayers}
-            label="Joueurs totaux"
-            color="#8B5CF6"
-            onPress={() => navigation.navigate('Teams')}
-          />
-          <StatCard
-            icon="mail"
-            value={stats.pendingInvitations}
-            label="Invitations"
-            color="#F59E0B"
-            onPress={() => navigation.navigate('Matches', { screen: 'Invitations' })}
           />
         </View>
 
@@ -337,33 +289,50 @@ export const ManagerDashboardScreen = ({ navigation }) => {
           </TouchableOpacity>
         </View>
 
-        <View style={styles.matchCard}>
-          <View style={styles.matchHeader}>
-            <View style={styles.matchDateBox}>
-              <Text style={styles.matchDay}>15</Text>
-              <Text style={styles.matchMonth}>DÉC</Text>
-            </View>
-            <View style={styles.matchInfo}>
-              <Text style={styles.matchTeams}>Mon Équipe vs Adversaires FC</Text>
-              <View style={styles.matchMetaRow}>
-                <Icon name="map-pin" size={12} color={THEME.TEXT_SEC} />
-                <Text style={styles.matchMeta}>Stade Municipal</Text>
-                <Icon name="clock" size={12} color={THEME.TEXT_SEC} style={{ marginLeft: 8 }} />
-                <Text style={styles.matchMeta}>18:00</Text>
+        {matches.length > 0 ? (
+          matches.slice(0, 2).map((match, index) => (
+            <TouchableOpacity
+              key={match.id || index}
+              style={styles.matchCard}
+              onPress={() => navigation.navigate('Matches')}
+            >
+              <View style={styles.matchHeader}>
+                <View style={styles.matchDateBox}>
+                  <Text style={styles.matchDay}>
+                    {new Date(match.matchDate).getDate()}
+                  </Text>
+                  <Text style={styles.matchMonth}>
+                    {new Date(match.matchDate).toLocaleDateString('fr-FR', { month: 'short' }).toUpperCase()}
+                  </Text>
+                </View>
+                <View style={styles.matchInfo}>
+                  <Text style={styles.matchTeams}>
+                    {match.homeTeam?.name || 'Mon Équipe'} vs {match.awayTeam?.name || 'Adversaire'}
+                  </Text>
+                  <View style={styles.matchMetaRow}>
+                    <Icon name="map-pin" size={12} color={COLORS.WHITE} style={{ opacity: 0.7 }} />
+                    <Text style={styles.matchMeta}>{match.location?.name || 'Lieu à définir'}</Text>
+                    <Icon name="clock" size={12} color={COLORS.WHITE} style={{ marginLeft: 8, opacity: 0.7 }} />
+                    <Text style={styles.matchMeta}>
+                      {new Date(match.matchDate).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+                    </Text>
+                  </View>
+                </View>
               </View>
-            </View>
-          </View>
-          <View style={styles.matchActions}>
-            <TouchableOpacity style={styles.matchActionBtn}>
-              <Icon name="users" size={16} color="#3B82F6" />
-              <Text style={[styles.matchActionText, { color: '#3B82F6' }]}>Gérer compo</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.matchActionBtn}>
-              <Icon name="check-circle" size={16} color={THEME.ACCENT} />
-              <Text style={styles.matchActionText}>Confirmer</Text>
+          ))
+        ) : (
+          <View style={styles.emptyCard}>
+            <Icon name="calendar" size={32} color={COLORS.TEXT_MUTED} />
+            <Text style={styles.emptyText}>Aucun match à gérer</Text>
+            <TouchableOpacity
+              style={styles.createBtn}
+              onPress={() => navigation.navigate('Matches', { screen: 'CreateMatch' })}
+            >
+              <Text style={styles.createBtnText}>Créer un match</Text>
             </TouchableOpacity>
           </View>
-        </View>
+        )}
 
         {/* Gestion des équipes */}
         <View style={styles.sectionHeader}>
@@ -375,17 +344,17 @@ export const ManagerDashboardScreen = ({ navigation }) => {
 
         {loading && !refreshing ? (
           <View style={styles.loadingContainer}>
-            <ActivityIndicator color={THEME.ACCENT} size="small" />
+            <ActivityIndicator color={COLORS.PRIMARY} size="small" />
           </View>
         ) : teams.length === 0 ? (
           <View style={styles.emptyCard}>
-            <Icon name="shield" size={32} color={THEME.TEXT_SEC} />
+            <Icon name="shield" size={32} color={COLORS.TEXT_MUTED} />
             <Text style={styles.emptyText}>Aucune équipe gérée</Text>
             <TouchableOpacity
-              style={styles.createTeamBtn}
+              style={styles.createBtn}
               onPress={() => navigation.navigate('Teams', { screen: 'CreateTeam' })}
             >
-              <Text style={styles.createTeamText}>Créer une équipe</Text>
+              <Text style={styles.createBtnText}>Créer une équipe</Text>
             </TouchableOpacity>
           </View>
         ) : (
@@ -396,7 +365,7 @@ export const ManagerDashboardScreen = ({ navigation }) => {
               onPress={() => navigation.navigate('Teams', { screen: 'TeamDetail', params: { teamId: team.id } })}
             >
               <View style={styles.teamIcon}>
-                <Icon name="shield" size={24} color={THEME.ACCENT} />
+                <Icon name="shield" size={24} color={COLORS.PRIMARY} />
               </View>
               <View style={styles.teamContent}>
                 <Text style={styles.teamName}>{team.name}</Text>
@@ -411,7 +380,7 @@ export const ManagerDashboardScreen = ({ navigation }) => {
                   navigation.navigate('Teams', { screen: 'TeamDetail', params: { teamId: team.id } });
                 }}
               >
-                <Icon name="settings" size={18} color={THEME.TEXT_SEC} />
+                <Icon name="settings" size={18} color={COLORS.WHITE} />
               </TouchableOpacity>
             </TouchableOpacity>
           ))
@@ -424,7 +393,7 @@ export const ManagerDashboardScreen = ({ navigation }) => {
           onPress={() => navigation.navigate('Search')}
         >
           <View style={styles.recruitIcon}>
-            <Icon name="user-plus" size={24} color="#8B5CF6" />
+            <Icon name="user-plus" size={24} color={COLORS.ROLE_REFEREE} />
           </View>
           <View style={styles.recruitContent}>
             <Text style={styles.recruitTitle}>Recruter des joueurs</Text>
@@ -432,19 +401,19 @@ export const ManagerDashboardScreen = ({ navigation }) => {
               Trouvez des joueurs pour renforcer vos équipes
             </Text>
           </View>
-          <Icon name="chevron-right" size={20} color={THEME.TEXT_SEC} />
+          <Icon name="chevron-right" size={20} color={COLORS.WHITE} />
         </TouchableOpacity>
 
-        <View style={{ height: 40 }} />
+        <View style={{ height: 100 }} />
       </Animated.ScrollView>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: THEME.BG },
+  container: { flex: 1, backgroundColor: COLORS.DARK },
   scrollView: { flex: 1 },
-  scrollContent: { paddingTop: 8, paddingHorizontal: 16, paddingBottom: 20 },
+  scrollContent: { paddingTop: 20, paddingHorizontal: 20, paddingBottom: 20 },
 
   // HEADER
   header: {
@@ -461,6 +430,8 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
+    borderBottomLeftRadius: 30,
+    borderBottomRightRadius: 30,
   },
   headerTexture: {
     position: 'absolute',
@@ -472,7 +443,7 @@ const styles = StyleSheet.create({
   },
   headerContent: {
     flex: 1,
-    paddingTop: Platform.OS === 'ios' ? 50 : 30,
+    paddingTop: Platform.OS === 'ios' ? 60 : 40,
     paddingHorizontal: 20,
   },
   topBar: {
@@ -481,10 +452,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 20,
   },
+  logoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  logoImage: {
+    width: 32,
+    height: 32,
+    marginRight: 8,
+  },
   logoText: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: THEME.TEXT,
+    fontSize: 16,
+    fontWeight: '800',
+    color: COLORS.WHITE,
     letterSpacing: 1,
   },
   headerActions: {
@@ -492,14 +472,14 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   iconBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.1)',
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: COLORS.GLASS,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
+    borderColor: COLORS.GLASS_BORDER,
   },
   badge: {
     position: 'absolute',
@@ -508,7 +488,7 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#EF4444',
+    backgroundColor: COLORS.ERROR,
   },
   userInfo: {
     flexDirection: 'row',
@@ -519,9 +499,9 @@ const styles = StyleSheet.create({
     width: 60,
     height: 60,
     borderRadius: 30,
-    backgroundColor: 'rgba(255,255,255,0.15)',
+    backgroundColor: COLORS.GLASS,
     borderWidth: 2,
-    borderColor: THEME.ACCENT,
+    borderColor: COLORS.PRIMARY_LIGHT,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 16,
@@ -529,55 +509,69 @@ const styles = StyleSheet.create({
   avatarText: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: THEME.TEXT,
+    color: COLORS.WHITE,
   },
   greeting: {
     fontSize: 14,
-    color: 'rgba(255,255,255,0.7)',
+    color: COLORS.WHITE,
+    opacity: 0.8,
     marginBottom: 2,
   },
   userName: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: THEME.TEXT,
+    color: COLORS.WHITE,
+  },
+  roleBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 123, 64, 0.2)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: RADIUS.full,
+    marginTop: 4,
+    gap: 4,
   },
   userRole: {
     fontSize: 12,
-    color: THEME.ACCENT,
-    marginTop: 2,
+    color: COLORS.PRIMARY_LIGHT,
+    fontWeight: '600',
   },
   quickStatsRow: {
     flexDirection: 'row',
     justifyContent: 'space-around',
-    backgroundColor: 'rgba(0,0,0,0.2)',
-    borderRadius: 16,
+    backgroundColor: COLORS.GLASS,
+    borderRadius: RADIUS.lg,
     padding: 16,
+    borderWidth: 1,
+    borderColor: COLORS.GLASS_BORDER,
   },
   quickStatItem: {
     alignItems: 'center',
   },
   quickStatNumber: {
     fontSize: 24,
-    fontWeight: 'bold',
-    color: THEME.TEXT,
+    fontWeight: '800',
+    color: COLORS.WHITE,
   },
   quickStatLabel: {
     fontSize: 12,
-    color: 'rgba(255,255,255,0.6)',
+    color: COLORS.WHITE,
+    opacity: 0.8,
     marginTop: 4,
   },
   verticalDivider: {
     width: 1,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    backgroundColor: COLORS.GLASS_BORDER,
   },
 
   // QUICK ACTIONS
   sectionTitle: {
     fontSize: 18,
-    fontWeight: 'bold',
-    color: THEME.TEXT,
+    fontWeight: '700',
+    color: COLORS.WHITE,
     marginTop: 24,
-    marginBottom: 12,
+    marginBottom: 16,
   },
   quickActionsContainer: {
     flexDirection: 'row',
@@ -586,72 +580,23 @@ const styles = StyleSheet.create({
   },
   quickAction: {
     flex: 1,
-    aspectRatio: 1,
-    backgroundColor: THEME.SURFACE,
-    borderRadius: 16,
-    padding: 12,
+    alignItems: 'center',
+  },
+  quickActionIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: 18,
+    backgroundColor: COLORS.DARK_CARD,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: THEME.BORDER,
-  },
-  quickActionIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    justifyContent: 'center',
-    alignItems: 'center',
     marginBottom: 8,
   },
   quickActionLabel: {
     fontSize: 11,
     fontWeight: '600',
-    color: THEME.TEXT,
+    color: COLORS.WHITE,
     textAlign: 'center',
-  },
-
-  // STATS GRID
-  statsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-  },
-  statCard: {
-    flex: 1,
-    minWidth: '47%',
-    backgroundColor: THEME.SURFACE,
-    borderRadius: 16,
-    padding: 16,
-    borderWidth: 1,
-    position: 'relative',
-    overflow: 'hidden',
-  },
-  statIconBox: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  statValue: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: THEME.TEXT,
-    marginBottom: 4,
-  },
-  statLabel: {
-    fontSize: 12,
-    color: THEME.TEXT_SEC,
-  },
-  statGlow: {
-    position: 'absolute',
-    bottom: -10,
-    right: -10,
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    opacity: 0.1,
   },
 
   // SECTION HEADER
@@ -660,32 +605,31 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginTop: 24,
-    marginBottom: 12,
+    marginBottom: 16,
   },
   seeAllText: {
     fontSize: 14,
-    color: THEME.ACCENT,
+    color: COLORS.PRIMARY,
     fontWeight: '600',
   },
 
   // MATCH CARD
   matchCard: {
-    backgroundColor: THEME.SURFACE,
-    borderRadius: 16,
+    backgroundColor: COLORS.DARK_CARD,
+    borderRadius: RADIUS.lg,
     padding: 16,
     borderWidth: 1,
-    borderColor: THEME.BORDER,
+    borderColor: COLORS.BORDER,
     marginBottom: 12,
   },
   matchHeader: {
     flexDirection: 'row',
-    marginBottom: 12,
   },
   matchDateBox: {
     width: 56,
     height: 56,
-    borderRadius: 12,
-    backgroundColor: THEME.ACCENT,
+    borderRadius: RADIUS.md,
+    backgroundColor: COLORS.PRIMARY,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
@@ -693,11 +637,11 @@ const styles = StyleSheet.create({
   matchDay: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#000',
+    color: COLORS.WHITE,
   },
   matchMonth: {
     fontSize: 10,
-    color: '#000',
+    color: COLORS.WHITE,
     fontWeight: '600',
   },
   matchInfo: {
@@ -706,7 +650,7 @@ const styles = StyleSheet.create({
   matchTeams: {
     fontSize: 15,
     fontWeight: '600',
-    color: THEME.TEXT,
+    color: COLORS.WHITE,
     marginBottom: 6,
   },
   matchMetaRow: {
@@ -715,44 +659,27 @@ const styles = StyleSheet.create({
   },
   matchMeta: {
     fontSize: 12,
-    color: THEME.TEXT_SEC,
+    color: COLORS.WHITE,
+    opacity: 0.7,
     marginLeft: 4,
-  },
-  matchActions: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  matchActionBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(34, 197, 94, 0.1)',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 8,
-    gap: 6,
-  },
-  matchActionText: {
-    fontSize: 13,
-    color: THEME.ACCENT,
-    fontWeight: '600',
   },
 
   // TEAM CARD
   teamCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: THEME.SURFACE,
-    borderRadius: 16,
+    backgroundColor: COLORS.DARK_CARD,
+    borderRadius: RADIUS.lg,
     padding: 16,
     borderWidth: 1,
-    borderColor: THEME.BORDER,
+    borderColor: COLORS.BORDER,
     marginBottom: 12,
   },
   teamIcon: {
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: 'rgba(34, 197, 94, 0.1)',
+    backgroundColor: `${COLORS.PRIMARY}15`,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
@@ -763,18 +690,19 @@ const styles = StyleSheet.create({
   teamName: {
     fontSize: 15,
     fontWeight: '600',
-    color: THEME.TEXT,
+    color: COLORS.WHITE,
     marginBottom: 4,
   },
   teamMeta: {
     fontSize: 12,
-    color: THEME.TEXT_SEC,
+    color: COLORS.WHITE,
+    opacity: 0.7,
   },
   teamActionBtn: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: THEME.BG,
+    backgroundColor: COLORS.GLASS,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -783,17 +711,17 @@ const styles = StyleSheet.create({
   recruitCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: THEME.SURFACE,
-    borderRadius: 16,
+    backgroundColor: COLORS.DARK_CARD,
+    borderRadius: RADIUS.lg,
     padding: 16,
     borderWidth: 1,
-    borderColor: THEME.BORDER,
+    borderColor: COLORS.BORDER,
   },
   recruitIcon: {
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: '#8B5CF620',
+    backgroundColor: `${COLORS.ROLE_REFEREE}15`,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
@@ -804,12 +732,13 @@ const styles = StyleSheet.create({
   recruitTitle: {
     fontSize: 15,
     fontWeight: '600',
-    color: THEME.TEXT,
+    color: COLORS.WHITE,
     marginBottom: 4,
   },
   recruitDesc: {
     fontSize: 12,
-    color: THEME.TEXT_SEC,
+    color: COLORS.WHITE,
+    opacity: 0.7,
   },
 
   // LOADING & EMPTY STATES
@@ -818,29 +747,32 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   emptyCard: {
-    backgroundColor: THEME.SURFACE,
-    borderRadius: 16,
+    backgroundColor: COLORS.DARK_CARD,
+    borderRadius: RADIUS.lg,
     padding: 32,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: THEME.BORDER,
+    borderColor: COLORS.BORDER,
     marginBottom: 12,
   },
   emptyText: {
     fontSize: 14,
-    color: THEME.TEXT_SEC,
+    color: COLORS.WHITE,
+    opacity: 0.7,
     marginTop: 12,
     marginBottom: 16,
   },
-  createTeamBtn: {
-    backgroundColor: THEME.ACCENT,
+  createBtn: {
+    backgroundColor: COLORS.PRIMARY,
     paddingHorizontal: 20,
     paddingVertical: 10,
-    borderRadius: 8,
+    borderRadius: RADIUS.md,
   },
-  createTeamText: {
+  createBtnText: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#000',
+    color: COLORS.WHITE,
   },
 });
+
+export default ManagerDashboardScreen;

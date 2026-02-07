@@ -42,6 +42,7 @@ router.get(
       let stats = {
         totalBookings: 0,
         pendingBookings: 0,
+        awaitingOwnerValidation: 0,
         confirmedBookings: 0,
         totalRevenue: 0,
         monthRevenue: 0,
@@ -55,6 +56,7 @@ router.get(
         SELECT
           COUNT(*) as totalBookings,
           SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) as pendingBookings,
+          SUM(CASE WHEN status = 'manager_confirmed' THEN 1 ELSE 0 END) as awaitingOwnerValidation,
           SUM(CASE WHEN status = 'confirmed' THEN 1 ELSE 0 END) as confirmedBookings,
           SUM(CASE WHEN status = 'confirmed' AND payment_status = 'paid' THEN final_price ELSE 0 END) as totalRevenue,
           SUM(CASE WHEN status = 'confirmed' AND payment_status = 'paid'
@@ -71,6 +73,7 @@ router.get(
           stats = {
             totalBookings: parseInt(statsResult[0].totalBookings) || 0,
             pendingBookings: parseInt(statsResult[0].pendingBookings) || 0,
+            awaitingOwnerValidation: parseInt(statsResult[0].awaitingOwnerValidation) || 0,
             confirmedBookings: parseInt(statsResult[0].confirmedBookings) || 0,
             totalRevenue: parseFloat(statsResult[0].totalRevenue) || 0,
             monthRevenue: parseFloat(statsResult[0].monthRevenue) || 0,
@@ -237,7 +240,9 @@ router.get(
 
 /**
  * PUT /api/venue-owner/bookings/:id/respond
- * Accept/Reject booking
+ * Phase 2: Le propriétaire du terrain valide ou refuse la réservation
+ * Requiert: status = 'manager_confirmed' (le manager doit avoir confirmé d'abord)
+ * Transition: manager_confirmed -> confirmed (accept) ou cancelled (reject)
  */
 router.put(
   "/bookings/:id/respond",
@@ -246,41 +251,69 @@ router.put(
     const { action, message } = req.body; // action: 'accept' | 'reject'
 
     if (!["accept", "reject"].includes(action)) {
-      return res.status(400).json({ error: "Invalid action" });
+      return res.status(400).json({ error: "Action invalide. Utilisez 'accept' ou 'reject'" });
     }
 
     try {
       // Verify ownership
       const [rows] = await db.execute(
         `
-      SELECT vb.id, vb.status, vb.location_id 
-      FROM venue_bookings vb
-      JOIN locations l ON vb.location_id = l.id
-      WHERE vb.id = ? AND l.owner_id = ?
-    `,
+        SELECT vb.id, vb.status, vb.location_id, vb.manager_confirmed_at,
+               l.name as venue_name,
+               t.name as team_name
+        FROM venue_bookings vb
+        JOIN locations l ON vb.location_id = l.id
+        JOIN teams t ON vb.team_id = t.id
+        WHERE vb.id = ? AND l.owner_id = ?
+        `,
         [req.params.id, req.user.id]
       );
 
-      if (rows.length === 0)
-        return res.status(404).json({ error: "Booking not found" });
-      if (rows[0].status !== "pending")
-        return res.status(400).json({ error: "Booking already processed" });
+      if (rows.length === 0) {
+        return res.status(404).json({ error: "Réservation non trouvée" });
+      }
+
+      const booking = rows[0];
+
+      // Workflow 2 phases: le propriétaire ne peut répondre que si le manager a confirmé
+      if (booking.status === "pending") {
+        return res.status(400).json({
+          error: "Le manager de l'équipe doit d'abord confirmer la réservation",
+          currentStatus: booking.status,
+          requiredStatus: "manager_confirmed"
+        });
+      }
+
+      if (booking.status !== "manager_confirmed") {
+        return res.status(400).json({
+          error: `Impossible de traiter. Statut actuel: ${booking.status}`,
+          currentStatus: booking.status
+        });
+      }
 
       const newStatus = action === "accept" ? "confirmed" : "cancelled";
 
       await db.execute(
         `
-      UPDATE venue_bookings
-      SET status = ?, owner_response_message = ?, owner_responded_at = NOW()
-      WHERE id = ?
-    `,
-        [newStatus, message, req.params.id]
+        UPDATE venue_bookings
+        SET status = ?,
+            owner_response_message = ?,
+            owner_responded_at = NOW()
+        WHERE id = ?
+        `,
+        [newStatus, message || null, req.params.id]
       );
 
-      res.json({ success: true, status: newStatus });
+      res.json({
+        success: true,
+        status: newStatus,
+        message: action === "accept"
+          ? `Réservation confirmée pour ${booking.team_name} au ${booking.venue_name}`
+          : `Réservation refusée`
+      });
     } catch (error) {
       console.error("Error responding to booking:", error);
-      res.status(500).json({ error: "Internal error" });
+      res.status(500).json({ error: "Erreur serveur" });
     }
   }
 );

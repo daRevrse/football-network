@@ -1,5 +1,9 @@
-// ====== src/screens/matches/MatchesScreen.js ======
-import React, { useState, useCallback, useRef } from 'react';
+/**
+ * MatchesScreen - Mes Matchs
+ * Design Foot Connect Premium
+ */
+
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -10,7 +14,6 @@ import {
   Platform,
   StatusBar,
   RefreshControl,
-  ActivityIndicator,
   Image,
 } from 'react-native';
 import { Feather as Icon } from '@expo/vector-icons';
@@ -19,18 +22,7 @@ import { useSelector } from 'react-redux';
 import { LinearGradient } from 'expo-linear-gradient';
 import { matchesApi } from '../../services/api';
 import { API_CONFIG } from '../../utils/constants';
-
-// Thème Premium Night
-const THEME = {
-  BG: '#0F172A', // Slate 900
-  SURFACE: '#1E293B', // Slate 800
-  TEXT: '#F8FAFC', // Slate 50
-  TEXT_SEC: '#94A3B8', // Slate 400
-  ACCENT: '#22C55E', // Green 500
-  BORDER: '#334155', // Slate 700
-  LIVE: '#EF4444', // Red 500 (En cours)
-  WIN: '#F59E0B', // Amber 500 (Vainqueur)
-};
+import { COLORS, GRADIENTS, SHADOWS, RADIUS } from '../../theme/colors';
 
 // Helper Date
 const formatDate = dateString => {
@@ -56,19 +48,19 @@ const formatDate = dateString => {
 const getStatusInfo = status => {
   switch (status) {
     case 'in_progress':
-      return { label: 'EN DIRECT', color: THEME.LIVE, icon: 'activity' };
+      return { label: 'EN DIRECT', color: COLORS.ERROR, icon: 'activity' };
     case 'completed':
-      return { label: 'TERMINÉ', color: THEME.TEXT_SEC, icon: 'check' };
+      return { label: 'TERMINÉ', color: COLORS.SUCCESS, icon: 'check' };
     case 'cancelled':
-      return { label: 'ANNULÉ', color: '#EF4444', icon: 'x' };
+      return { label: 'ANNULÉ', color: COLORS.ERROR, icon: 'x' };
     case 'confirmed':
-      return { label: 'CONFIRMÉ', color: THEME.ACCENT, icon: 'check-circle' };
+      return { label: 'CONFIRMÉ', color: COLORS.PRIMARY, icon: 'check-circle' };
     default:
-      return { label: 'À VENIR', color: '#3B82F6', icon: 'calendar' };
+      return { label: 'À VENIR', color: COLORS.INFO, icon: 'calendar' };
   }
 };
 
-// Composant Avatar d'Équipe (Image ou Initiale)
+// Composant Avatar d'Équipe
 const TeamAvatar = ({ name, logoUrl, size = 48 }) => {
   if (logoUrl) {
     return (
@@ -78,7 +70,9 @@ const TeamAvatar = ({ name, logoUrl, size = 48 }) => {
           width: size,
           height: size,
           borderRadius: size / 3,
-          backgroundColor: '#FFF',
+          backgroundColor: COLORS.WHITE,
+          borderWidth: 2,
+          borderColor: COLORS.PRIMARY,
         }}
         resizeMode="cover"
       />
@@ -87,7 +81,7 @@ const TeamAvatar = ({ name, logoUrl, size = 48 }) => {
 
   return (
     <LinearGradient
-      colors={[THEME.ACCENT, '#166534']}
+      colors={GRADIENTS.button}
       style={{
         width: size,
         height: size,
@@ -95,10 +89,10 @@ const TeamAvatar = ({ name, logoUrl, size = 48 }) => {
         justifyContent: 'center',
         alignItems: 'center',
         borderWidth: 1,
-        borderColor: 'rgba(255,255,255,0.1)',
+        borderColor: COLORS.GLASS_BORDER,
       }}
     >
-      <Text style={{ fontSize: size * 0.4, fontWeight: 'bold', color: '#FFF' }}>
+      <Text style={{ fontSize: size * 0.4, fontWeight: 'bold', color: COLORS.WHITE }}>
         {name ? name.charAt(0).toUpperCase() : '?'}
       </Text>
     </LinearGradient>
@@ -113,7 +107,7 @@ const MatchCard = ({ match, onPress }) => {
   return (
     <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.7}>
       <LinearGradient
-        colors={[THEME.SURFACE, '#162032']}
+        colors={[COLORS.DARK_CARD, COLORS.DARK_ELEVATED]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={styles.cardGradient}
@@ -171,15 +165,10 @@ const MatchCard = ({ match, onPress }) => {
               </>
             ) : (
               <>
-                <View
-                  style={[
-                    styles.avatarPlaceholder,
-                    { width: 48, height: 48, borderRadius: 16 },
-                  ]}
-                >
-                  <Icon name="help-circle" size={24} color={THEME.TEXT_SEC} />
+                <View style={styles.avatarPlaceholder}>
+                  <Icon name="help-circle" size={24} color={COLORS.WHITE} />
                 </View>
-                <Text style={[styles.teamName, { color: THEME.TEXT_SEC }]}>
+                <Text style={[styles.teamName, { opacity: 0.6 }]}>
                   En attente
                 </Text>
               </>
@@ -190,7 +179,7 @@ const MatchCard = ({ match, onPress }) => {
         {/* Location Footer */}
         <View style={styles.cardFooter}>
           <View style={styles.locationContainer}>
-            <Icon name="map-pin" size={12} color={THEME.TEXT_SEC} />
+            <Icon name="map-pin" size={12} color={COLORS.WHITE} />
             <Text style={styles.locationText} numberOfLines={1}>
               {match.location?.name ||
                 match.location?.address ||
@@ -199,7 +188,7 @@ const MatchCard = ({ match, onPress }) => {
           </View>
           {match.isOrganizer && (
             <View style={styles.organizerBadge}>
-              <Icon name="star" size={10} color="#000" />
+              <Icon name="star" size={10} color={COLORS.DARK} />
               <Text style={styles.organizerText}>ORGANISATEUR</Text>
             </View>
           )}
@@ -216,9 +205,8 @@ export const MatchesScreen = ({ navigation }) => {
   const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [matches, setMatches] = useState([]);
-  const [filter, setFilter] = useState('upcoming'); // upcoming, past
+  const [filter, setFilter] = useState('upcoming');
 
-  // Déterminer si l'utilisateur peut créer des matchs
   const canCreateMatch = userType === 'manager';
 
   useFocusEffect(
@@ -231,7 +219,6 @@ export const MatchesScreen = ({ navigation }) => {
     try {
       setLoading(true);
       const result = await matchesApi.getMyMatches();
-      console.log('Matches loaded:', result); // Debug pour vérifier les logos
       if (result.success) setMatches(result.data || result.matches || []);
     } catch (e) {
       console.error(e);
@@ -261,10 +248,13 @@ export const MatchesScreen = ({ navigation }) => {
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={THEME.BG} />
+      <StatusBar barStyle="light-content" backgroundColor={COLORS.DARK} />
 
       {/* Header */}
-      <View style={styles.header}>
+      <LinearGradient
+        colors={[COLORS.PRIMARY, COLORS.PRIMARY_DARK, COLORS.DARK]}
+        style={styles.header}
+      >
         <Text style={styles.title}>Mes Matchs</Text>
         <View style={styles.headerActions}>
           {canCreateMatch && (
@@ -272,17 +262,17 @@ export const MatchesScreen = ({ navigation }) => {
               style={styles.createBtn}
               onPress={() => navigation.navigate('CreateMatch')}
             >
-              <Icon name="plus" size={24} color="#000" />
+              <Icon name="plus" size={22} color={COLORS.WHITE} />
             </TouchableOpacity>
           )}
           <TouchableOpacity
             style={styles.invitationButton}
             onPress={handleInvitations}
           >
-            <Icon name="mail" size={20} color="#FFF" />
+            <Icon name="mail" size={20} color={COLORS.WHITE} />
           </TouchableOpacity>
         </View>
-      </View>
+      </LinearGradient>
 
       {/* Tabs */}
       <View style={styles.tabs}>
@@ -317,21 +307,30 @@ export const MatchesScreen = ({ navigation }) => {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            tintColor={THEME.ACCENT}
+            tintColor={COLORS.PRIMARY}
           />
         }
       >
         {filteredMatches.length === 0 && !loading ? (
           <View style={styles.emptyState}>
-            <Icon name="calendar" size={48} color={THEME.TEXT_SEC} />
+            <View style={styles.emptyIconBox}>
+              <Icon name="calendar" size={48} color={COLORS.PRIMARY} />
+            </View>
             <Text style={styles.emptyText}>
               Aucun match {filter === 'upcoming' ? 'prévu' : 'trouvé'}
             </Text>
             {filter === 'upcoming' && canCreateMatch && (
               <TouchableOpacity
+                style={styles.emptyBtn}
                 onPress={() => navigation.navigate('CreateMatch')}
               >
-                <Text style={styles.linkText}>Organiser un match</Text>
+                <LinearGradient
+                  colors={GRADIENTS.button}
+                  style={styles.emptyBtnGradient}
+                >
+                  <Icon name="plus" size={18} color={COLORS.WHITE} />
+                  <Text style={styles.emptyBtnText}>Organiser un match</Text>
+                </LinearGradient>
               </TouchableOpacity>
             )}
           </View>
@@ -346,25 +345,34 @@ export const MatchesScreen = ({ navigation }) => {
             />
           ))
         )}
-        <View style={{ height: 80 }} />
+        <View style={{ height: 100 }} />
       </ScrollView>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: THEME.BG },
+  container: {
+    flex: 1,
+    backgroundColor: COLORS.DARK,
+  },
+
+  // HEADER
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingTop: Platform.OS === 'ios' ? 60 : 30,
+    paddingTop: Platform.OS === 'ios' ? 60 : 40,
     paddingHorizontal: 24,
     paddingBottom: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: THEME.BORDER,
+    borderBottomLeftRadius: RADIUS.xl,
+    borderBottomRightRadius: RADIUS.xl,
   },
-  title: { fontSize: 28, fontWeight: '900', color: THEME.TEXT },
+  title: {
+    fontSize: 28,
+    fontWeight: '800',
+    color: COLORS.WHITE,
+  },
   headerActions: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -374,24 +382,24 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: THEME.ACCENT,
+    backgroundColor: COLORS.GLASS,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: THEME.ACCENT,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
+    borderWidth: 1,
+    borderColor: COLORS.GLASS_BORDER,
   },
   invitationButton: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: THEME.SURFACE,
+    backgroundColor: COLORS.GLASS,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: THEME.BORDER,
+    borderColor: COLORS.GLASS_BORDER,
   },
+
+  // TABS
   tabs: {
     flexDirection: 'row',
     paddingHorizontal: 24,
@@ -400,34 +408,44 @@ const styles = StyleSheet.create({
     marginTop: 16,
   },
   tab: {
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 20,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: RADIUS.full,
     borderWidth: 1,
-    borderColor: THEME.BORDER,
-    backgroundColor: THEME.SURFACE,
+    borderColor: COLORS.BORDER,
+    backgroundColor: COLORS.DARK_CARD,
   },
   tabActive: {
-    backgroundColor: THEME.ACCENT,
-    borderColor: THEME.ACCENT,
+    backgroundColor: COLORS.PRIMARY,
+    borderColor: COLORS.PRIMARY,
   },
-  tabText: { color: THEME.TEXT_SEC, fontWeight: '600', fontSize: 13 },
-  tabTextActive: { color: '#000' },
-  content: { paddingHorizontal: 24 },
+  tabText: {
+    color: COLORS.WHITE,
+    fontWeight: '600',
+    fontSize: 14,
+    opacity: 0.7,
+  },
+  tabTextActive: {
+    color: COLORS.WHITE,
+    opacity: 1,
+  },
+
+  content: {
+    paddingHorizontal: 24,
+  },
 
   // CARD
   card: {
     marginBottom: 16,
-    borderRadius: 16,
+    borderRadius: RADIUS.lg,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: THEME.BORDER,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
+    borderColor: COLORS.BORDER,
+    ...SHADOWS.medium,
   },
-  cardGradient: { padding: 16 },
+  cardGradient: {
+    padding: 16,
+  },
   cardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -442,19 +460,36 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 4,
     gap: 6,
+    backgroundColor: 'rgba(0,0,0,0.3)',
   },
-  statusDot: { width: 6, height: 6, borderRadius: 3 },
-  statusText: { fontSize: 10, fontWeight: 'bold' },
-  dateText: { color: THEME.TEXT_SEC, fontSize: 12, fontWeight: '500' },
+  statusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  statusText: {
+    fontSize: 10,
+    fontWeight: 'bold',
+  },
+  dateText: {
+    color: COLORS.WHITE,
+    fontSize: 12,
+    fontWeight: '500',
+    opacity: 0.8,
+  },
 
   teamsRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  teamSide: { flex: 1, alignItems: 'center', gap: 8 },
+  teamSide: {
+    flex: 1,
+    alignItems: 'center',
+    gap: 8,
+  },
   teamName: {
-    color: THEME.TEXT,
+    color: COLORS.WHITE,
     fontSize: 13,
     fontWeight: '600',
     textAlign: 'center',
@@ -466,18 +501,27 @@ const styles = StyleSheet.create({
     height: 40,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#0F172A',
-    borderRadius: 12,
+    backgroundColor: COLORS.DARK,
+    borderRadius: RADIUS.md,
     borderWidth: 1,
-    borderColor: THEME.BORDER,
+    borderColor: COLORS.BORDER,
     paddingHorizontal: 12,
   },
   scoreBoxActive: {
-    borderColor: THEME.ACCENT,
-    backgroundColor: 'rgba(34, 197, 94, 0.1)',
+    borderColor: COLORS.PRIMARY,
+    backgroundColor: `${COLORS.PRIMARY}15`,
   },
-  scoreText: { color: THEME.TEXT, fontSize: 18, fontWeight: 'bold' },
-  vsText: { color: THEME.TEXT_SEC, fontSize: 14, fontWeight: 'bold' },
+  scoreText: {
+    color: COLORS.WHITE,
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  vsText: {
+    color: COLORS.WHITE,
+    fontSize: 14,
+    fontWeight: 'bold',
+    opacity: 0.6,
+  },
 
   cardFooter: {
     flexDirection: 'row',
@@ -486,7 +530,7 @@ const styles = StyleSheet.create({
     marginTop: 20,
     paddingTop: 12,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(255,255,255,0.05)',
+    borderTopColor: COLORS.GLASS_BORDER,
   },
   locationContainer: {
     flexDirection: 'row',
@@ -494,32 +538,77 @@ const styles = StyleSheet.create({
     gap: 6,
     flex: 1,
   },
-  locationText: { color: THEME.TEXT_SEC, fontSize: 12, flex: 1 },
+  locationText: {
+    color: COLORS.WHITE,
+    fontSize: 12,
+    flex: 1,
+    opacity: 0.8,
+  },
 
   organizerBadge: {
-    backgroundColor: THEME.CAPTAIN,
+    backgroundColor: COLORS.WARNING,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
     gap: 4,
   },
-  organizerText: { color: '#000', fontSize: 9, fontWeight: 'bold' },
+  organizerText: {
+    color: COLORS.DARK,
+    fontSize: 9,
+    fontWeight: 'bold',
+  },
 
   avatarPlaceholder: {
-    backgroundColor: THEME.SURFACE_LIGHT,
+    width: 48,
+    height: 48,
+    borderRadius: RADIUS.lg,
+    backgroundColor: COLORS.GLASS,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: THEME.BORDER,
+    borderColor: COLORS.GLASS_BORDER,
   },
 
-  emptyState: { alignItems: 'center', marginTop: 60, gap: 12 },
-  emptyText: { color: THEME.TEXT_SEC, fontSize: 16 },
-  linkText: {
-    color: THEME.ACCENT,
+  // EMPTY STATE
+  emptyState: {
+    alignItems: 'center',
+    marginTop: 60,
+    gap: 12,
+  },
+  emptyIconBox: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: `${COLORS.PRIMARY}15`,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: COLORS.PRIMARY,
+  },
+  emptyText: {
+    color: COLORS.WHITE,
+    fontSize: 18,
+    fontWeight: '600',
+  },
+  emptyBtn: {
+    marginTop: 20,
+    borderRadius: RADIUS.lg,
+    overflow: 'hidden',
+    ...SHADOWS.glow,
+  },
+  emptyBtnGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+    paddingVertical: 14,
+    gap: 10,
+  },
+  emptyBtnText: {
+    color: COLORS.WHITE,
     fontWeight: 'bold',
-    textDecorationLine: 'underline',
+    fontSize: 15,
   },
 });

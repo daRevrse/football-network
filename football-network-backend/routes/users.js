@@ -635,6 +635,109 @@ router.get("/recruit", authenticateToken, async (req, res) => {
   }
 });
 
+/**
+ * GET /api/users/:id/rating-stats
+ * Récupérer les statistiques de notation d'un joueur
+ * Visible publiquement pour les profils joueurs
+ */
+router.get("/:id/rating-stats", authenticateToken, async (req, res) => {
+  try {
+    const userId = req.params.id;
+
+    // Vérifier que l'utilisateur existe et est un joueur
+    const [users] = await db.execute(
+      `SELECT id, first_name, last_name, average_rating, total_ratings, user_type
+       FROM users WHERE id = ?`,
+      [userId]
+    );
+
+    if (users.length === 0) {
+      return res.status(404).json({ error: "Utilisateur non trouvé" });
+    }
+
+    const user = users[0];
+
+    // Récupérer les statistiques détaillées depuis player_match_ratings
+    const [ratingStats] = await db.execute(
+      `SELECT
+        COUNT(*) as total_ratings,
+        AVG(rating) as average_rating,
+        MIN(rating) as min_rating,
+        MAX(rating) as max_rating,
+        SUM(CASE WHEN rating >= 7 THEN 1 ELSE 0 END) as good_performances,
+        SUM(CASE WHEN rating >= 9 THEN 1 ELSE 0 END) as excellent_performances
+       FROM player_match_ratings
+       WHERE player_id = ?`,
+      [userId]
+    );
+
+    // Récupérer les 5 dernières notations
+    const [recentRatings] = await db.execute(
+      `SELECT
+        pmr.rating, pmr.notes, pmr.created_at,
+        m.match_date,
+        ht.name as home_team_name, at.name as away_team_name,
+        t.name as team_name
+       FROM player_match_ratings pmr
+       JOIN matches m ON pmr.match_id = m.id
+       JOIN teams t ON pmr.team_id = t.id
+       JOIN teams ht ON m.home_team_id = ht.id
+       LEFT JOIN teams at ON m.away_team_id = at.id
+       WHERE pmr.player_id = ?
+       ORDER BY pmr.created_at DESC
+       LIMIT 5`,
+      [userId]
+    );
+
+    // Récupérer la distribution des notes
+    const [distribution] = await db.execute(
+      `SELECT
+        rating,
+        COUNT(*) as count
+       FROM player_match_ratings
+       WHERE player_id = ?
+       GROUP BY rating
+       ORDER BY rating ASC`,
+      [userId]
+    );
+
+    const stats = ratingStats[0];
+
+    res.json({
+      success: true,
+      player: {
+        id: user.id,
+        firstName: user.first_name,
+        lastName: user.last_name,
+        userType: user.user_type
+      },
+      stats: {
+        averageRating: stats.average_rating ? parseFloat(stats.average_rating).toFixed(2) : null,
+        totalRatings: parseInt(stats.total_ratings) || 0,
+        minRating: stats.min_rating,
+        maxRating: stats.max_rating,
+        goodPerformances: parseInt(stats.good_performances) || 0,
+        excellentPerformances: parseInt(stats.excellent_performances) || 0
+      },
+      distribution: distribution.map(d => ({
+        rating: d.rating,
+        count: d.count
+      })),
+      recentRatings: recentRatings.map(r => ({
+        rating: r.rating,
+        notes: r.notes,
+        matchDate: r.match_date,
+        match: `${r.home_team_name} vs ${r.away_team_name}`,
+        teamName: r.team_name,
+        createdAt: r.created_at
+      }))
+    });
+  } catch (error) {
+    console.error("Get rating stats error:", error);
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+
 // GET /api/users/:id - Récupérer le profil public d'un utilisateur
 router.get("/:id", authenticateToken, async (req, res) => {
   try {
@@ -643,6 +746,7 @@ router.get("/:id", authenticateToken, async (req, res) => {
     const [users] = await db.execute(
       `SELECT u.id, u.first_name, u.last_name, u.bio, u.position, u.skill_level,
               u.location_city, u.created_at, u.user_type,
+              u.average_rating, u.total_ratings,
               pp.stored_filename as profile_picture,
               cp.stored_filename as cover_photo
        FROM users u
@@ -683,6 +787,8 @@ router.get("/:id", authenticateToken, async (req, res) => {
       skillLevel: user.skill_level,
       locationCity: user.location_city,
       userType: user.user_type,
+      averageRating: user.average_rating ? parseFloat(user.average_rating) : null,
+      totalRatings: user.total_ratings || 0,
       profilePictureUrl: user.profile_picture
         ? `/uploads/users/${user.profile_picture}`
         : null,

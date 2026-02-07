@@ -1,4 +1,8 @@
-// ====== src/screens/teams/TeamDetailScreen.js ======
+/**
+ * TeamDetailScreen - Détail d'équipe
+ * Design Foot Connect Premium
+ */
+
 import React, { useState, useCallback } from 'react';
 import {
   View,
@@ -20,15 +24,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { useSelector } from 'react-redux';
 import { teamsApi } from '../../services/api';
 import { API_CONFIG } from '../../utils/constants';
-
-const THEME = {
-  BG: '#0F172A',
-  SURFACE: '#1E293B',
-  TEXT: '#F8FAFC',
-  TEXT_SEC: '#94A3B8',
-  ACCENT: '#22C55E',
-  BORDER: '#334155',
-};
+import { COLORS, GRADIENTS, SHADOWS, RADIUS } from '../../theme/colors';
 
 const StatBox = ({ label, value }) => (
   <View style={styles.statBox}>
@@ -85,11 +81,10 @@ export const TeamDetailScreen = ({ route, navigation }) => {
   if (loading || !team)
     return (
       <View style={[styles.container, styles.center]}>
-        <ActivityIndicator color={THEME.ACCENT} />
+        <ActivityIndicator color={COLORS.PRIMARY} />
       </View>
     );
 
-  // Vérifier les permissions: L'utilisateur est-il owner ou captain de cette équipe?
   const isOwner = team.role === 'owner' || team.role === 'captain';
   const isManager = team.manager_id === user?.id;
   const isCaptain = team.captain_id === user?.id;
@@ -97,11 +92,10 @@ export const TeamDetailScreen = ({ route, navigation }) => {
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={THEME.BG} />
+      <StatusBar barStyle="light-content" backgroundColor={COLORS.DARK} />
 
       {/* HEADER AVEC BANNIÈRE */}
       <View style={styles.headerWrapper}>
-        {/* Image de Bannière */}
         {team.bannerUrl && (
           <Image
             source={{
@@ -110,9 +104,8 @@ export const TeamDetailScreen = ({ route, navigation }) => {
             style={styles.bannerImage}
           />
         )}
-        {/* Gradient Overlay pour lisibilité */}
         <LinearGradient
-          colors={['rgba(15, 23, 42, 0.3)', 'rgba(15, 23, 42, 0.8)', THEME.BG]}
+          colors={['rgba(10, 10, 10, 0.3)', 'rgba(10, 10, 10, 0.8)', COLORS.DARK]}
           style={styles.headerOverlay}
         />
 
@@ -122,7 +115,7 @@ export const TeamDetailScreen = ({ route, navigation }) => {
             onPress={() => navigation.goBack()}
             style={styles.iconBtn}
           >
-            <Icon name="arrow-left" size={24} color={THEME.TEXT} />
+            <Icon name="arrow-left" size={24} color={COLORS.WHITE} />
           </TouchableOpacity>
           <View style={styles.headerActions}>
             {isOwner && (
@@ -130,16 +123,16 @@ export const TeamDetailScreen = ({ route, navigation }) => {
                 onPress={() => navigation.navigate('EditTeam', { teamId })}
                 style={styles.iconBtn}
               >
-                <Icon name="edit-2" size={20} color={THEME.TEXT} />
+                <Icon name="edit-2" size={20} color={COLORS.WHITE} />
               </TouchableOpacity>
             )}
             <TouchableOpacity style={styles.iconBtn}>
-              <Icon name="share-2" size={20} color={THEME.TEXT} />
+              <Icon name="share-2" size={20} color={COLORS.WHITE} />
             </TouchableOpacity>
           </View>
         </View>
 
-        {/* Info Équipe (Logo Centré) */}
+        {/* Info Équipe */}
         <View style={styles.teamHeader}>
           <View style={styles.logoPlaceholder}>
             {team.logoUrl ? (
@@ -150,14 +143,13 @@ export const TeamDetailScreen = ({ route, navigation }) => {
                 style={styles.teamLogo}
               />
             ) : (
-              <Icon name="shield" size={48} color={THEME.ACCENT} />
+              <Icon name="shield" size={48} color={COLORS.PRIMARY} />
             )}
           </View>
           <Text style={styles.teamName}>{team.name}</Text>
           <Text style={styles.teamLoc}>
             {team.locationCity} • {team.skillLevel}
           </Text>
-          {/* Badge Mercato */}
           <View
             style={[
               styles.mercatoBadge,
@@ -167,12 +159,12 @@ export const TeamDetailScreen = ({ route, navigation }) => {
             <Icon
               name={team.mercatoActif ? 'user-check' : 'user-x'}
               size={14}
-              color={team.mercatoActif ? '#22C55E' : '#EF4444'}
+              color={team.mercatoActif ? COLORS.SUCCESS : COLORS.ERROR}
             />
             <Text
               style={[
                 styles.mercatoText,
-                {color: team.mercatoActif ? '#22C55E' : '#EF4444'},
+                {color: team.mercatoActif ? COLORS.SUCCESS : COLORS.ERROR},
               ]}
             >
               {team.mercatoActif ? 'Recrute' : 'Mercato Fermé'}
@@ -186,7 +178,7 @@ export const TeamDetailScreen = ({ route, navigation }) => {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={loadData}
-            tintColor={THEME.ACCENT}
+            tintColor={COLORS.PRIMARY}
           />
         }
         contentContainerStyle={styles.content}
@@ -213,27 +205,26 @@ export const TeamDetailScreen = ({ route, navigation }) => {
           }
         >
           <View style={styles.menuLeft}>
-            <View style={[styles.menuIcon, { backgroundColor: '#3B82F620' }]}>
-              <Icon name="users" size={20} color="#3B82F6" />
+            <View style={[styles.menuIcon, { backgroundColor: `${COLORS.INFO}20` }]}>
+              <Icon name="users" size={20} color={COLORS.INFO} />
             </View>
             <Text style={styles.menuText}>Voir les membres</Text>
           </View>
-          <Icon name="chevron-right" size={20} color={THEME.TEXT_SEC} />
+          <Icon name="chevron-right" size={20} color={COLORS.WHITE} />
         </TouchableOpacity>
 
         {canManage && (
           <>
             <TouchableOpacity style={styles.menuItem}>
               <View style={styles.menuLeft}>
-                <View style={[styles.menuIcon, { backgroundColor: '#F59E0B20' }]}>
-                  <Icon name="calendar" size={20} color="#F59E0B" />
+                <View style={[styles.menuIcon, { backgroundColor: `${COLORS.WARNING}20` }]}>
+                  <Icon name="calendar" size={20} color={COLORS.WARNING} />
                 </View>
                 <Text style={styles.menuText}>Planifier un match</Text>
               </View>
-              <Icon name="chevron-right" size={20} color={THEME.TEXT_SEC} />
+              <Icon name="chevron-right" size={20} color={COLORS.WHITE} />
             </TouchableOpacity>
 
-            {/* Toggle Mercato pour Managers */}
             <View style={styles.menuItem}>
               <View style={styles.menuLeft}>
                 <View
@@ -241,15 +232,15 @@ export const TeamDetailScreen = ({ route, navigation }) => {
                     styles.menuIcon,
                     {
                       backgroundColor: team.mercatoActif
-                        ? '#22C55E20'
-                        : '#EF444420',
+                        ? `${COLORS.SUCCESS}20`
+                        : `${COLORS.ERROR}20`,
                     },
                   ]}
                 >
                   <Icon
                     name={team.mercatoActif ? 'user-check' : 'user-x'}
                     size={20}
-                    color={team.mercatoActif ? THEME.ACCENT : '#EF4444'}
+                    color={team.mercatoActif ? COLORS.SUCCESS : COLORS.ERROR}
                   />
                 </View>
                 <View style={{flex: 1}}>
@@ -264,9 +255,9 @@ export const TeamDetailScreen = ({ route, navigation }) => {
               <Switch
                 value={team.mercatoActif || false}
                 onValueChange={handleToggleMercato}
-                trackColor={{false: '#334155', true: '#22C55E40'}}
-                thumbColor={team.mercatoActif ? THEME.ACCENT : '#94A3B8'}
-                ios_backgroundColor="#334155"
+                trackColor={{false: COLORS.BORDER, true: `${COLORS.SUCCESS}40`}}
+                thumbColor={team.mercatoActif ? COLORS.SUCCESS : COLORS.WHITE}
+                ios_backgroundColor={COLORS.BORDER}
               />
             </View>
           </>
@@ -283,12 +274,18 @@ export const TeamDetailScreen = ({ route, navigation }) => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: THEME.BG },
-  center: { justifyContent: 'center', alignItems: 'center' },
+  container: {
+    flex: 1,
+    backgroundColor: COLORS.DARK,
+  },
+  center: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
 
   // HEADER STYLES
   headerWrapper: {
-    height: 320, // Hauteur fixe pour le header
+    height: 320,
     justifyContent: 'flex-end',
     paddingBottom: 20,
     position: 'relative',
@@ -308,68 +305,96 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingTop: Platform.OS === 'ios' ? 60 : 30,
+    paddingTop: Platform.OS === 'ios' ? 60 : 40,
     paddingHorizontal: 20,
     zIndex: 10,
   },
-  headerActions: { flexDirection: 'row', gap: 12 },
+  headerActions: {
+    flexDirection: 'row',
+    gap: 12,
+  },
   iconBtn: {
-    padding: 8,
-    backgroundColor: 'rgba(0,0,0,0.4)', // Fond sombre semi-transparent
-    borderRadius: 12,
+    padding: 10,
+    backgroundColor: COLORS.GLASS,
+    borderRadius: RADIUS.md,
+    borderWidth: 1,
+    borderColor: COLORS.GLASS_BORDER,
   },
 
-  teamHeader: { alignItems: 'center', marginBottom: 10, zIndex: 5 },
+  teamHeader: {
+    alignItems: 'center',
+    marginBottom: 10,
+    zIndex: 5,
+  },
   logoPlaceholder: {
     width: 80,
     height: 80,
-    borderRadius: 50,
-    backgroundColor: `${THEME.ACCENT}15`,
+    borderRadius: 40,
+    backgroundColor: `${COLORS.PRIMARY}15`,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 16,
     borderWidth: 2,
-    borderColor: `${THEME.ACCENT}50`,
+    borderColor: COLORS.PRIMARY,
     overflow: 'hidden',
   },
-  teamLogo: { width: '100%', height: '100%' },
+  teamLogo: {
+    width: '100%',
+    height: '100%',
+  },
   teamName: {
     fontSize: 26,
     fontWeight: 'bold',
-    color: THEME.TEXT,
+    color: COLORS.WHITE,
     marginBottom: 4,
-    textShadowColor: 'rgba(0, 0, 0, 0.75)',
-    textShadowOffset: { width: -1, height: 1 },
-    textShadowRadius: 10,
   },
   teamLoc: {
     fontSize: 14,
-    color: THEME.TEXT_SEC,
+    color: COLORS.WHITE,
+    opacity: 0.7,
     textTransform: 'capitalize',
   },
 
-  content: { padding: 24 },
+  content: {
+    padding: 24,
+  },
 
   statsRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: THEME.SURFACE,
+    backgroundColor: COLORS.DARK_CARD,
     padding: 20,
-    borderRadius: 16,
+    borderRadius: RADIUS.lg,
     marginBottom: 32,
     borderWidth: 1,
-    borderColor: THEME.BORDER,
+    borderColor: COLORS.BORDER,
   },
-  statBox: { alignItems: 'center', flex: 1 },
-  statValue: { fontSize: 20, fontWeight: 'bold', color: THEME.TEXT },
-  statLabel: { fontSize: 12, color: THEME.TEXT_SEC, marginTop: 4 },
-  divider: { width: 1, height: 30, backgroundColor: THEME.BORDER },
+  statBox: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  statValue: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: COLORS.WHITE,
+  },
+  statLabel: {
+    fontSize: 12,
+    color: COLORS.WHITE,
+    marginTop: 4,
+    opacity: 0.7,
+  },
+  divider: {
+    width: 1,
+    height: 30,
+    backgroundColor: COLORS.BORDER,
+  },
 
   sectionTitle: {
     fontSize: 12,
     fontWeight: 'bold',
-    color: THEME.TEXT_SEC,
+    color: COLORS.PRIMARY,
     textTransform: 'uppercase',
     letterSpacing: 1,
     marginBottom: 16,
@@ -378,26 +403,36 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: THEME.SURFACE,
+    backgroundColor: COLORS.DARK_CARD,
     padding: 16,
-    borderRadius: 12,
+    borderRadius: RADIUS.md,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: THEME.BORDER,
+    borderColor: COLORS.BORDER,
   },
-  menuLeft: { flexDirection: 'row', alignItems: 'center', gap: 16 },
+  menuLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+    flex: 1,
+  },
   menuIcon: {
     width: 40,
     height: 40,
-    borderRadius: 10,
+    borderRadius: RADIUS.sm,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  menuText: { fontSize: 16, color: THEME.TEXT, fontWeight: '600' },
+  menuText: {
+    fontSize: 16,
+    color: COLORS.WHITE,
+    fontWeight: '600',
+  },
   menuSubtext: {
     fontSize: 12,
-    color: THEME.TEXT_SEC,
+    color: COLORS.WHITE,
     marginTop: 2,
+    opacity: 0.6,
   },
 
   // Mercato Badge
@@ -406,24 +441,29 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 12,
     paddingVertical: 6,
-    borderRadius: 20,
+    borderRadius: RADIUS.full,
     marginTop: 8,
     gap: 6,
   },
   mercatoOpen: {
-    backgroundColor: '#22C55E20',
+    backgroundColor: `${COLORS.SUCCESS}20`,
     borderWidth: 1,
-    borderColor: '#22C55E40',
+    borderColor: `${COLORS.SUCCESS}40`,
   },
   mercatoClosed: {
-    backgroundColor: '#EF444420',
+    backgroundColor: `${COLORS.ERROR}20`,
     borderWidth: 1,
-    borderColor: '#EF444440',
+    borderColor: `${COLORS.ERROR}40`,
   },
   mercatoText: {
     fontSize: 12,
     fontWeight: '600',
   },
 
-  description: { fontSize: 14, color: THEME.TEXT_SEC, lineHeight: 22 },
+  description: {
+    fontSize: 14,
+    color: COLORS.WHITE,
+    lineHeight: 22,
+    opacity: 0.8,
+  },
 });

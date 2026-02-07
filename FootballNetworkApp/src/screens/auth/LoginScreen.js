@@ -1,5 +1,9 @@
-// ====== src/screens/auth/LoginScreen.js ======
-import React, { useState, useCallback } from 'react';
+/**
+ * LoginScreen - Écran de connexion premium
+ * Design cohérent avec le reste de l'onboarding
+ */
+
+import React, { useState, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -10,31 +14,26 @@ import {
   StatusBar,
   StyleSheet,
   Dimensions,
-  TextInput,
   ImageBackground,
   ActivityIndicator,
   Image,
   Platform,
+  Animated,
 } from 'react-native';
 import { Feather as Icon } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAuthImproved } from '../../utils/hooks/useAuthImproved';
+import { PremiumInput, PremiumButton } from '../../components/premium';
+import { COLORS, GRADIENTS, SHADOWS, RADIUS } from '../../theme/colors';
 
 const { height, width } = Dimensions.get('window');
-
-const THEME = {
-  ACCENT: '#22C55E', // Green 500
-  TEXT: '#F8FAFC',
-  TEXT_SEC: '#94A3B8',
-  ERROR: '#EF4444',
-};
 
 export const LoginScreen = ({ navigation }) => {
   const [email, setEmail] = useState(__DEV__ ? 'test@example.com' : '');
   const [password, setPassword] = useState(__DEV__ ? 'password123' : '');
-  const [showPassword, setShowPassword] = useState(false);
   const [errors, setErrors] = useState({});
   const { login, isLoading } = useAuthImproved();
+  const buttonScale = useRef(new Animated.Value(1)).current;
 
   const handleLogin = useCallback(async () => {
     // Validation
@@ -60,27 +59,42 @@ export const LoginScreen = ({ navigation }) => {
     }
   }, [email, password, login]);
 
+  const handlePressIn = () => {
+    Animated.spring(buttonScale, {
+      toValue: 0.97,
+      useNativeDriver: true,
+      speed: 50,
+    }).start();
+  };
+
+  const handlePressOut = () => {
+    Animated.spring(buttonScale, {
+      toValue: 1,
+      useNativeDriver: true,
+      speed: 50,
+    }).start();
+  };
+
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="#000" translucent />
+      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
 
-      {/* Image de fond + Overlay */}
+      {/* Background image avec overlay */}
       <ImageBackground
         source={{
-          uri: 'https://images.unsplash.com/photo-1574629810360-7efbbe195018?q=80&w=2836&auto=format&fit=crop',
+          uri: 'https://images.unsplash.com/photo-1574629810360-7efbbe195018?w=800&q=80',
         }}
         style={styles.backgroundImage}
         resizeMode="cover"
       >
-        {/* Overlay gradient vert-noir comme le web */}
         <LinearGradient
           colors={[
-            'rgba(22, 101, 52, 0.9)',
-            'rgba(0, 0, 0, 0.8)',
-            'rgba(0, 0, 0, 0.9)',
+            'rgba(0, 123, 64, 0.85)',
+            'rgba(0, 60, 32, 0.9)',
+            'rgba(10, 10, 10, 0.98)',
           ]}
           start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
+          end={{ x: 0.3, y: 1 }}
           style={styles.overlay}
         >
           <KeyboardAvoidingView
@@ -93,135 +107,116 @@ export const LoginScreen = ({ navigation }) => {
               keyboardShouldPersistTaps="handled"
               showsVerticalScrollIndicator={false}
             >
+              {/* Bouton retour */}
+              <TouchableOpacity
+                style={styles.backButton}
+                onPress={() => navigation.goBack()}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Icon name="arrow-left" size={22} color={COLORS.WHITE} />
+              </TouchableOpacity>
+
               {/* Header avec logo */}
               <View style={styles.header}>
-                <View style={styles.logoBox}>
-                  <Text style={styles.logoText}>FN</Text>
+                <View style={styles.logoContainer}>
+                  <Image
+                    source={require('../../assets/icon.png')}
+                    style={styles.logo}
+                    resizeMode="contain"
+                  />
                 </View>
                 <Text style={styles.title}>Bon retour !</Text>
                 <Text style={styles.subtitle}>
-                  Prêt pour le prochain match ? Connectez-vous.
+                  Prêt pour le prochain match ? Connecte-toi.
                 </Text>
               </View>
 
-              {/* Card glassmorphism */}
+              {/* Card formulaire */}
               <View style={styles.card}>
                 {/* Email */}
-                <View style={styles.inputGroup}>
-                  <Text style={styles.label}>Email</Text>
-                  <View style={styles.inputWrapper}>
-                    <Icon
-                      name="mail"
-                      size={20}
-                      color={errors.email ? THEME.ERROR : THEME.TEXT_SEC}
-                      style={styles.inputIcon}
-                    />
-                    <TextInput
-                      style={[styles.input, errors.email && styles.inputError]}
-                      value={email}
-                      onChangeText={text => {
-                        setEmail(text);
-                        if (errors.email) setErrors({ ...errors, email: null });
-                      }}
-                      placeholder="votre@email.com"
-                      placeholderTextColor="#6B7280"
-                      keyboardType="email-address"
-                      autoCapitalize="none"
-                      autoCorrect={false}
-                    />
-                  </View>
-                  {errors.email && (
-                    <View style={styles.errorRow}>
-                      <View style={styles.errorDot} />
-                      <Text style={styles.errorText}>{errors.email}</Text>
-                    </View>
-                  )}
-                </View>
+                <PremiumInput
+                  label="Email"
+                  placeholder="ton@email.com"
+                  value={email}
+                  onChangeText={(text) => {
+                    setEmail(text);
+                    if (errors.email) setErrors({ ...errors, email: null });
+                  }}
+                  icon="mail"
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  error={errors.email}
+                />
 
                 {/* Mot de passe */}
-                <View style={styles.inputGroup}>
-                  <View style={styles.labelRow}>
+                <View style={styles.passwordContainer}>
+                  <View style={styles.passwordHeader}>
                     <Text style={styles.label}>Mot de passe</Text>
                     <TouchableOpacity
                       onPress={() => navigation.navigate('ForgotPassword')}
+                      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                     >
                       <Text style={styles.forgotLink}>Oublié ?</Text>
                     </TouchableOpacity>
                   </View>
-                  <View style={styles.inputWrapper}>
-                    <Icon
-                      name="lock"
-                      size={20}
-                      color={errors.password ? THEME.ERROR : THEME.TEXT_SEC}
-                      style={styles.inputIcon}
-                    />
-                    <TextInput
-                      style={[
-                        styles.input,
-                        errors.password && styles.inputError,
-                      ]}
-                      value={password}
-                      onChangeText={text => {
-                        setPassword(text);
-                        if (errors.password)
-                          setErrors({ ...errors, password: null });
-                      }}
-                      placeholder="••••••••"
-                      placeholderTextColor="#6B7280"
-                      secureTextEntry={!showPassword}
-                      autoCapitalize="none"
-                      autoCorrect={false}
-                    />
-                    <TouchableOpacity
-                      onPress={() => setShowPassword(!showPassword)}
-                      style={styles.eyeButton}
-                    >
-                      <Icon
-                        name={showPassword ? 'eye-off' : 'eye'}
-                        size={20}
-                        color={THEME.TEXT_SEC}
-                      />
-                    </TouchableOpacity>
-                  </View>
-                  {errors.password && (
-                    <View style={styles.errorRow}>
-                      <View style={styles.errorDot} />
-                      <Text style={styles.errorText}>{errors.password}</Text>
-                    </View>
-                  )}
+                  <PremiumInput
+                    placeholder="••••••••"
+                    value={password}
+                    onChangeText={(text) => {
+                      setPassword(text);
+                      if (errors.password) setErrors({ ...errors, password: null });
+                    }}
+                    icon="lock"
+                    secureTextEntry
+                    error={errors.password}
+                    style={{ marginBottom: 0 }}
+                  />
                 </View>
 
                 {/* Bouton de connexion */}
-                <TouchableOpacity
+                <Animated.View
                   style={[
-                    styles.loginButton,
-                    isLoading && styles.loginButtonDisabled,
+                    styles.buttonWrapper,
+                    { transform: [{ scale: buttonScale }] },
+                    !isLoading && SHADOWS.glow,
                   ]}
-                  onPress={handleLogin}
-                  disabled={isLoading}
-                  activeOpacity={0.8}
                 >
-                  {isLoading ? (
-                    <>
-                      <ActivityIndicator color="#FFF" size="small" />
-                      <Text style={styles.loginButtonText}>Connexion...</Text>
-                    </>
-                  ) : (
-                    <>
-                      <Text style={styles.loginButtonText}>Se connecter</Text>
-                      <Icon name="arrow-right" size={20} color="#FFF" />
-                    </>
-                  )}
-                </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={handleLogin}
+                    onPressIn={handlePressIn}
+                    onPressOut={handlePressOut}
+                    disabled={isLoading}
+                    activeOpacity={0.9}
+                  >
+                    <LinearGradient
+                      colors={isLoading ? [COLORS.BORDER, COLORS.BORDER] : GRADIENTS.button}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 1 }}
+                      style={styles.loginButton}
+                    >
+                      {isLoading ? (
+                        <>
+                          <ActivityIndicator color={COLORS.WHITE} size="small" />
+                          <Text style={styles.loginButtonText}>Connexion...</Text>
+                        </>
+                      ) : (
+                        <>
+                          <Text style={styles.loginButtonText}>Se connecter</Text>
+                          <Icon name="arrow-right" size={20} color={COLORS.WHITE} />
+                        </>
+                      )}
+                    </LinearGradient>
+                  </TouchableOpacity>
+                </Animated.View>
 
-                {/* Divider avec OU */}
+                {/* Divider */}
                 <View style={styles.divider}>
                   <View style={styles.dividerLine} />
                   <Text style={styles.dividerText}>OU</Text>
                   <View style={styles.dividerLine} />
                 </View>
 
-                {/* Bouton Google Sign-In */}
+                {/* Bouton Google */}
                 <TouchableOpacity
                   style={styles.googleButton}
                   onPress={() => {
@@ -238,21 +233,15 @@ export const LoginScreen = ({ navigation }) => {
                     }}
                     style={styles.googleLogo}
                   />
-                  <Text style={styles.googleButtonText}>
-                    Continuer avec Google
-                  </Text>
+                  <Text style={styles.googleButtonText}>Continuer avec Google</Text>
                 </TouchableOpacity>
 
-                {/* Divider simple */}
-                <View style={styles.dividerSimple}>
-                  <View style={styles.dividerLineSimple} />
-                </View>
-
-                {/* Lien d'inscription */}
+                {/* Lien inscription */}
                 <View style={styles.signupRow}>
                   <Text style={styles.signupText}>Pas encore de compte ? </Text>
                   <TouchableOpacity
-                    onPress={() => navigation.navigate('Register')}
+                    onPress={() => navigation.navigate('RoleSelection')}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                   >
                     <Text style={styles.signupLink}>Créer un compte</Text>
                   </TouchableOpacity>
@@ -261,7 +250,7 @@ export const LoginScreen = ({ navigation }) => {
 
               {/* Footer */}
               <Text style={styles.footer}>
-                © 2024 Football Network. Tous droits réservés.
+                © 2025 Foot Connect. Tous droits réservés.
               </Text>
             </ScrollView>
           </KeyboardAvoidingView>
@@ -274,7 +263,7 @@ export const LoginScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#000',
+    backgroundColor: COLORS.DARK,
   },
   backgroundImage: {
     flex: 1,
@@ -287,188 +276,134 @@ const styles = StyleSheet.create({
   scrollContent: {
     flexGrow: 1,
     paddingHorizontal: 24,
-    paddingTop: Platform.OS === 'ios' ? 60 : 40,
+    paddingTop: Platform.OS === 'ios' ? 60 : 50,
     paddingBottom: 40,
+  },
+  backButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: COLORS.GLASS,
+    alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.GLASS_BORDER,
+    marginBottom: 20,
   },
 
-  // HEADER
+  // Header
   header: {
     alignItems: 'center',
     marginBottom: 32,
   },
-  logoBox: {
-    width: 64,
-    height: 64,
-    borderRadius: 16,
-    backgroundColor: THEME.ACCENT,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 16,
-    transform: [{ rotate: '3deg' }],
-    shadowColor: THEME.ACCENT,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.3,
-    shadowRadius: 16,
-    elevation: 8,
+  logoContainer: {
+    marginBottom: 20,
+    ...SHADOWS.glow,
   },
-  logoText: {
-    fontSize: 24,
-    fontWeight: '900',
-    color: '#FFF',
+  logo: {
+    width: 80,
+    height: 80,
   },
   title: {
     fontSize: 32,
-    fontWeight: 'bold',
-    color: THEME.TEXT,
+    fontWeight: '800',
+    color: COLORS.WHITE,
     marginBottom: 8,
     textAlign: 'center',
+    letterSpacing: -0.5,
   },
   subtitle: {
     fontSize: 16,
-    color: '#D1D5DB',
+    color: COLORS.TEXT_SECONDARY,
     textAlign: 'center',
   },
 
-  // CARD GLASSMORPHISM
+  // Card
   card: {
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    borderRadius: 16,
+    backgroundColor: COLORS.GLASS,
+    borderRadius: RADIUS.lg,
     padding: 24,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 20 },
-    shadowOpacity: 0.3,
-    shadowRadius: 30,
-    elevation: 10,
+    borderColor: COLORS.GLASS_BORDER,
+    ...SHADOWS.medium,
   },
 
-  // INPUTS
-  inputGroup: {
+  // Password section
+  passwordContainer: {
     marginBottom: 24,
   },
-  label: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#E5E7EB',
-    marginBottom: 8,
-  },
-  labelRow: {
+  passwordHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 8,
   },
+  label: {
+    color: COLORS.TEXT_SECONDARY,
+    fontSize: 14,
+    fontWeight: '500',
+    letterSpacing: 0.3,
+  },
   forgotLink: {
-    fontSize: 12,
-    color: THEME.ACCENT,
+    fontSize: 13,
+    color: COLORS.PRIMARY,
     fontWeight: '600',
   },
-  inputWrapper: {
-    position: 'relative',
-  },
-  inputIcon: {
-    position: 'absolute',
-    left: 12,
-    top: 14,
-    zIndex: 1,
-  },
-  input: {
-    backgroundColor: 'rgba(0, 0, 0, 0.2)',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
-    borderRadius: 12,
-    paddingLeft: 44,
-    paddingRight: 44,
-    paddingVertical: 12,
-    fontSize: 16,
-    color: THEME.TEXT,
-  },
-  inputError: {
-    borderColor: THEME.ERROR,
-  },
-  eyeButton: {
-    position: 'absolute',
-    right: 12,
-    top: 12,
-    padding: 4,
-  },
-  errorRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 6,
-  },
-  errorDot: {
-    width: 4,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: THEME.ERROR,
-    marginRight: 8,
-  },
-  errorText: {
-    fontSize: 13,
-    color: THEME.ERROR,
-  },
 
-  // BUTTON
+  // Button
+  buttonWrapper: {
+    borderRadius: RADIUS.md,
+    overflow: 'hidden',
+    marginTop: 8,
+  },
   loginButton: {
-    backgroundColor: '#16A34A',
-    borderRadius: 12,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    paddingVertical: 18,
+    borderRadius: RADIUS.md,
     gap: 8,
-    shadowColor: '#16A34A',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 4,
-    marginTop: 8,
-  },
-  loginButtonDisabled: {
-    opacity: 0.5,
   },
   loginButtonText: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#FFF',
+    fontSize: 17,
+    fontWeight: '600',
+    color: COLORS.WHITE,
+    letterSpacing: 0.5,
   },
 
-  // DIVIDER
+  // Divider
   divider: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 32,
+    marginTop: 28,
     marginBottom: 24,
   },
   dividerLine: {
     flex: 1,
     height: 1,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    backgroundColor: COLORS.BORDER,
   },
   dividerText: {
     fontSize: 12,
-    color: '#9CA3AF',
+    color: COLORS.TEXT_MUTED,
     fontWeight: '600',
     marginHorizontal: 16,
+    letterSpacing: 1,
   },
 
-  // GOOGLE BUTTON
+  // Google button
   googleButton: {
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    backgroundColor: COLORS.GLASS,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
-    borderRadius: 12,
-    paddingVertical: 12,
+    borderColor: COLORS.GLASS_BORDER,
+    borderRadius: RADIUS.md,
+    paddingVertical: 14,
     paddingHorizontal: 16,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 12,
-    marginBottom: 8,
+    marginBottom: 24,
   },
   googleLogo: {
     width: 20,
@@ -477,20 +412,10 @@ const styles = StyleSheet.create({
   googleButtonText: {
     fontSize: 15,
     fontWeight: '600',
-    color: THEME.TEXT,
+    color: COLORS.TEXT_PRIMARY,
   },
 
-  // DIVIDER SIMPLE
-  dividerSimple: {
-    marginTop: 24,
-    marginBottom: 20,
-  },
-  dividerLineSimple: {
-    height: 1,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-  },
-
-  // SIGNUP ROW
+  // Signup row
   signupRow: {
     flexDirection: 'row',
     justifyContent: 'center',
@@ -498,19 +423,21 @@ const styles = StyleSheet.create({
   },
   signupText: {
     fontSize: 14,
-    color: '#9CA3AF',
+    color: COLORS.TEXT_MUTED,
   },
   signupLink: {
     fontSize: 14,
-    color: THEME.ACCENT,
-    fontWeight: 'bold',
+    color: COLORS.PRIMARY,
+    fontWeight: '600',
   },
 
-  // FOOTER
+  // Footer
   footer: {
     fontSize: 12,
-    color: '#6B7280',
+    color: COLORS.TEXT_MUTED,
     textAlign: 'center',
     marginTop: 32,
   },
 });
+
+export default LoginScreen;

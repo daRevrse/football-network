@@ -1,4 +1,8 @@
-// ====== src/screens/profile/ProfileScreen.js ======
+/**
+ * ProfileScreen - Profil utilisateur premium
+ * Design Foot Connect avec textes blancs
+ */
+
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import {
   View,
@@ -18,62 +22,63 @@ import { useSelector, useDispatch } from 'react-redux';
 import { Feather as Icon } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { UserApi } from '../../services/api';
-import { useAuthImproved } from '../../utils/hooks/useAuthImproved';
-import { SHADOWS } from '../../styles/theme';
 import { logout } from '../../store/slices/authSlice';
 import { API_CONFIG } from '../../utils/constants';
+import { COLORS, GRADIENTS, SHADOWS, RADIUS } from '../../theme/colors';
 
 const { width } = Dimensions.get('window');
-const HEADER_HEIGHT = 340;
+const HEADER_HEIGHT = 320;
 
-// Thème Dark
-const THEME = {
-  BG: '#0F172A',
-  SURFACE: '#1E293B',
-  SURFACE_LIGHT: '#334155',
-  TEXT: '#F8FAFC',
-  TEXT_SEC: '#94A3B8',
-  ACCENT: '#22C55E',
-  BORDER: '#334155',
-  DANGER: '#EF4444',
-};
-
-// StatCard "Neon Block"
+// StatCard component
 const StatCard = ({ icon, value, label, color }) => (
   <View style={[styles.statCard, { borderColor: color }]}>
     <View style={[styles.statIconBox, { backgroundColor: `${color}15` }]}>
       <Icon name={icon} size={20} color={color} />
     </View>
-    <Text style={styles.statValue}>{value}</Text>
+    <Text style={styles.statValue}>{value || 0}</Text>
     <Text style={styles.statLabel}>{label}</Text>
   </View>
 );
 
-// QuickAction "Dark Button"
-const QuickAction = ({ icon, label, onPress, color = THEME.ACCENT }) => (
+// QuickAction component
+const QuickAction = ({ icon, label, onPress, color = COLORS.PRIMARY }) => (
   <TouchableOpacity
     style={styles.quickAction}
     onPress={onPress}
     activeOpacity={0.7}
   >
-    <View style={[styles.quickActionIcon, { borderColor: color }]}>
+    <View style={[styles.quickActionIcon, { borderColor: color, backgroundColor: `${color}10` }]}>
       <Icon name={icon} size={20} color={color} />
     </View>
     <Text style={styles.quickActionLabel}>{label}</Text>
   </TouchableOpacity>
 );
 
+// MenuItem component
+const MenuItem = ({ icon, label, onPress, color = COLORS.WHITE, danger = false }) => (
+  <TouchableOpacity
+    style={styles.menuItem}
+    onPress={onPress}
+    activeOpacity={0.7}
+  >
+    <View style={[styles.menuItemIcon, { backgroundColor: danger ? `${COLORS.ERROR}15` : `${color}10` }]}>
+      <Icon name={icon} size={20} color={danger ? COLORS.ERROR : color} />
+    </View>
+    <Text style={[styles.menuItemLabel, danger && { color: COLORS.ERROR }]}>{label}</Text>
+    <Icon name="chevron-right" size={20} color={COLORS.TEXT_MUTED} />
+  </TouchableOpacity>
+);
+
 export const ProfileScreen = ({ navigation }) => {
-  const { logoutUser } = useAuthImproved();
   const dispatch = useDispatch();
   const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState(null);
   const [stats, setStats] = useState({
-    totalMatches: 0,
-    wins: 0,
-    goals: 0,
-    assists: 0,
+    matchesCount: 0,
+    winsCount: 0,
+    teamsCount: 0,
+    winRate: 0,
   });
 
   const scrollY = useRef(new Animated.Value(0)).current;
@@ -90,9 +95,6 @@ export const ProfileScreen = ({ navigation }) => {
 
       const statsResult = await UserApi.getStats();
       if (statsResult.success) setStats(statsResult.data);
-
-      console.log('profileResult', profileResult);
-      console.log('statsResult', statsResult);
     } catch (error) {
       console.error('Error loading profile:', error);
     } finally {
@@ -105,6 +107,21 @@ export const ProfileScreen = ({ navigation }) => {
     await loadProfileData();
     setRefreshing(false);
   }, []);
+
+  const handleLogout = () => {
+    Alert.alert(
+      'Déconnexion',
+      'Es-tu sûr de vouloir te déconnecter ?',
+      [
+        { text: 'Annuler', style: 'cancel' },
+        {
+          text: 'Déconnexion',
+          style: 'destructive',
+          onPress: () => dispatch(logout()),
+        },
+      ]
+    );
+  };
 
   // Animations
   const headerTranslateY = scrollY.interpolate({
@@ -119,9 +136,30 @@ export const ProfileScreen = ({ navigation }) => {
     extrapolate: 'clamp',
   });
 
+  const getPositionLabel = (position) => {
+    const positions = {
+      goalkeeper: 'Gardien',
+      defender: 'Défenseur',
+      midfielder: 'Milieu',
+      forward: 'Attaquant',
+      any: 'Polyvalent',
+    };
+    return positions[position] || position || 'Non défini';
+  };
+
+  const getSkillLabel = (skill) => {
+    const skills = {
+      beginner: 'Débutant',
+      amateur: 'Amateur',
+      intermediate: 'Intermédiaire',
+      advanced: 'Avancé',
+    };
+    return skills[skill] || skill || 'Non défini';
+  };
+
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={THEME.BG} />
+      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
 
       {/* HEADER */}
       <Animated.View
@@ -134,41 +172,40 @@ export const ProfileScreen = ({ navigation }) => {
         ]}
       >
         <LinearGradient
-          colors={['#14532d', '#0F172A']}
+          colors={[COLORS.PRIMARY, COLORS.PRIMARY_DARK, COLORS.DARK]}
           style={styles.headerGradient}
         >
+          {/* Top Row */}
           <View style={styles.topRow}>
             <TouchableOpacity
               style={styles.iconBtn}
               onPress={() => navigation.navigate('Settings')}
             >
-              <Icon name="settings" size={22} color={THEME.TEXT} />
+              <Icon name="settings" size={22} color={COLORS.WHITE} />
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.iconBtn}
               onPress={() => navigation.navigate('Notifications')}
             >
-              <Icon name="bell" size={22} color={THEME.TEXT} />
-              <View style={styles.badge} />
+              <Icon name="bell" size={22} color={COLORS.WHITE} />
             </TouchableOpacity>
           </View>
 
+          {/* Profile Info */}
           <View style={styles.profileInfo}>
             <View style={styles.avatarContainer}>
               {user?.profilePictureUrl ? (
                 <Image
                   source={{
-                    uri:
-                      API_CONFIG.BASE_URL.replace('/api', '') +
-                      user.profilePictureUrl,
+                    uri: API_CONFIG.BASE_URL.replace('/api', '') + user.profilePictureUrl,
                   }}
                   style={styles.avatar}
                 />
               ) : (
                 <View style={styles.avatarPlaceholder}>
                   <Text style={styles.avatarInitials}>
-                    {user?.firstName?.[0]}
-                    {user?.lastName?.[0]}
+                    {user?.firstName?.[0] || 'U'}
+                    {user?.lastName?.[0] || ''}
                   </Text>
                 </View>
               )}
@@ -176,22 +213,20 @@ export const ProfileScreen = ({ navigation }) => {
                 style={styles.editBadge}
                 onPress={() => navigation.navigate('EditProfile')}
               >
-                <Icon name="edit-2" size={14} color="#FFF" />
+                <Icon name="edit-2" size={14} color={COLORS.WHITE} />
               </TouchableOpacity>
             </View>
 
             <Text style={styles.name}>
-              {user?.firstName} {user?.lastName}
+              {user?.firstName || 'Utilisateur'} {user?.lastName || ''}
             </Text>
             <Text style={styles.position}>
-              {user?.position?.toUpperCase()} • {user?.locationCity}
+              {getPositionLabel(user?.position)} • {user?.locationCity || 'Ville non définie'}
             </Text>
 
             <View style={styles.tagsRow}>
               <View style={styles.tag}>
-                <Text style={styles.tagText}>
-                  {user?.skillLevel || 'Niveau ?'}
-                </Text>
+                <Text style={styles.tagText}>{getSkillLabel(user?.skillLevel)}</Text>
               </View>
             </View>
           </View>
@@ -206,11 +241,12 @@ export const ProfileScreen = ({ navigation }) => {
           [{ nativeEvent: { contentOffset: { y: scrollY } } }],
           { useNativeDriver: true },
         )}
+        scrollEventThrottle={16}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            tintColor={THEME.ACCENT}
+            tintColor={COLORS.PRIMARY}
           />
         }
       >
@@ -220,67 +256,103 @@ export const ProfileScreen = ({ navigation }) => {
             icon="activity"
             value={stats.matchesCount}
             label="Matchs"
-            color="#3B82F6"
+            color={COLORS.INFO}
           />
           <StatCard
             icon="trophy"
             value={stats.winsCount}
             label="Victoires"
-            color={THEME.ACCENT}
+            color={COLORS.SUCCESS}
           />
           <StatCard
             icon="shield"
             value={stats.teamsCount}
-            label="Equipes"
-            color="#F59E0B"
+            label="Équipes"
+            color={COLORS.WARNING}
           />
           <StatCard
             icon="zap"
-            value={stats.winRate}
-            label="Winrate %"
-            color="#8B5CF6"
+            value={`${stats.winRate || 0}%`}
+            label="Winrate"
+            color={COLORS.ROLE_REFEREE}
           />
         </View>
 
-        {/* Menu Rapide */}
-        <Text style={styles.sectionTitle}>Menu Principal</Text>
+        {/* Actions rapides */}
+        <Text style={styles.sectionTitle}>Actions Rapides</Text>
         <View style={styles.menuGrid}>
           <QuickAction
             icon="user"
             label="Modifier"
             onPress={() => navigation.navigate('EditProfile')}
-            color="#3B82F6"
+            color={COLORS.INFO}
           />
           <QuickAction
             icon="shield"
             label="Confidentialité"
             onPress={() => navigation.navigate('Privacy')}
-            color="#8B5CF6"
+            color={COLORS.ROLE_REFEREE}
           />
           <QuickAction
             icon="help-circle"
-            label="Support"
+            label="Aide"
             onPress={() => navigation.navigate('Help')}
-            color="#F59E0B"
+            color={COLORS.WARNING}
           />
           <QuickAction
-            icon="power"
-            label="Déconnexion"
-            color={THEME.DANGER}
-            onPress={() =>
-              Alert.alert('Déconnexion', 'Quitter ?', [
-                { text: 'Non', style: 'cancel' },
-                {
-                  text: 'Oui',
-                  style: 'destructive',
-                  onPress: () => dispatch(logout()),
-                },
-              ])
-            }
+            icon="share-2"
+            label="Partager"
+            onPress={() => Alert.alert('Partager', 'Fonctionnalité à venir')}
+            color={COLORS.SUCCESS}
           />
         </View>
 
-        {/* Espace pour le scroll */}
+        {/* Menu */}
+        <Text style={styles.sectionTitle}>Paramètres</Text>
+        <View style={styles.menuContainer}>
+          <MenuItem
+            icon="bell"
+            label="Notifications"
+            onPress={() => navigation.navigate('Notifications')}
+            color={COLORS.INFO}
+          />
+          <MenuItem
+            icon="lock"
+            label="Confidentialité"
+            onPress={() => navigation.navigate('Privacy')}
+            color={COLORS.ROLE_REFEREE}
+          />
+          <MenuItem
+            icon="help-circle"
+            label="Centre d'aide"
+            onPress={() => navigation.navigate('Help')}
+            color={COLORS.WARNING}
+          />
+          <MenuItem
+            icon="info"
+            label="À propos"
+            onPress={() => Alert.alert('Foot Connect', 'Version 1.0.0')}
+            color={COLORS.TEXT_SECONDARY}
+          />
+        </View>
+
+        {/* Déconnexion */}
+        <TouchableOpacity
+          style={styles.logoutButton}
+          onPress={handleLogout}
+        >
+          <LinearGradient
+            colors={['rgba(255, 61, 0, 0.1)', 'rgba(255, 61, 0, 0.05)']}
+            style={styles.logoutGradient}
+          >
+            <Icon name="log-out" size={20} color={COLORS.ERROR} />
+            <Text style={styles.logoutText}>Déconnexion</Text>
+          </LinearGradient>
+        </TouchableOpacity>
+
+        {/* Footer */}
+        <Text style={styles.footer}>Foot Connect v1.0.0</Text>
+
         <View style={{ height: 100 }} />
       </Animated.ScrollView>
     </View>
@@ -290,7 +362,7 @@ export const ProfileScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: THEME.BG,
+    backgroundColor: COLORS.DARK,
   },
   headerContainer: {
     position: 'absolute',
@@ -302,7 +374,7 @@ const styles = StyleSheet.create({
   },
   headerGradient: {
     flex: 1,
-    paddingTop: Platform.OS === 'ios' ? 60 : 30,
+    paddingTop: Platform.OS === 'ios' ? 60 : 40,
     paddingHorizontal: 20,
     borderBottomLeftRadius: 30,
     borderBottomRightRadius: 30,
@@ -312,25 +384,18 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   iconBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(0,0,0,0.2)',
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: COLORS.GLASS,
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  badge: {
-    position: 'absolute',
-    top: 10,
-    right: 10,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: THEME.DANGER,
+    borderWidth: 1,
+    borderColor: COLORS.GLASS_BORDER,
   },
   profileInfo: {
     alignItems: 'center',
-    marginTop: 20,
+    marginTop: 16,
   },
   avatarContainer: {
     marginBottom: 16,
@@ -341,44 +406,45 @@ const styles = StyleSheet.create({
     height: 100,
     borderRadius: 50,
     borderWidth: 3,
-    borderColor: THEME.ACCENT,
+    borderColor: COLORS.PRIMARY_LIGHT,
   },
   avatarPlaceholder: {
     width: 100,
     height: 100,
     borderRadius: 50,
-    backgroundColor: THEME.SURFACE,
+    backgroundColor: COLORS.GLASS,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 3,
-    borderColor: THEME.ACCENT,
+    borderColor: COLORS.PRIMARY_LIGHT,
   },
   avatarInitials: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: THEME.ACCENT,
+    fontSize: 36,
+    fontWeight: '800',
+    color: COLORS.WHITE,
   },
   editBadge: {
     position: 'absolute',
     bottom: 0,
     right: 0,
-    backgroundColor: '#3B82F6',
-    width: 30,
-    height: 30,
-    borderRadius: 15,
+    backgroundColor: COLORS.INFO,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 2,
-    borderColor: THEME.BG,
+    borderWidth: 3,
+    borderColor: COLORS.DARK,
   },
   name: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: THEME.TEXT,
+    fontSize: 26,
+    fontWeight: '800',
+    color: COLORS.WHITE,
   },
   position: {
     fontSize: 14,
-    color: THEME.TEXT_SEC,
+    color: COLORS.WHITE,
+    opacity: 0.8,
     marginTop: 4,
   },
   tagsRow: {
@@ -387,15 +453,15 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   tag: {
-    backgroundColor: 'rgba(34, 197, 94, 0.1)',
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 12,
+    backgroundColor: 'rgba(0, 123, 64, 0.2)',
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: RADIUS.full,
     borderWidth: 1,
-    borderColor: 'rgba(34, 197, 94, 0.3)',
+    borderColor: 'rgba(0, 168, 87, 0.3)',
   },
   tagText: {
-    color: THEME.ACCENT,
+    color: COLORS.PRIMARY_LIGHT,
     fontSize: 12,
     fontWeight: '600',
   },
@@ -407,42 +473,44 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 12,
-    marginBottom: 32,
+    marginBottom: 24,
   },
   statCard: {
     width: (width - 52) / 2,
-    backgroundColor: THEME.SURFACE,
-    borderRadius: 16,
+    backgroundColor: COLORS.DARK_CARD,
+    borderRadius: RADIUS.lg,
     padding: 16,
     borderWidth: 1,
     alignItems: 'center',
   },
   statIconBox: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 10,
   },
   statValue: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: THEME.TEXT,
+    fontSize: 26,
+    fontWeight: '800',
+    color: COLORS.WHITE,
   },
   statLabel: {
     fontSize: 12,
-    color: THEME.TEXT_SEC,
+    color: COLORS.TEXT_SECONDARY,
+    marginTop: 4,
   },
   sectionTitle: {
     fontSize: 18,
-    fontWeight: 'bold',
-    color: THEME.TEXT,
+    fontWeight: '700',
+    color: COLORS.WHITE,
     marginBottom: 16,
   },
   menuGrid: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    marginBottom: 32,
   },
   quickAction: {
     alignItems: 'center',
@@ -451,8 +519,8 @@ const styles = StyleSheet.create({
   quickActionIcon: {
     width: 56,
     height: 56,
-    borderRadius: 20,
-    backgroundColor: THEME.SURFACE,
+    borderRadius: 18,
+    backgroundColor: COLORS.DARK_CARD,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
@@ -460,6 +528,62 @@ const styles = StyleSheet.create({
   },
   quickActionLabel: {
     fontSize: 12,
-    color: THEME.TEXT_SEC,
+    color: COLORS.WHITE,
+    fontWeight: '500',
+  },
+  menuContainer: {
+    backgroundColor: COLORS.DARK_CARD,
+    borderRadius: RADIUS.lg,
+    overflow: 'hidden',
+    marginBottom: 24,
+  },
+  menuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.BORDER,
+  },
+  menuItemIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 14,
+  },
+  menuItemLabel: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: '500',
+    color: COLORS.WHITE,
+  },
+  logoutButton: {
+    marginBottom: 16,
+    borderRadius: RADIUS.lg,
+    overflow: 'hidden',
+  },
+  logoutGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    gap: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 61, 0, 0.2)',
+    borderRadius: RADIUS.lg,
+  },
+  logoutText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: COLORS.ERROR,
+  },
+  footer: {
+    fontSize: 12,
+    color: COLORS.TEXT_MUTED,
+    textAlign: 'center',
+    marginTop: 8,
   },
 });
+
+export default ProfileScreen;

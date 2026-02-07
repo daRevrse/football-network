@@ -1226,7 +1226,246 @@ router.delete(
   }
 );
 
-// POST /api/teams/:id/set-captain - Nommer un nouveau capitaine
+// GET /api/teams/:id/roster - Récupérer le roster complet avec dossards
+router.get("/:id/roster", authenticateToken, async (req, res) => {
+  try {
+    const teamId = req.params.id;
+
+    // Vérifier que l'équipe existe
+    const [teams] = await db.execute(
+      "SELECT id, name FROM teams WHERE id = ? AND is_active = true",
+      [teamId]
+    );
+
+    if (teams.length === 0) {
+      return res.status(404).json({ error: "Équipe non trouvée" });
+    }
+
+    // Récupérer tous les membres avec leurs dossards
+    const [members] = await db.execute(
+      `SELECT
+        u.id,
+        u.first_name,
+        u.last_name,
+        u.position,
+        u.skill_level,
+        u.user_type,
+        u.average_rating,
+        tm.role,
+        tm.jersey_number,
+        tm.is_captain,
+        tm.joined_at,
+        pp.stored_filename as profile_picture
+       FROM team_members tm
+       JOIN users u ON tm.user_id = u.id
+       LEFT JOIN uploads pp ON u.profile_picture_id = pp.id
+       WHERE tm.team_id = ? AND tm.is_active = true
+       ORDER BY
+         CASE WHEN tm.role = 'manager' THEN 1 ELSE 2 END,
+         tm.is_captain DESC,
+         tm.jersey_number ASC,
+         u.first_name ASC`,
+      [teamId]
+    );
+
+    const roster = members.map((m) => ({
+      id: m.id,
+      firstName: m.first_name,
+      lastName: m.last_name,
+      position: m.position,
+      skillLevel: m.skill_level,
+      userType: m.user_type,
+      averageRating: m.average_rating ? parseFloat(m.average_rating) : null,
+      role: m.role,
+      jerseyNumber: m.jersey_number,
+      isCaptain: m.is_captain === 1,
+      joinedAt: m.joined_at,
+      profilePictureUrl: m.profile_picture
+        ? `/uploads/users/${m.profile_picture}`
+        : null,
+    }));
+
+    res.json({
+      teamId: parseInt(teamId),
+      teamName: teams[0].name,
+      roster,
+      totalPlayers: roster.filter((m) => m.userType === "player").length,
+    });
+  } catch (error) {
+    console.error("Get roster error:", error);
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+
+// PUT /api/teams/:id/members/:userId/jersey - Assigner un dossard à un joueur
+router.put(
+  "/:id/members/:userId/jersey",
+  [
+    authenticateToken,
+    body("jerseyNumber")
+      .isInt({ min: 1, max: 99 })
+      .withMessage("Le dossard doit être entre 1 et 99"),
+  ],
+  async (req, res) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ errors: errors.array() });
+      }
+
+      const teamId = req.params.id;
+      const targetUserId = req.params.userId;
+      const { jerseyNumber } = req.body;
+
+      // Vérifier les permissions (seul le manager peut assigner des dossards)
+      const [requesterMembership] = await db.execute(
+        "SELECT role FROM team_members WHERE team_id = ? AND user_id = ? AND is_active = true",
+        [teamId, req.user.id]
+      );
+
+      if (requesterMembership.length === 0 || requesterMembership[0].role !== "manager") {
+        return res.status(403).json({
+          error: "Seul le manager peut assigner des dossards"
+        });
+      }
+
+      // Vérifier que le joueur cible est membre de l'équipe
+      const [targetMembership] = await db.execute(
+        "SELECT id, jersey_number FROM team_members WHERE team_id = ? AND user_id = ? AND is_active = true",
+        [teamId, targetUserId]
+      );
+
+      if (targetMembership.length === 0) {
+        return res.status(404).json({ error: "Joueur non trouvé dans l'équipe" });
+      }
+
+      // Vérifier que le dossard n'est pas déjà pris
+      const [existingJersey] = await db.execute(
+        "SELECT user_id FROM team_members WHERE team_id = ? AND jersey_number = ? AND user_id != ? AND is_active = true",
+        [teamId, jerseyNumber, targetUserId]
+      );
+
+      if (existingJersey.length > 0) {
+        return res.status(409).json({
+          error: `Le dossard ${jerseyNumber} est déjà attribué à un autre joueur`
+        });
+      }
+
+      // Assigner le dossard
+      await db.execute(
+        "UPDATE team_members SET jersey_number = ? WHERE team_id = ? AND user_id = ?",
+        [jerseyNumber, teamId, targetUserId]
+      );
+
+      res.json({
+        message: "Dossard assigné avec succès",
+        userId: parseInt(targetUserId),
+        jerseyNumber
+      });
+    } catch (error) {
+      console.error("Assign jersey error:", error);
+      res.status(500).json({ error: "Erreur serveur" });
+    }
+  }
+);
+
+// PUT /api/teams/:id/members/:userId/captain - Désigner/retirer le titre de capitaine
+router.put(
+  "/:id/members/:userId/captain",
+  [
+    authenticateToken,
+    body("isCaptain").isBoolean().withMessage("isCaptain doit être true ou false"),
+  ],
+  async (req, res) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ errors: errors.array() });
+      }
+
+      const teamId = req.params.id;
+      const targetUserId = req.params.userId;
+      const { isCaptain } = req.body;
+
+      // Vérifier les permissions (seul le manager peut désigner le capitaine)
+      const [requesterMembership] = await db.execute(
+        "SELECT role FROM team_members WHERE team_id = ? AND user_id = ? AND is_active = true",
+        [teamId, req.user.id]
+      );
+
+      if (requesterMembership.length === 0 || requesterMembership[0].role !== "manager") {
+        return res.status(403).json({
+          error: "Seul le manager peut désigner le capitaine"
+        });
+      }
+
+      // Vérifier que le joueur cible est membre de l'équipe et est un joueur
+      const [targetMembership] = await db.execute(
+        `SELECT tm.id, tm.role, u.user_type
+         FROM team_members tm
+         JOIN users u ON tm.user_id = u.id
+         WHERE tm.team_id = ? AND tm.user_id = ? AND tm.is_active = true`,
+        [teamId, targetUserId]
+      );
+
+      if (targetMembership.length === 0) {
+        return res.status(404).json({ error: "Joueur non trouvé dans l'équipe" });
+      }
+
+      // Le capitaine doit être un joueur (pas un manager)
+      if (isCaptain && targetMembership[0].user_type !== "player") {
+        return res.status(400).json({
+          error: "Le capitaine doit être un joueur (user_type = player)"
+        });
+      }
+
+      const connection = await db.getConnection();
+      await connection.beginTransaction();
+
+      try {
+        // Si on désigne un nouveau capitaine, retirer le titre à l'ancien
+        if (isCaptain) {
+          await connection.execute(
+            "UPDATE team_members SET is_captain = FALSE WHERE team_id = ? AND is_captain = TRUE",
+            [teamId]
+          );
+        }
+
+        // Mettre à jour le statut du capitaine
+        await connection.execute(
+          "UPDATE team_members SET is_captain = ? WHERE team_id = ? AND user_id = ?",
+          [isCaptain, teamId, targetUserId]
+        );
+
+        // Mettre à jour captain_id dans teams pour compatibilité
+        if (isCaptain) {
+          await connection.execute(
+            "UPDATE teams SET captain_id = ? WHERE id = ?",
+            [targetUserId, teamId]
+          );
+        }
+
+        await connection.commit();
+
+        res.json({
+          message: isCaptain ? "Capitaine désigné avec succès" : "Titre de capitaine retiré",
+          userId: parseInt(targetUserId),
+          isCaptain
+        });
+      } catch (error) {
+        await connection.rollback();
+        throw error;
+      } finally {
+        connection.release();
+      }
+    } catch (error) {
+      console.error("Set captain error:", error);
+      res.status(500).json({ error: "Erreur serveur" });
+    }
+  }
+);
+
+// POST /api/teams/:id/set-captain - Nommer un nouveau capitaine (Legacy - gardé pour compatibilité)
 router.post(
   "/:id/set-captain",
   [

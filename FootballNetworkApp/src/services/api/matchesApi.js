@@ -929,6 +929,97 @@ class MatchesApiService {
       return this.handleApiError(error);
     }
   }
+  // ==================== NOTATION DES JOUEURS ====================
+
+  /**
+   * Noter les joueurs après un match
+   */
+  async ratePlayers(matchId, ratings) {
+    try {
+      const token = await SecureStorage.getToken();
+      if (!token) {
+        return { success: false, error: 'Non authentifié' };
+      }
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), this.timeout);
+
+      const response = await fetch(
+        `${this.baseURL}/matches/${matchId}/rate-players`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ ratings }),
+          signal: controller.signal,
+        },
+      );
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        throw {
+          response: { status: response.status, data: await response.json() },
+        };
+      }
+
+      const data = await response.json();
+
+      return {
+        success: true,
+        data: data,
+        message: data.message,
+      };
+    } catch (error) {
+      return this.handleApiError(error);
+    }
+  }
+
+  /**
+   * Récupérer les notations des joueurs pour un match
+   */
+  async getPlayerRatings(matchId) {
+    try {
+      const token = await SecureStorage.getToken();
+      if (!token) {
+        return { success: false, error: 'Non authentifié' };
+      }
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), this.timeout);
+
+      const response = await fetch(
+        `${this.baseURL}/matches/${matchId}/player-ratings`,
+        {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          signal: controller.signal,
+        },
+      );
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        throw {
+          response: { status: response.status, data: await response.json() },
+        };
+      }
+
+      const data = await response.json();
+
+      return {
+        success: true,
+        data: data,
+      };
+    } catch (error) {
+      return this.handleApiError(error);
+    }
+  }
 }
 
 // Export une instance unique (singleton)

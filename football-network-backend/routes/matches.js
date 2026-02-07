@@ -2484,4 +2484,222 @@ router.patch(
   }
 );
 
+/**
+ * POST /api/matches/:id/rate-players
+ * Le manager note les joueurs de son équipe après le match (1-10)
+ */
+router.post(
+  "/:id/rate-players",
+  [
+    authenticateToken,
+    body("ratings").isArray({ min: 1 }).withMessage("Au moins une notation requise"),
+    body("ratings.*.playerId").isInt().withMessage("ID joueur requis"),
+    body("ratings.*.rating").isInt({ min: 1, max: 10 }).withMessage("Note entre 1 et 10"),
+    body("ratings.*.notes").optional().trim().isLength({ max: 500 })
+  ],
+  async (req, res) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ errors: errors.array() });
+      }
+
+      const matchId = req.params.id;
+      const { ratings } = req.body;
+
+      // Vérifier que le match existe et est terminé
+      const [matches] = await db.execute(
+        `SELECT m.*, ht.id as home_team_id, at.id as away_team_id
+         FROM matches m
+         JOIN teams ht ON m.home_team_id = ht.id
+         LEFT JOIN teams at ON m.away_team_id = at.id
+         WHERE m.id = ?`,
+        [matchId]
+      );
+
+      if (matches.length === 0) {
+        return res.status(404).json({ error: "Match non trouvé" });
+      }
+
+      const match = matches[0];
+
+      if (match.status !== 'completed') {
+        return res.status(400).json({ error: "Les joueurs ne peuvent être notés qu'après la fin du match" });
+      }
+
+      // Vérifier que l'utilisateur est manager d'une des équipes
+      const [managerCheck] = await db.execute(
+        `SELECT tm.team_id FROM team_members tm
+         WHERE tm.user_id = ? AND tm.role = 'manager' AND tm.is_active = true
+         AND tm.team_id IN (?, ?)`,
+        [req.user.id, match.home_team_id, match.away_team_id]
+      );
+
+      if (managerCheck.length === 0) {
+        return res.status(403).json({ error: "Seul le manager d'une équipe peut noter ses joueurs" });
+      }
+
+      const managerTeamId = managerCheck[0].team_id;
+
+      // Vérifier que tous les joueurs notés sont de l'équipe du manager
+      const playerIds = ratings.map(r => r.playerId);
+      const [teamPlayers] = await db.execute(
+        `SELECT user_id FROM team_members
+         WHERE team_id = ? AND user_id IN (${playerIds.map(() => '?').join(',')}) AND is_active = true`,
+        [managerTeamId, ...playerIds]
+      );
+
+      const validPlayerIds = new Set(teamPlayers.map(p => p.user_id));
+      const invalidPlayers = playerIds.filter(id => !validPlayerIds.has(id));
+
+      if (invalidPlayers.length > 0) {
+        return res.status(400).json({
+          error: "Certains joueurs ne font pas partie de votre équipe",
+          invalidPlayerIds: invalidPlayers
+        });
+      }
+
+      // Insérer les notations (avec upsert)
+      const connection = await db.getConnection();
+      await connection.beginTransaction();
+
+      try {
+        for (const r of ratings) {
+          // Vérifier si une notation existe déjà
+          const [existing] = await connection.execute(
+            "SELECT id FROM player_match_ratings WHERE match_id = ? AND player_id = ?",
+            [matchId, r.playerId]
+          );
+
+          if (existing.length > 0) {
+            // Mettre à jour
+            await connection.execute(
+              `UPDATE player_match_ratings
+               SET rating = ?, notes = ?, rated_by = ?
+               WHERE match_id = ? AND player_id = ?`,
+              [r.rating, r.notes || null, req.user.id, matchId, r.playerId]
+            );
+          } else {
+            // Insérer
+            await connection.execute(
+              `INSERT INTO player_match_ratings (match_id, player_id, team_id, rated_by, rating, notes)
+               VALUES (?, ?, ?, ?, ?, ?)`,
+              [matchId, r.playerId, managerTeamId, req.user.id, r.rating, r.notes || null]
+            );
+          }
+
+          // Recalculer la note moyenne du joueur
+          await connection.execute(
+            `UPDATE users u
+             SET average_rating = (
+               SELECT AVG(rating) FROM player_match_ratings WHERE player_id = u.id
+             ),
+             total_ratings = (
+               SELECT COUNT(*) FROM player_match_ratings WHERE player_id = u.id
+             )
+             WHERE u.id = ?`,
+            [r.playerId]
+          );
+        }
+
+        await connection.commit();
+
+        res.json({
+          success: true,
+          message: `${ratings.length} joueurs notés avec succès`,
+          ratingsCount: ratings.length
+        });
+      } catch (error) {
+        await connection.rollback();
+        throw error;
+      } finally {
+        connection.release();
+      }
+    } catch (error) {
+      console.error("Rate players error:", error);
+      res.status(500).json({ error: "Erreur serveur" });
+    }
+  }
+);
+
+/**
+ * GET /api/matches/:id/player-ratings
+ * Récupérer les notations des joueurs pour un match
+ */
+router.get("/:id/player-ratings", authenticateToken, async (req, res) => {
+  try {
+    const matchId = req.params.id;
+
+    // Vérifier que le match existe
+    const [matches] = await db.execute(
+      `SELECT home_team_id, away_team_id FROM matches WHERE id = ?`,
+      [matchId]
+    );
+
+    if (matches.length === 0) {
+      return res.status(404).json({ error: "Match non trouvé" });
+    }
+
+    const match = matches[0];
+
+    // Vérifier que l'utilisateur fait partie d'une des équipes
+    const [membership] = await db.execute(
+      `SELECT team_id, role FROM team_members
+       WHERE user_id = ? AND is_active = true
+       AND team_id IN (?, ?)`,
+      [req.user.id, match.home_team_id, match.away_team_id]
+    );
+
+    if (membership.length === 0) {
+      return res.status(403).json({ error: "Accès refusé" });
+    }
+
+    // Récupérer les notations
+    const [ratings] = await db.execute(
+      `SELECT
+        pmr.*,
+        u.first_name, u.last_name,
+        t.name as team_name,
+        rater.first_name as rater_first_name, rater.last_name as rater_last_name
+       FROM player_match_ratings pmr
+       JOIN users u ON pmr.player_id = u.id
+       JOIN teams t ON pmr.team_id = t.id
+       JOIN users rater ON pmr.rated_by = rater.id
+       WHERE pmr.match_id = ?
+       ORDER BY pmr.team_id, pmr.rating DESC`,
+      [matchId]
+    );
+
+    const formattedRatings = ratings.map(r => ({
+      id: r.id,
+      player: {
+        id: r.player_id,
+        firstName: r.first_name,
+        lastName: r.last_name
+      },
+      team: {
+        id: r.team_id,
+        name: r.team_name
+      },
+      rating: r.rating,
+      notes: r.notes,
+      ratedBy: {
+        id: r.rated_by,
+        firstName: r.rater_first_name,
+        lastName: r.rater_last_name
+      },
+      createdAt: r.created_at
+    }));
+
+    res.json({
+      success: true,
+      matchId: parseInt(matchId),
+      ratings: formattedRatings
+    });
+  } catch (error) {
+    console.error("Get player ratings error:", error);
+    res.status(500).json({ error: "Erreur serveur" });
+  }
+});
+
 module.exports = router;

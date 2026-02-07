@@ -2,7 +2,7 @@ import React, { useEffect } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { useSelector, useDispatch } from 'react-redux';
 import { AuthNavigator } from './AuthNavigator';
-import { MainTabNavigator } from './MainTabNavigator';
+import { RoleBasedNavigator } from './RoleBasedNavigator';
 import { LoadingSpinner } from '../components/common';
 import { SecureStorage } from '../services/storage';
 import { loginSuccess } from '../store/slices/authSlice';
@@ -66,7 +66,7 @@ export const AppNavigator = () => {
 
   return (
     <NavigationContainer>
-      {isAuthenticated ? <MainTabNavigator /> : <AuthNavigator />}
+      {isAuthenticated ? <RoleBasedNavigator /> : <AuthNavigator />}
     </NavigationContainer>
   );
 };
