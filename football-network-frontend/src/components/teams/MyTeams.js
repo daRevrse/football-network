@@ -193,7 +193,7 @@ const MyTeams = () => {
   if (loading) {
     return (
       <div className="flex justify-center items-center h-96">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-500"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600"></div>
       </div>
     );
   }
@@ -211,9 +211,9 @@ const MyTeams = () => {
             <h1 className="text-3xl font-bold text-white mb-2 flex items-center">
               {/* Icône et Titre dynamique */}
               {isManager ? (
-                <Shield className="w-8 h-8 mr-3 text-green-400" />
+                <Shield className="w-8 h-8 mr-3 text-emerald-400" />
               ) : (
-                <Users className="w-8 h-8 mr-3 text-green-400" />
+                <Users className="w-8 h-8 mr-3 text-emerald-400" />
               )}
               {isManager ? "Gestion d'Équipe" : "Mes Équipes"}
             </h1>
@@ -244,7 +244,7 @@ const MyTeams = () => {
                 icon={Calendar}
                 value={stats.totalMatches}
                 label="Matchs"
-                color="text-green-300"
+                color="text-emerald-300"
               />
               <StatBadge
                 icon={ArrowUpRight}
@@ -259,7 +259,7 @@ const MyTeams = () => {
           {isManager && (
             <button
               onClick={() => setShowCreateModal(true)}
-              className="group flex items-center px-6 py-3 bg-green-500 text-white rounded-xl font-bold hover:bg-green-400 transition-all shadow-lg shadow-green-500/20 hover:shadow-green-500/40 transform hover:-translate-y-0.5"
+              className="group flex items-center px-6 py-3 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-500 transition-all shadow-lg shadow-emerald-600/20 hover:shadow-emerald-600/40 transform hover:-translate-y-0.5"
             >
               <Plus className="w-5 h-5 mr-2 group-hover:rotate-90 transition-transform" />
               {teams.length > 0 ? "Créer une autre équipe" : "Créer mon équipe"}
@@ -277,7 +277,7 @@ const MyTeams = () => {
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all outline-none"
+              className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all outline-none"
               placeholder="Rechercher une équipe..."
             />
           </div>
@@ -290,7 +290,7 @@ const MyTeams = () => {
                 <select
                   value={filterRole}
                   onChange={(e) => setFilterRole(e.target.value)}
-                  className="w-full pl-9 pr-8 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-green-500 outline-none appearance-none cursor-pointer text-sm font-medium text-gray-700"
+                  className="w-full pl-9 pr-8 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none appearance-none cursor-pointer text-sm font-medium text-gray-700"
                 >
                   <option value="all">Tous les rôles</option>
                   <option value="captain">Capitaine</option>
@@ -304,7 +304,7 @@ const MyTeams = () => {
               <select
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value)}
-                className="w-full pl-9 pr-8 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-green-500 outline-none appearance-none cursor-pointer text-sm font-medium text-gray-700"
+                className="w-full pl-9 pr-8 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none appearance-none cursor-pointer text-sm font-medium text-gray-700"
               >
                 <option value="name">Nom (A-Z)</option>
                 <option value="created">Récents</option>
@@ -337,7 +337,7 @@ const MyTeams = () => {
           {isManager && (
             <button
               onClick={() => setShowCreateModal(true)}
-              className="text-green-600 font-bold hover:text-green-700 hover:underline"
+              className="text-emerald-600 font-bold hover:text-emerald-700 hover:underline"
             >
               Créer ma première équipe &rarr;
             </button>
@@ -353,7 +353,7 @@ const MyTeams = () => {
               setSearchTerm("");
               setFilterRole("all");
             }}
-            className="text-green-600 font-medium mt-2 hover:underline"
+            className="text-emerald-600 font-medium mt-2 hover:underline"
           >
             Réinitialiser les filtres
           </button>

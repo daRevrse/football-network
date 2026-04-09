@@ -349,7 +349,7 @@ const Feed = () => {
           className={`p-1.5 rounded-full transition ${
             isFollowing
               ? "text-gray-400 bg-gray-100 cursor-not-allowed"
-              : "text-green-600 hover:bg-green-50"
+              : "text-emerald-600 hover:bg-emerald-50"
           }`}
           title={isFollowing ? "Déjà suivi" : "Suivre cette équipe"}
         >
@@ -410,7 +410,7 @@ const Feed = () => {
                         to="/matches"
                         className="flex items-center text-gray-700 hover:bg-gray-50 p-2 rounded-lg transition"
                       >
-                        <Calendar className="w-5 h-5 mr-3 text-green-600" /> Mes
+                        <Calendar className="w-5 h-5 mr-3 text-emerald-600" /> Mes
                         Matchs
                       </Link>
                     </li>
@@ -430,8 +430,8 @@ const Feed = () => {
               // VERSION INVITÉ
               <div className="bg-white rounded-xl shadow-sm p-6 sticky top-24">
                 <div className="text-center mb-6">
-                  <div className="w-16 h-16 bg-green-100 rounded-2xl mx-auto mb-4 flex items-center justify-center transform -rotate-6">
-                    <Trophy className="w-8 h-8 text-green-600" />
+                  <div className="w-16 h-16 bg-emerald-100 rounded-2xl mx-auto mb-4 flex items-center justify-center transform -rotate-6">
+                    <Trophy className="w-8 h-8 text-emerald-600" />
                   </div>
                   <h2 className="text-xl font-bold text-gray-900">
                     Rejoignez le terrain
@@ -450,7 +450,7 @@ const Feed = () => {
                   </Link>
                   <Link
                     to="/signup"
-                    className="flex items-center justify-center w-full py-2.5 px-4 bg-green-600 text-white rounded-xl font-medium hover:bg-green-700 transition shadow-lg shadow-green-600/20"
+                    className="flex items-center justify-center w-full py-2.5 px-4 bg-emerald-600 text-white rounded-xl font-medium hover:bg-emerald-700 transition shadow-lg shadow-emerald-600/20"
                   >
                     <UserPlus className="w-4 h-4 mr-2" /> Créer un compte
                   </Link>
@@ -468,30 +468,30 @@ const Feed = () => {
                   onClick={() => setShowCreateModal(true)}
                   className="w-full flex items-center space-x-3 p-3 hover:bg-gray-50 rounded-lg transition group"
                 >
-                  <div className="w-10 h-10 rounded-full bg-green-100 flex-shrink-0 flex items-center justify-center text-green-700 font-bold">
+                  <div className="w-10 h-10 rounded-full bg-emerald-100 flex-shrink-0 flex items-center justify-center text-emerald-700 font-bold">
                     {user?.firstName?.[0]}
                   </div>
                   <div className="flex-1 text-left text-gray-500 group-hover:text-gray-700 transition">
                     Quoi de neuf sur le terrain ?
                   </div>
-                  <Plus className="w-5 h-5 text-green-600" />
+                  <Plus className="w-5 h-5 text-emerald-600" />
                 </button>
               </div>
             ) : (
-              <div className="bg-gradient-to-r from-green-600 to-teal-600 rounded-2xl shadow-lg p-8 mb-8 text-white relative overflow-hidden">
+              <div className="bg-gradient-to-r from-emerald-600 to-emerald-800 rounded-2xl shadow-lg p-8 mb-8 text-white relative overflow-hidden">
                 <div className="absolute top-0 right-0 w-64 h-64 bg-white opacity-10 rounded-full -mr-16 -mt-16 blur-3xl"></div>
                 <div className="relative z-10">
                   <h1 className="text-3xl font-bold mb-2">
                     Bienvenue sur Football Network ⚽
                   </h1>
-                  <p className="text-green-50 mb-6 max-w-xl">
+                  <p className="text-emerald-50 mb-6 max-w-xl">
                     La plateforme ultime pour gérer vos équipes, organiser des
                     matchs et trouver des joueurs. Rejoignez la communauté dès
                     maintenant !
                   </p>
                   <Link
                     to="/signup"
-                    className="inline-flex items-center px-6 py-3 bg-white text-green-700 font-bold rounded-xl hover:bg-gray-50 transition shadow-md"
+                    className="inline-flex items-center px-6 py-3 bg-white text-emerald-700 font-bold rounded-xl hover:bg-gray-50 transition shadow-md"
                   >
                     Commencer l'aventure <ArrowRight className="ml-2 w-5 h-5" />
                   </Link>
@@ -573,7 +573,7 @@ const Feed = () => {
 
               {loadingFeed && page > 0 && (
                 <div className="flex justify-center py-4">
-                  <Loader2 className="w-6 h-6 text-green-600 animate-spin" />
+                  <Loader2 className="w-6 h-6 text-emerald-600 animate-spin" />
                 </div>
               )}
             </div>
@@ -616,7 +616,7 @@ const Feed = () => {
               <div className="bg-white rounded-xl shadow-sm overflow-hidden border border-gray-100">
                 <div className="p-4 border-b border-gray-50 flex justify-between items-center bg-gradient-to-r from-white to-gray-50">
                   <h3 className="font-bold text-gray-800 flex items-center">
-                    <Star className="w-4 h-4 mr-2 text-green-500" /> Clubs à
+                    <Star className="w-4 h-4 mr-2 text-emerald-500" /> Clubs à
                     suivre
                   </h3>
                   <Link

@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from "react";
 import { Image, Upload, Grid, Crop } from "lucide-react";
 import toast from "react-hot-toast";
-import axios from "axios";
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { doc, updateDoc } from "firebase/firestore";
+import { storage, db } from "../../config/firebase";
 import LogoEditor from "./LogoEditor";
 import BannerEditor from "./BannerEditor";
 import GalleryManager from "./GalleryManager";
@@ -29,20 +31,35 @@ const TeamMediaManager = ({ team, isCapta, onUpdate }) => {
     reader.readAsDataURL(file);
   };
 
-  const handleSave = async (formData, endpoint) => {
+  const handleSave = async (file, endpoint) => {
     try {
       setLoading(true);
-      await axios.post(
-        `${API_BASE_URL}/teams/${team.id}/media/${endpoint}`,
-        formData,
-        { headers: { "Content-Type": "multipart/form-data" } }
-      );
+
+      const fileExt = file.name ? file.name.split('.').pop() : 'png';
+      const fileName = `${Date.now()}.${fileExt}`;
+      const folder = endpoint === 'logo' ? `teams/${team.id}/logos` : `teams/${team.id}/banners`;
+      
+      const storageRef = ref(storage, `${folder}/${fileName}`);
+      await uploadBytes(storageRef, file);
+      const url = await getDownloadURL(storageRef);
+
+      // Mettre à jour la table teams (Firestore)
+      const updateData = endpoint === 'logo' ? { logoUrl: url } : { bannerUrl: url };
+      
+      try {
+        const teamDocRef = doc(db, 'teams', team.id);
+        await updateDoc(teamDocRef, updateData);
+      } catch (dbError) {
+        console.error(dbError);
+        throw new Error("Erreur mise à jour équipe");
+      }
+
       toast.success("Mise à jour réussie");
       setShowLogoEditor(false);
       setShowBannerEditor(false);
       onUpdate();
     } catch (error) {
-      toast.error("Erreur upload");
+      toast.error(error.message || "Erreur upload");
     } finally {
       setLoading(false);
     }
@@ -77,7 +94,7 @@ const TeamMediaManager = ({ team, isCapta, onUpdate }) => {
             <div className="w-40 h-40 rounded-full border-4 border-gray-100 overflow-hidden shadow-sm mb-6 relative group">
               {team.logoUrl ? (
                 <img
-                  src={`${API_BASE_URL.replace("/api", "")}${team.logoUrl}`}
+                  src={team.logoUrl.startsWith('http') ? team.logoUrl : `${API_BASE_URL.replace("/api", "")}${team.logoUrl}`}
                   className="w-full h-full object-cover"
                   alt="Logo"
                 />
@@ -106,7 +123,7 @@ const TeamMediaManager = ({ team, isCapta, onUpdate }) => {
             <div className="h-48 w-full bg-gray-100 rounded-xl overflow-hidden relative border border-gray-200">
               {team.bannerUrl ? (
                 <img
-                  src={`${API_BASE_URL.replace("/api", "")}${team.bannerUrl}`}
+                  src={team.bannerUrl.startsWith('http') ? team.bannerUrl : `${API_BASE_URL.replace("/api", "")}${team.bannerUrl}`}
                   className="w-full h-full object-cover"
                   alt="Banner"
                 />
@@ -145,10 +162,9 @@ const TeamMediaManager = ({ team, isCapta, onUpdate }) => {
         <LogoEditor
           image={selectedImage}
           onSave={(blob, data) => {
-            const formData = new FormData();
-            formData.append("logo", blob);
-            if (data) formData.append("cropData", JSON.stringify(data));
-            handleSave(formData, "logo");
+            // Passer directement le blob (file) à handleSave
+            const file = new File([blob], 'logo.png', { type: 'image/png' });
+            handleSave(file, "logo");
           }}
           onCancel={() => setShowLogoEditor(false)}
           loading={loading}
@@ -159,9 +175,7 @@ const TeamMediaManager = ({ team, isCapta, onUpdate }) => {
         <BannerEditor
           image={selectedImage}
           onSave={(file) => {
-            const formData = new FormData();
-            formData.append("banner", file);
-            handleSave(formData, "banner");
+            handleSave(file, "banner");
           }}
           onCancel={() => setShowBannerEditor(false)}
           loading={loading}

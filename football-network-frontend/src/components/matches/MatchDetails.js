@@ -22,11 +22,11 @@ import {
 } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
 import toast from "react-hot-toast";
-import axios from "axios";
+import api from "../../services/api";
 import MatchChat from "./MatchChat";
 
-const API_BASE_URL =
-  process.env.REACT_APP_API_URL || "http://localhost:5000/api";
+
+
 
 const MatchDetails = () => {
   const { matchId } = useParams();
@@ -57,16 +57,8 @@ const MatchDetails = () => {
   const loadMatch = async () => {
     try {
       setLoading(true);
-      const response = await axios.get(`${API_BASE_URL}/matches/${matchId}`);
+      const response = await api.get(`/matches/${matchId}`);
       setMatch(response.data);
-      console.log("response.data", response.data);
-      // Ouvrir le chat par défaut si le match est en cours ou terminé
-      if (
-        response.data.status === "confirmed" ||
-        response.data.status === "completed"
-      ) {
-        // setShowChat(true);
-      }
     } catch (error) {
       toast.error("Impossible de charger le match");
       navigate("/matches");
@@ -87,7 +79,7 @@ const MatchDetails = () => {
         body = { reason };
       }
 
-      await axios.patch(`${API_BASE_URL}/matches/${matchId}/${endpoint}`, body);
+      await api.patch(`/matches/${matchId}/${endpoint}`, body);
       toast.success("Statut mis à jour");
       loadMatch();
     } catch (error) {
@@ -98,7 +90,7 @@ const MatchDetails = () => {
   const handleDelete = async () => {
     if (!window.confirm("Supprimer définitivement ce match ?")) return;
     try {
-      await axios.delete(`${API_BASE_URL}/matches/${matchId}`);
+      await api.delete(`/matches/${matchId}`);
       toast.success("Match supprimé");
       navigate("/matches");
     } catch (error) {
@@ -109,20 +101,18 @@ const MatchDetails = () => {
   const handleBookVenue = async (venueId) => {
     try {
       setBookingVenue(true);
-      const token = localStorage.getItem("token");
-      const response = await axios.post(
-        `${API_BASE_URL}/matches/${matchId}/book-venue`,
-        { venueId, durationMinutes: 90 },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      toast.success("Réservation créée avec succès !");
+      await api.post(`/matches/${matchId}/book-venue`, { 
+        venueId, 
+        bookingDate: match.matchDate, // Utiliser la date du match
+        startTime: new Date(match.matchDate).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+        duration: 90 
+      });
+      toast.success("Terrain réservé avec succès !");
       setShowVenueModal(false);
-      loadMatch(); // Recharger le match pour afficher la réservation
+      loadMatch();
     } catch (error) {
       console.error("Booking error:", error);
-      toast.error(
-        error.response?.data?.error || "Erreur lors de la réservation"
-      );
+      toast.error(error.response?.data?.error || "Erreur lors de la réservation");
     } finally {
       setBookingVenue(false);
     }
@@ -130,15 +120,8 @@ const MatchDetails = () => {
 
   const loadVenues = async () => {
     try {
-      const token = localStorage.getItem("token");
-      const response = await axios.get(`${API_BASE_URL}/venues`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      // L'API peut retourner soit un tableau, soit {venues: [...]}
-      const venuesData = Array.isArray(response.data)
-        ? response.data
-        : response.data.venues || response.data.locations || [];
-      setVenues(venuesData);
+      const response = await api.get("/venues");
+      setVenues(response.data.venues || []);
     } catch (error) {
       console.error("Error loading venues:", error);
       setVenues([]);
@@ -148,12 +131,7 @@ const MatchDetails = () => {
   const loadReferees = async () => {
     try {
       setLoadingReferees(true);
-      const token = localStorage.getItem("token");
-      const response = await axios.get(`${API_BASE_URL}/referees`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-
-      console.log("first", response.data.referees);
+      const response = await api.get("/referees");
       setReferees(response.data.referees || []);
     } catch (error) {
       console.error("Error loading referees:", error);
@@ -167,24 +145,18 @@ const MatchDetails = () => {
   const handleAssignReferee = async (refereeId) => {
     try {
       setAssigningReferee(true);
-      const token = localStorage.getItem("token");
-      await axios.patch(
-        `${API_BASE_URL}/matches/${matchId}/assign-referee`,
-        { refereeId },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      await api.patch(`/matches/${matchId}/assign-referee`, { refereeId });
       toast.success("Arbitre assigné avec succès !");
       setShowRefereeModal(false);
-      loadMatch(); // Recharger le match
+      loadMatch();
     } catch (error) {
       console.error("Error assigning referee:", error);
-      toast.error(
-        error.response?.data?.message || "Erreur lors de l'assignation"
-      );
+      toast.error(error.response?.data?.error || "Erreur lors de l'assignation");
     } finally {
       setAssigningReferee(false);
     }
   };
+
 
   const handleOpenRefereeModal = () => {
     setShowRefereeModal(true);
@@ -200,7 +172,7 @@ const MatchDetails = () => {
   if (loading)
     return (
       <div className="flex justify-center items-center h-screen">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-500"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600"></div>
       </div>
     );
   if (!match) return null;
@@ -436,7 +408,7 @@ const MatchDetails = () => {
               onClick={() => setActiveTab("info")}
               className={`pb-3 px-2 text-sm font-bold border-b-2 transition ${
                 activeTab === "info"
-                  ? "border-indigo-600 text-indigo-600"
+                  ? "border-emerald-600 text-emerald-600"
                   : "border-transparent text-gray-500 hover:text-gray-700"
               }`}
             >
@@ -448,7 +420,7 @@ const MatchDetails = () => {
                 onClick={() => setActiveTab("chat")}
                 className={`pb-3 px-2 text-sm font-bold border-b-2 transition ${
                   activeTab === "chat"
-                    ? "border-indigo-600 text-indigo-600"
+                    ? "border-emerald-600 text-emerald-600"
                     : "border-transparent text-gray-500 hover:text-gray-700"
                 }`}
               >
@@ -463,7 +435,7 @@ const MatchDetails = () => {
               <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
                 <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center justify-between">
                   <span className="flex items-center">
-                    <MapPin className="w-5 h-5 mr-2 text-indigo-500" /> Détails
+                    <MapPin className="w-5 h-5 mr-2 text-emerald-500" /> Détails
                     du terrain
                   </span>
                   {/* Réservation terrain - Uniquement avant le début du match */}
@@ -485,7 +457,7 @@ const MatchDetails = () => {
                             }
                             setShowVenueModal(true);
                           }}
-                          className="px-3 py-1.5 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition flex items-center"
+                          className="px-3 py-1.5 bg-emerald-600 text-white text-sm font-medium rounded-lg hover:bg-emerald-700 transition flex items-center shadow-sm"
                         >
                           <MapPin className="w-4 h-4 mr-1.5" />
                           {match.location?.id
@@ -523,7 +495,7 @@ const MatchDetails = () => {
                     href={`https://maps.google.com/?q=${match.location?.address}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="p-2 bg-white border border-gray-200 rounded-lg text-indigo-600 hover:bg-indigo-50 transition"
+                    className="p-2 bg-white border border-gray-200 rounded-lg text-emerald-600 hover:bg-emerald-50 transition shadow-sm"
                   >
                     <MapPin className="w-5 h-5" />
                   </a>
@@ -621,11 +593,11 @@ const MatchDetails = () => {
           </div>
 
           {/* Share / Actions */}
-          <div className="bg-indigo-50 rounded-2xl p-6 border border-indigo-100">
-            <h3 className="text-indigo-900 font-bold mb-2">
+          <div className="bg-emerald-50 rounded-2xl p-6 border border-emerald-100">
+            <h3 className="text-emerald-900 font-bold mb-2">
               Invitez vos supporters
             </h3>
-            <p className="text-indigo-700/80 text-sm mb-4">
+            <p className="text-emerald-800/80 text-sm mb-4">
               Partagez le lien du match pour que vos amis puissent suivre le
               score.
             </p>
@@ -634,7 +606,7 @@ const MatchDetails = () => {
                 navigator.clipboard.writeText(window.location.href);
                 toast.success("Lien copié dans le presse-papier !");
               }}
-              className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-sm flex items-center justify-center transition shadow-lg shadow-indigo-200">
+              className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-sm flex items-center justify-center transition shadow-lg shadow-emerald-200">
               <Share2 className="w-4 h-4 mr-2" /> Partager le match
             </button>
           </div>
@@ -690,7 +662,7 @@ const MatchDetails = () => {
               <div className="flex items-center justify-between">
                 <div>
                   <h2 className="text-xl font-bold text-gray-900 flex items-center">
-                    <MapPin className="w-6 h-6 mr-2 text-indigo-600" />
+                    <MapPin className="w-6 h-6 mr-2 text-emerald-600" />
                     Réserver un terrain
                   </h2>
                   {match.location?.id && (
@@ -724,10 +696,10 @@ const MatchDetails = () => {
                         key={venue.id}
                         className={`border rounded-xl p-4 hover:shadow-md transition cursor-pointer ${
                           isSelected
-                            ? "border-indigo-500 bg-indigo-50"
+                            ? "border-emerald-500 bg-emerald-50"
                             : isMatchVenue
-                            ? "border-blue-300 bg-blue-50"
-                            : "border-gray-200 hover:border-indigo-300"
+                            ? "border-gray-300 bg-gray-50"
+                            : "border-gray-200 hover:border-emerald-300"
                         }`}
                         onClick={() => setSelectedVenue(venue.id)}
                       >
@@ -756,7 +728,7 @@ const MatchDetails = () => {
                             type="radio"
                             checked={isSelected}
                             onChange={() => setSelectedVenue(venue.id)}
-                            className="mt-1 w-5 h-5 text-indigo-600"
+                            className="mt-1 w-5 h-5 text-emerald-600"
                           />
                         </div>
                       </div>
@@ -776,7 +748,7 @@ const MatchDetails = () => {
               <button
                 onClick={() => selectedVenue && handleBookVenue(selectedVenue)}
                 disabled={!selectedVenue || bookingVenue}
-                className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
+                className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center shadow-sm"
               >
                 {bookingVenue ? (
                   <>

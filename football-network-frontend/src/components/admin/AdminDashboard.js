@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import axios from "axios";
 import {
   Users,
   Shield,
@@ -14,6 +13,8 @@ import {
   Settings,
 } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
+import { collection, query, orderBy, limit, getDocs } from "firebase/firestore";
+import { db } from "../../config/firebase";
 import AdminLayout from "./AdminLayout";
 
 const AdminDashboard = () => {
@@ -24,8 +25,7 @@ const AdminDashboard = () => {
   const [recentUsers, setRecentUsers] = useState([]);
   const [recentReports, setRecentReports] = useState([]);
 
-  const API_BASE_URL =
-    process.env.REACT_APP_API_URL || "http://localhost:5000/api";
+
 
   useEffect(() => {
     // Vérifier que l'utilisateur est superadmin
@@ -40,14 +40,29 @@ const AdminDashboard = () => {
   const fetchDashboardData = async () => {
     setLoading(true);
     try {
-      const token = localStorage.getItem("token");
-      const response = await axios.get(`${API_BASE_URL}/admin/dashboard`, {
-        headers: { Authorization: `Bearer ${token}` },
+      // Mock stats en attendant le backend
+      setStats({
+        total_users: 0,
+        total_players: 0,
+        total_managers: 0,
+        total_teams: 0,
+        total_matches: 0,
+        confirmed_matches: 0,
+        total_venues: 0,
+        open_reports: 0,
+        active_bans: 0,
       });
 
-      setStats(response.data.stats);
-      setRecentUsers(response.data.recentUsers || []);
-      setRecentReports(response.data.recentReports || []);
+      try {
+        const usersQuery = query(collection(db, "users"), orderBy("created_at", "desc"), limit(5));
+        const usersSnap = await getDocs(usersQuery);
+        setRecentUsers(usersSnap.docs.map(d => ({id: d.id, ...d.data()})));
+      } catch (e) {
+        console.warn("Could not fetch recent users", e);
+        setRecentUsers([]);
+      }
+      
+      setRecentReports([]);
     } catch (error) {
       console.error("Error fetching dashboard:", error);
     } finally {

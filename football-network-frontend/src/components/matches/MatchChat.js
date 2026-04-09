@@ -2,11 +2,11 @@ import React, { useState, useEffect, useRef } from "react";
 import { Send, MessageCircle, Users, X, Loader2, Smile } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
 import toast from "react-hot-toast";
-import axios from "axios";
+import api from "../../services/api";
 import io from "socket.io-client";
 
-const API_BASE_URL =
-  process.env.REACT_APP_API_URL || "http://localhost:5000/api";
+
+
 const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || "http://localhost:5000";
 
 const MatchChat = ({ matchId, onClose }) => {
@@ -36,9 +36,7 @@ const MatchChat = ({ matchId, onClose }) => {
   const loadMessages = async () => {
     try {
       setLoading(true);
-      const response = await axios.get(
-        `${API_BASE_URL}/matches/${matchId}/messages`
-      );
+      const response = await api.get(`/matches/${matchId}/messages`);
       setMessages(response.data || []);
     } catch (error) {
       console.error("Chat load error", error);
@@ -46,6 +44,7 @@ const MatchChat = ({ matchId, onClose }) => {
       setLoading(false);
     }
   };
+
 
   const setupSocket = () => {
     socketRef.current = io(SOCKET_URL, {
@@ -90,10 +89,7 @@ const MatchChat = ({ matchId, onClose }) => {
     setNewMessage("");
 
     try {
-      const response = await axios.post(
-        `${API_BASE_URL}/matches/${matchId}/messages`,
-        { content: messageContent }
-      );
+      const response = await api.post(`/matches/${matchId}/messages`, { content: messageContent });
 
       // Replace temp message with real one
       setMessages((prev) =>
@@ -109,6 +105,7 @@ const MatchChat = ({ matchId, onClose }) => {
       setMessages((prev) => prev.filter((msg) => msg.id !== tempId));
       setNewMessage(messageContent);
     }
+
   };
 
   const scrollToBottom = () => {

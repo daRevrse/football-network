@@ -23,10 +23,10 @@ const MatchAnnouncementPost = ({ post, onLike }) => {
   const matchDate = post.matchDate || post.match_date;
 
   return (
-    <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border-2 border-blue-200 rounded-xl p-6">
+    <div className="bg-blue-50/50 border border-blue-100/50 rounded-xl p-5">
       <div className="flex items-center mb-4">
-        <div className="bg-blue-600 p-3 rounded-full">
-          <Calendar className="w-6 h-6 text-white" />
+        <div className="bg-blue-100 p-2.5 rounded-full">
+          <Calendar className="w-5 h-5 text-blue-600" />
         </div>
         <div className="ml-4">
           <h3 className="text-lg font-bold text-blue-900">Match à venir</h3>
@@ -46,17 +46,17 @@ const MatchAnnouncementPost = ({ post, onLike }) => {
       </div>
 
       {post.team && (
-        <div className="bg-white/70 rounded-lg p-4 mb-4">
+        <div className="bg-white rounded-lg p-4 mb-4 border border-blue-50">
           <div className="flex items-center justify-center space-x-6">
-            <div className="text-center">
-              <div className="font-bold text-xl text-gray-900">
+            <div className="text-center w-1/3">
+              <div className="font-bold text-gray-900 truncate">
                 {post.team.name || "Notre équipe"}
               </div>
-              <div className="text-sm text-gray-600">Domicile</div>
+              <div className="text-xs text-gray-500">Domicile</div>
             </div>
-            <div className="text-3xl font-bold text-blue-600">VS</div>
-            <div className="text-center">
-              <div className="font-bold text-xl text-gray-900">
+            <div className="text-sm font-bold text-blue-400 px-2">VS</div>
+            <div className="text-center w-1/3">
+              <div className="font-bold text-gray-900 truncate">
                 {post.matchOpponent || post.match_opponent || "Adversaire"}
               </div>
               <div className="text-sm text-gray-600">Extérieur</div>
@@ -65,13 +65,13 @@ const MatchAnnouncementPost = ({ post, onLike }) => {
         </div>
       )}
 
-      <div className="bg-white/70 rounded-lg p-4">
-        <p className="text-gray-800 leading-relaxed">{post.content}</p>
+      <div className="bg-white rounded-lg p-4 border border-blue-50">
+        <p className="text-gray-700 text-sm leading-relaxed">{post.content}</p>
       </div>
 
       {post.location && (
-        <div className="mt-4 flex items-center text-sm text-blue-700">
-          <MapPin className="w-4 h-4 mr-1" />
+        <div className="mt-4 flex items-center text-xs text-blue-600 font-medium">
+          <MapPin className="w-3.5 h-3.5 mr-1" />
           {post.location.city}
         </div>
       )}
@@ -87,27 +87,32 @@ const MatchResultPost = ({ post, onLike }) => {
   const isDraw = homeScore === awayScore;
 
   const bgColor = isWin
-    ? "from-green-50 to-emerald-50 border-green-200"
+    ? "bg-emerald-50/50 border-emerald-100/50"
     : isDraw
-    ? "from-yellow-50 to-orange-50 border-yellow-200"
-    : "from-red-50 to-pink-50 border-red-200";
+    ? "bg-amber-50/50 border-amber-100/50"
+    : "bg-red-50/50 border-red-100/50";
 
+  const iconBg = isWin
+    ? "bg-emerald-100"
+    : isDraw
+    ? "bg-amber-100"
+    : "bg-red-100";
   const iconColor = isWin
-    ? "bg-green-600"
+    ? "text-emerald-600"
     : isDraw
-    ? "bg-yellow-600"
-    : "bg-red-600";
+    ? "text-amber-600"
+    : "text-red-600";
   const textColor = isWin
-    ? "text-green-900"
+    ? "text-emerald-900"
     : isDraw
-    ? "text-yellow-900"
+    ? "text-amber-900"
     : "text-red-900";
 
   return (
-    <div className={`bg-gradient-to-br ${bgColor} border-2 rounded-xl p-6`}>
+    <div className={`${bgColor} border rounded-xl p-5`}>
       <div className="flex items-center mb-4">
-        <div className={`${iconColor} p-3 rounded-full`}>
-          <Trophy className="w-6 h-6 text-white" />
+        <div className={`${iconBg} p-2.5 rounded-full`}>
+          <Trophy className={`w-5 h-5 ${iconColor}`} />
         </div>
         <div className="ml-4">
           <h3 className={`text-lg font-bold ${textColor}`}>
@@ -117,20 +122,20 @@ const MatchResultPost = ({ post, onLike }) => {
         </div>
       </div>
 
-      <div className="bg-white/80 rounded-lg p-6 mb-4">
-        <div className="flex items-center justify-center space-x-8">
+      <div className="bg-white rounded-lg p-5 mb-4 border border-white/50 shadow-sm">
+        <div className="flex items-center justify-center space-x-6">
           <div className="text-center flex-1">
-            <div className="font-bold text-lg text-gray-900 mb-1">
+            <div className="font-bold text-sm text-gray-500 mb-1 truncate">
               {post.team?.name || "Notre équipe"}
             </div>
-            <div className="text-5xl font-black text-gray-900">{homeScore}</div>
+            <div className="text-4xl font-black text-gray-900">{homeScore}</div>
           </div>
-          <div className="text-3xl font-bold text-gray-400">-</div>
+          <div className="text-xl font-bold text-gray-300">-</div>
           <div className="text-center flex-1">
-            <div className="font-bold text-lg text-gray-900 mb-1">
+            <div className="font-bold text-sm text-gray-500 mb-1 truncate">
               {post.matchOpponent || post.match_opponent || "Adversaire"}
             </div>
-            <div className="text-5xl font-black text-gray-900">{awayScore}</div>
+            <div className="text-4xl font-black text-gray-900">{awayScore}</div>
           </div>
         </div>
       </div>
@@ -161,10 +166,10 @@ const RecruitmentPost = ({ post, onLike }) => {
   };
 
   return (
-    <div className="bg-gradient-to-br from-purple-50 to-pink-50 border-2 border-purple-200 rounded-xl p-6">
+    <div className="bg-purple-50/50 border border-purple-100/50 rounded-xl p-5">
       <div className="flex items-center mb-4">
-        <div className="bg-purple-600 p-3 rounded-full">
-          <UserPlus className="w-6 h-6 text-white" />
+        <div className="bg-purple-100 p-2.5 rounded-full">
+          <UserPlus className="w-5 h-5 text-purple-600" />
         </div>
         <div className="ml-4">
           <h3 className="text-lg font-bold text-purple-900">Recrutement</h3>
@@ -212,21 +217,21 @@ const RecruitmentPost = ({ post, onLike }) => {
         )}
       </div>
 
-      <div className="bg-white/70 rounded-lg p-4 mb-4">
-        <p className="text-gray-800 leading-relaxed">{post.content}</p>
+      <div className="bg-white rounded-lg p-4 mb-4 border border-purple-50">
+        <p className="text-gray-700 text-sm leading-relaxed">{post.content}</p>
       </div>
 
       {(post.recruitmentDescription || post.recruitment_description) && (
-        <div className="bg-purple-100 rounded-lg p-4 border border-purple-200">
-          <p className="text-sm text-purple-900">
+        <div className="bg-purple-50/50 rounded-lg p-4 border border-purple-100/50 mb-4">
+          <p className="text-sm text-purple-800 leading-relaxed">
             {post.recruitmentDescription || post.recruitment_description}
           </p>
         </div>
       )}
 
-      <div className="mt-4">
-        <button className="w-full bg-purple-600 text-white font-bold py-3 px-6 rounded-lg hover:bg-purple-700 transition-colors flex items-center justify-center">
-          <UserPlus className="w-5 h-5 mr-2" />
+      <div>
+        <button className="w-full bg-white border border-purple-200 text-purple-700 font-semibold py-2.5 px-4 rounded-lg hover:bg-purple-50 transition-colors flex items-center justify-center text-sm shadow-sm">
+          <UserPlus className="w-4 h-4 mr-2" />
           Postuler
         </button>
       </div>
@@ -247,7 +252,7 @@ const MediaPost = ({ post, onLike }) => {
           {post.media.type === "video" ? (
             <video
               controls
-              className="w-full max-h-[500px] object-contain"
+              className="w-full max-h-[400px] object-cover"
               poster={post.media.thumbnail}
             >
               <source src={post.media.url} type="video/mp4" />
@@ -257,7 +262,7 @@ const MediaPost = ({ post, onLike }) => {
             <img
               src={post.media.url}
               alt="Post media"
-              className="w-full max-h-[500px] object-contain"
+              className="w-full max-h-[400px] object-cover"
             />
           )}
         </div>
@@ -316,7 +321,7 @@ const PostCard = ({ post, isLast, onLike, isAuthenticated }) => {
             }
             className="block"
           >
-            <div className="w-12 h-12 rounded-full bg-gradient-to-r from-green-400 to-blue-500 flex items-center justify-center text-white font-bold shadow-sm">
+            <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-700 font-bold shadow-sm">
               {post.author?.profilePictureUrl ? (
                 <img
                   src={

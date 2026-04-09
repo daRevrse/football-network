@@ -1,19 +1,17 @@
 import React, { useState, useEffect } from "react";
 import { useParams } from "react-router-dom";
-import axios from "axios";
-import {
-  CheckCircle,
-  XCircle,
-  HelpCircle,
-  Clock,
-  Users,
-  AlertTriangle,
-  RefreshCw,
-} from "lucide-react";
 import toast from "react-hot-toast";
+import { 
+  CheckCircle, 
+  XCircle, 
+  HelpCircle, 
+  Clock, 
+  AlertTriangle, 
+  Users, 
+  RefreshCw 
+} from "lucide-react";
+import api from "../../services/api";
 
-const API_BASE_URL =
-  process.env.REACT_APP_API_URL || "http://localhost:5000/api";
 
 const MatchParticipations = () => {
   const { matchId } = useParams();
@@ -30,15 +28,7 @@ const MatchParticipations = () => {
   const loadParticipations = async () => {
     try {
       setLoading(true);
-      const token = localStorage.getItem("token");
-      const response = await axios.get(
-        `${API_BASE_URL}/participations/match/${matchId}`,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
-
-      console.log("response", response);
+      const response = await api.get(`/participations/match/${matchId}`);
 
       setMatch(response.data.match);
       setParticipations(response.data.participations);
@@ -54,12 +44,8 @@ const MatchParticipations = () => {
   const handleValidate = async () => {
     try {
       setUpdating(true);
-      const token = localStorage.getItem("token");
-      await axios.post(
-        `${API_BASE_URL}/participations/match/${matchId}/validate`,
-        {},
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      await api.post(`/participations/match/${matchId}/validate`);
+
 
       toast.success("Validation du match effectuée");
       loadParticipations();
@@ -133,21 +119,7 @@ const MatchParticipations = () => {
           <div className="flex-1">
             <h3 className="font-bold text-green-900">Match Validé</h3>
             <p className="text-sm text-green-700">
-              Les deux équipes ont suffisamment de joueurs confirmés (minimum 6
-              par équipe).
-            </p>
-          </div>
-        </div>
-      );
-    } else if (summary.homeConfirmed >= 4 && summary.awayConfirmed >= 4) {
-      return (
-        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 flex items-start space-x-3">
-          <AlertTriangle className="w-6 h-6 text-yellow-600 mt-0.5" />
-          <div className="flex-1">
-            <h3 className="font-bold text-yellow-900">Attention</h3>
-            <p className="text-sm text-yellow-700">
-              Pas encore assez de confirmations. Il faut au moins 6 joueurs par
-              équipe.
+              Les deux équipes ont assez de joueurs confirmés (minimum {summary.minRequired} par équipe) pour ce type de match ({match.match_type || 'unspecified'}).
             </p>
           </div>
         </div>
@@ -155,18 +127,18 @@ const MatchParticipations = () => {
     } else {
       return (
         <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-start space-x-3">
-          <XCircle className="w-6 h-6 text-red-600 mt-0.5" />
+          <AlertTriangle className="w-6 h-6 text-yellow-600 mt-0.5" />
           <div className="flex-1">
-            <h3 className="font-bold text-red-900">Critique</h3>
+            <h3 className="font-bold text-red-900">Validation en attente</h3>
             <p className="text-sm text-red-700">
-              Nombre insuffisant de confirmations. Contactez les joueurs pour
-              confirmer leur présence.
+              Nombre de confirmations insuffisant. Il faut au moins {summary.minRequired} joueurs par équipe pour valider le match.
             </p>
           </div>
         </div>
       );
     }
   };
+
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-8">
@@ -210,14 +182,15 @@ const MatchParticipations = () => {
           <div className="mt-4 pt-4 border-t border-gray-200">
             <div
               className={`text-center font-semibold ${
-                summary.homeConfirmed >= 6 ? "text-green-600" : "text-red-600"
+                summary.homeConfirmed >= summary.minRequired ? "text-green-600" : "text-red-600"
               }`}
             >
-              {summary.homeConfirmed >= 6
-                ? "✓ Validé"
-                : `Manque ${6 - summary.homeConfirmed}`}
+              {summary.homeConfirmed >= summary.minRequired
+                ? "✓ Prêt"
+                : `Manque ${summary.minRequired - summary.homeConfirmed}`}
             </div>
           </div>
+
         </div>
 
         <div className="bg-white rounded-lg border border-gray-200 p-6">
@@ -237,14 +210,15 @@ const MatchParticipations = () => {
           <div className="mt-4 pt-4 border-t border-gray-200">
             <div
               className={`text-center font-semibold ${
-                summary.awayConfirmed >= 6 ? "text-green-600" : "text-red-600"
+                summary.awayConfirmed >= summary.minRequired ? "text-green-600" : "text-red-600"
               }`}
             >
-              {summary.awayConfirmed >= 6
-                ? "✓ Validé"
-                : `Manque ${6 - summary.awayConfirmed}`}
+              {summary.awayConfirmed >= summary.minRequired
+                ? "✓ Prêt"
+                : `Manque ${summary.minRequired - summary.awayConfirmed}`}
             </div>
           </div>
+
         </div>
 
         <div className="bg-white rounded-lg border border-gray-200 p-6">

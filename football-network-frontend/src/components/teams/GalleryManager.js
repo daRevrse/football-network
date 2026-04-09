@@ -12,9 +12,11 @@ import {
   Loader2,
 } from "lucide-react";
 import toast from "react-hot-toast";
-import axios from "axios";
+import { collection, query, where, orderBy, getDocs, addDoc, deleteDoc, doc, serverTimestamp } from "firebase/firestore";
+import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
+import { db, storage } from "../../config/firebase";
 
-const API_BASE_URL = process.env.REACT_APP_API_URL;
+const API_BASE_URL = process.env.REACT_APP_API_URL || "http://localhost:5000/api";
 
 const GalleryManager = ({ teamId, isCapta, onUpdate }) => {
   const [photos, setPhotos] = useState([]);
@@ -35,13 +37,13 @@ const GalleryManager = ({ teamId, isCapta, onUpdate }) => {
   const loadGallery = async () => {
     try {
       setLoading(true);
-      const response = await axios.get(
-        `${API_BASE_URL}/teams/${teamId}/media/gallery`
-      );
-      console.log("first", response);
-      setPhotos(response.data.items || []);
+      const q = query(collection(db, "team_photos"), where("team_id", "==", teamId), orderBy("created_at", "desc"));
+      const querySnapshot = await getDocs(q);
+      const data = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      
+      setPhotos(data || []);
     } catch (error) {
-      console.error("Erreur galerie");
+      console.error("Erreur galerie", error);
     } finally {
       setLoading(false);
     }
@@ -51,16 +53,24 @@ const GalleryManager = ({ teamId, isCapta, onUpdate }) => {
     if (selectedFiles.length === 0) return;
     setUploading(true);
     try {
-      const formData = new FormData();
-      selectedFiles.forEach((file) => formData.append("photos", file));
+      const uploadPromises = selectedFiles.map(async (file) => {
+         const fileExt = file.name ? file.name.split('.').pop() : 'png';
+         const fileName = `${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
+         const storageRef = ref(storage, `teams/${teamId}/gallery/${fileName}`);
+         await uploadBytes(storageRef, file);
+         return getDownloadURL(storageRef);
+      });
 
-      await axios.post(
-        `${API_BASE_URL}/teams/${teamId}/media/gallery`,
-        formData,
-        {
-          headers: { "Content-Type": "multipart/form-data" },
-        }
-      );
+      const uploadedUrls = await Promise.all(uploadPromises);
+
+      // Insert records into team_photos
+      const recordsToInsertPromises = uploadedUrls.map(url => addDoc(collection(db, 'team_photos'), {
+         team_id: teamId,
+         file_path: url,
+         created_at: serverTimestamp()
+      }));
+
+      await Promise.all(recordsToInsertPromises);
 
       toast.success("Photos ajoutées !");
       setShowUploadModal(false);
@@ -68,21 +78,31 @@ const GalleryManager = ({ teamId, isCapta, onUpdate }) => {
       loadGallery();
       if (onUpdate) onUpdate();
     } catch (error) {
+      console.error(error);
       toast.error("Erreur upload");
     } finally {
       setUploading(false);
     }
   };
 
-  const handleDelete = async (photoId) => {
+  const handleDelete = async (photo) => {
     if (!window.confirm("Supprimer cette photo ?")) return;
     try {
-      await axios.delete(
-        `${API_BASE_URL}/teams/${teamId}/media/gallery/${photoId}`
-      );
-      setPhotos((prev) => prev.filter((p) => p.id !== photoId));
+      // 1. Delete from Firebase Storage
+      try {
+         const photoRef = ref(storage, photo.file_path);
+         await deleteObject(photoRef);
+      } catch (err) {
+         console.warn("Erreur de suppression du fichier (Storage):", err);
+      }
+
+      // 2. Delete from DB
+      await deleteDoc(doc(db, "team_photos", photo.id));
+
+      setPhotos((prev) => prev.filter((p) => p.id !== photo.id));
       toast.success("Photo supprimée");
     } catch (error) {
+      console.error(error);
       toast.error("Erreur suppression");
     }
   };
@@ -157,10 +177,7 @@ const GalleryManager = ({ teamId, isCapta, onUpdate }) => {
               className="group relative aspect-square bg-gray-100 rounded-xl overflow-hidden cursor-pointer border border-gray-200"
             >
               <img
-                src={
-                  API_BASE_URL.replace("/api", "/") +
-                  photo.file_path.replace("\\", "/")
-                }
+                src={photo.file_path}
                 alt=""
                 className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
               />
@@ -184,7 +201,7 @@ const GalleryManager = ({ teamId, isCapta, onUpdate }) => {
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      handleDelete(photo.id);
+                      handleDelete(photo);
                     }}
                     className="p-1.5 bg-red-500 text-white rounded-full hover:bg-red-600 shadow-sm"
                   >
@@ -203,10 +220,7 @@ const GalleryManager = ({ teamId, isCapta, onUpdate }) => {
               className="flex items-center p-3 bg-white border border-gray-100 rounded-xl hover:shadow-sm transition"
             >
               <img
-                src={
-                  API_BASE_URL.replace("/api", "/") +
-                  photo.file_path.replace("\\", "/")
-                }
+                src={photo.file_path}
                 alt=""
                 className="w-16 h-16 object-cover rounded-lg bg-gray-100"
               />
@@ -220,7 +234,7 @@ const GalleryManager = ({ teamId, isCapta, onUpdate }) => {
               </div>
               {isCapta && (
                 <button
-                  onClick={() => handleDelete(photo.id)}
+                  onClick={() => handleDelete(photo)}
                   className="text-gray-400 hover:text-red-500 p-2"
                 >
                   <Trash2 size={18} />
@@ -302,10 +316,7 @@ const GalleryManager = ({ teamId, isCapta, onUpdate }) => {
           </button>
 
           <img
-            src={
-              API_BASE_URL.replace("/api", "/") +
-              photos[lightboxIndex]?.file_path.replace("\\", "/")
-            }
+            src={photos[lightboxIndex]?.file_path}
             alt=""
             className="max-h-[85vh] max-w-[90vw] object-contain shadow-2xl"
           />

@@ -12,10 +12,9 @@ import {
   Briefcase,
 } from "lucide-react";
 import toast from "react-hot-toast";
-import axios from "axios";
+import api from "../services/api";
+// Removed direct Firestore imports
 
-const API_BASE_URL =
-  process.env.REACT_APP_API_URL || "http://localhost:5000/api";
 
 const PublicProfile = () => {
   const { userId } = useParams();
@@ -30,15 +29,46 @@ const PublicProfile = () => {
   const loadProfile = async () => {
     try {
       setLoading(true);
-      const response = await axios.get(`${API_BASE_URL}/users/${userId}`);
-      setProfile(response.data);
+      
+      const response = await api.get(`/users/${userId}`);
+      const userData = response.data.user;
+        
+      if (!userData) {
+        throw new Error("Profil introuvable");
+      }
+
+      // Stats - actuellement mockées en attendant le backend TheNodeJS
+      const teamsCount = 0;
+      const matchesCount = 0;
+
+      const mappedProfile = {
+        id: userId,
+        ...userData,
+        // Map from both possible formats to camelCase
+        firstName: userData.first_name || userData.displayName?.split(' ')[0] || "",
+        lastName: userData.last_name || userData.displayName?.split(' ')[1] || "",
+        userType: userData.role || userData.user_type || userData.userType || "player",
+        profilePictureUrl: userData.profile_picture_id || userData.photoURL || userData.profilePictureUrl,
+        coverPhotoUrl: userData.cover_photo_id || userData.coverPhotoUrl,
+        locationCity: userData.location_city || userData.locationCity,
+        skillLevel: userData.skill_level || userData.skillLevel,
+        createdAt: userData.created_at || userData.createdAt || userData.joinedAt,
+        stats: {
+          teamsCount: teamsCount,
+          matchesCount: matchesCount,
+        }
+      };
+
+      setProfile(mappedProfile);
     } catch (error) {
-      toast.error("Erreur lors du chargement du profil");
+      console.error(error);
+      toast.error("Erreur lors du chargement du profil via API");
       navigate("/");
     } finally {
       setLoading(false);
     }
   };
+
 
   const getPositionLabel = (position) => {
     const positions = {
@@ -98,9 +128,7 @@ const PublicProfile = () => {
         <div className="h-48 md:h-64 relative bg-gradient-to-r from-blue-600 to-indigo-700">
           {profile.coverPhotoUrl && (
             <img
-              src={`${API_BASE_URL.replace("/api", "")}${
-                profile.coverPhotoUrl
-              }`}
+              src={profile.coverPhotoUrl}
               alt="Cover"
               className="w-full h-full object-cover"
             />
@@ -114,9 +142,7 @@ const PublicProfile = () => {
               <div className="w-32 h-32 rounded-2xl border-4 border-white shadow-xl overflow-hidden bg-white">
                 {profile.profilePictureUrl ? (
                   <img
-                    src={`${API_BASE_URL.replace("/api", "")}${
-                      profile.profilePictureUrl
-                    }`}
+                    src={profile.profilePictureUrl}
                     alt={`${profile.firstName} ${profile.lastName}`}
                     className="w-full h-full object-cover"
                   />

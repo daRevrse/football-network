@@ -4,32 +4,7 @@ import { useAuth } from "../../contexts/AuthContext";
 import { useUserProfile } from "../../contexts/UserContext";
 import { useNotifications } from "../../hooks/useNotifications";
 import NotificationCenter from "../notifications/NotificationCenter";
-import axios from "axios";
-import {
-  Home,
-  Users,
-  Shield,
-  Hash,
-  Calendar,
-  MessageSquare,
-  UserPlus,
-  Search,
-  MapPin,
-  Award,
-  Trophy,
-  User,
-  LogOut,
-  Menu,
-  X,
-  Bell,
-  ChevronDown,
-  ShieldCheck,
-  FileText,
-  CheckCircle,
-  Clock
-} from "lucide-react";
-
-const API_BASE_URL = process.env.REACT_APP_API_URL || "http://localhost:5000/api";
+import { LogOut, Menu, Bell, User, X, ChevronDown, Home, ShieldCheck, FileText, Calendar, Hash, Shield, Trophy, MessageSquare, UserPlus, MapPin, Award, Users, Search, CheckCircle } from "lucide-react";
 
 const AppLayout = ({ children }) => {
   const { user, logout } = useAuth();
@@ -62,26 +37,13 @@ const AppLayout = ({ children }) => {
 
         if (isReferee) return;
 
-        const [playerInvites, matchInvites, validations, participations] = await Promise.allSettled([
-          axios.get(`${API_BASE_URL}/player-invitations?status=pending`, { headers }),
-          axios.get(`${API_BASE_URL}/matches/invitations/received?status=pending`, { headers }),
-          axios.get(`${API_BASE_URL}/matches/pending-validation/list`, { headers }),
-          axios.get(`${API_BASE_URL}/participations/my-pending`, { headers })
-        ]);
+        if (isReferee) return;
 
         setPendingCounts({
-          playerInvites: playerInvites.status === "fulfilled"
-            ? playerInvites.value.data.filter(i => i.status === "pending").length
-            : 0,
-          matchInvites: matchInvites.status === "fulfilled"
-            ? matchInvites.value.data.length
-            : 0,
-          validations: validations.status === "fulfilled"
-            ? validations.value.data.count || 0
-            : 0,
-          participations: participations.status === "fulfilled"
-            ? participations.value.data.participations?.length || 0
-            : 0
+          playerInvites: 0,
+          matchInvites: 0,
+          validations: 0,
+          participations: 0
         });
       } catch (error) {
         console.error("Error loading pending counts:", error);
@@ -316,10 +278,24 @@ const AppLayout = ({ children }) => {
       <div className="lg:pl-72">
         {/* Desktop Header */}
         <header className="hidden lg:flex h-16 bg-white border-b border-gray-200 items-center justify-between px-6 sticky top-0 z-30">
-          <div>
-            <h1 className="text-lg font-semibold text-gray-900">
+          <div className="flex items-center gap-8 flex-1">
+            <h1 className="text-lg font-semibold text-gray-900 whitespace-nowrap">
               {isReferee ? "Espace Arbitre" : isManager ? "Espace Manager" : "Espace Joueur"}
             </h1>
+            
+            {/* Global Search Component */}
+            <div className="hidden xl:block max-w-md w-full relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Rechercher des joueurs, équipes, matchs..."
+                className="w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-900 placeholder:text-gray-500 focus:outline-none focus:bg-white focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
+              />
+              <div className="absolute right-3 top-1/2 -translate-y-1/2 hidden lg:flex items-center gap-1">
+                <kbd className="hidden sm:inline-block px-2 py-0.5 text-[10px] font-medium text-gray-500 bg-gray-100 border border-gray-200 rounded">Ctrl</kbd>
+                <kbd className="hidden sm:inline-block px-2 py-0.5 text-[10px] font-medium text-gray-500 bg-gray-100 border border-gray-200 rounded">K</kbd>
+              </div>
+            </div>
           </div>
 
           <div className="flex items-center gap-4">

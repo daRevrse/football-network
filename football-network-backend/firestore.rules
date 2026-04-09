@@ -1,0 +1,46 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Profils utilisateurs
+    match /users/{userId} {
+      allow read: if true; // Public pour voir les profils des joueurs/managers
+      allow write: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    // Matchs : Public en lecture, protégé en écriture
+    match /matches/{matchId} {
+      allow read: if true;
+      allow write: if request.auth != null;
+      
+      // Sous-collection messages
+      match /messages/{messageId} {
+        allow read: if request.auth != null;
+        allow write: if request.auth != null;
+      }
+    }
+    
+    // Posts / Social Feed
+    match /posts/{postId} {
+      allow read: if true;
+      allow write: if request.auth != null;
+      
+      // Sous-collection commentaires
+      match /comments/{commentId} {
+        allow read: if true;
+        allow write: if request.auth != null;
+      }
+    }
+    
+    // Terrains / Venues
+    match /venues/{venueId} {
+      allow read: if true;
+      allow write: if request.auth != null; // Reservé aux admins normalement, mais flexible pour dev
+    }
+
+    // Équipes
+    match /teams/{teamId} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+  }
+}

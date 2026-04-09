@@ -12,10 +12,11 @@ import {
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import toast from "react-hot-toast";
-import axios from "axios";
+import api from "../../services/api";
 import { useAuth } from "../../contexts/AuthContext";
 
-const API_BASE_URL = process.env.REACT_APP_API_URL;
+
+
 
 const Matches = () => {
   const { token } = useAuth();
@@ -33,23 +34,19 @@ const Matches = () => {
     try {
       setLoading(true);
       setError(null);
-      const params = new URLSearchParams();
+      
+      const params = {};
       if (activeFilter === "upcoming") {
-        params.append("upcoming", "true");
-        params.append("status", "confirmed");
+        params.upcoming = "true";
+        params.status = "planning"; // Matches standard backend status
+      } else if (activeFilter === "completed") {
+        params.status = "completed";
       }
-      if (activeFilter === "completed") params.append("status", "completed");
-      params.append("limit", "50");
 
-      const config = token
-        ? { headers: { Authorization: `Bearer ${token}` } }
-        : {};
+      const response = await api.get('/matches', { params });
+      setMatches(response.data.matches || response.data || []);
 
-      const response = await axios.get(
-        `${API_BASE_URL}/matches?${params}`,
-        config
-      );
-      setMatches(response.data);
+
     } catch (error) {
       console.error("Error loading matches:", error);
       setError("Erreur lors du chargement des matchs");
@@ -85,7 +82,7 @@ const Matches = () => {
         </div>
         <Link
           to="/matches/create"
-          className="inline-flex items-center px-5 py-3 bg-indigo-600 text-white rounded-xl font-bold shadow-lg shadow-indigo-200 hover:bg-indigo-700 transition transform hover:-translate-y-0.5"
+          className="inline-flex items-center px-5 py-2.5 bg-emerald-600 text-white rounded-lg font-medium shadow-sm hover:bg-emerald-700 transition-colors"
         >
           <Plus className="w-5 h-5 mr-2" /> Organiser un match
         </Link>
@@ -100,8 +97,8 @@ const Matches = () => {
               onClick={() => setActiveFilter(filter)}
               className={`flex-1 sm:flex-none px-6 py-2 rounded-lg text-sm font-medium transition-all ${
                 activeFilter === filter
-                  ? "bg-white text-indigo-600 shadow-sm"
-                  : "text-gray-500 hover:text-gray-700"
+                  ? "bg-white text-emerald-700 shadow-sm border border-gray-200/60"
+                  : "text-gray-500 hover:text-gray-900"
               }`}
             >
               {filter === "upcoming"
@@ -120,7 +117,7 @@ const Matches = () => {
             placeholder="Rechercher une équipe..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-sm"
+            className="w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none text-sm transition-all"
           />
         </div>
       </div>
@@ -144,7 +141,7 @@ const Matches = () => {
       {/* Matches Grid */}
       {loading ? (
         <div className="flex justify-center py-12">
-          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-indigo-500"></div>
+          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-emerald-600"></div>
         </div>
       ) : filteredMatches.length === 0 ? (
         <div className="text-center py-16 bg-white rounded-3xl border-2 border-dashed border-gray-200">
@@ -189,85 +186,86 @@ const MatchListItem = ({ match }) => {
   // Gérer la localisation
   const locationName = match.location_name || match.location?.name || match.location || "Lieu à déterminer";
 
+  const getStatusBadge = (status) => {
+    switch (status) {
+      case "completed":
+        return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 border border-gray-200">Terminé</span>;
+      case "confirmed":
+        return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">Confirmé</span>;
+      case "pending":
+        return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-50 text-amber-700 border border-amber-200">En attente</span>;
+      case "cancelled":
+      case "refused":
+        return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-50 text-red-700 border border-red-200">Refusé/Annulé</span>;
+      default:
+        return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 border border-gray-200">{status || "Inconnu"}</span>;
+    }
+  };
+
   return (
     <Link
       to={`/matches/${match.id}`}
-      className="group bg-white rounded-2xl border border-gray-100 hover:border-indigo-100 hover:shadow-lg transition-all duration-300 overflow-hidden flex flex-col"
+      className="group bg-white rounded-xl border border-gray-200 hover:border-emerald-500/30 hover:shadow-md transition-all duration-200 flex flex-col p-5"
     >
-      {/* Status Bar */}
-      <div
-        className={`h-1.5 w-full ${
-          isCompleted ? "bg-gray-200" : "bg-green-500"
-        }`}
-      ></div>
+      {/* Header Info */}
+      <div className="flex items-center justify-between mb-4 pb-4 border-b border-gray-100">
+        <div className="flex items-center gap-2 text-xs font-medium text-gray-500 uppercase tracking-wider">
+          <Calendar className="w-3.5 h-3.5 text-gray-400" />
+          {date.toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" })}
+          <span className="mx-1">•</span>
+          {date.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}
+        </div>
+        <div>
+          {getStatusBadge(match.status)}
+        </div>
+      </div>
 
-      <div className="p-6 flex items-center justify-between">
+      {/* Match Up */}
+      <div className="flex items-center justify-between flex-1">
         {/* Home */}
-        <div className="flex flex-col items-center w-1/3">
-          <div className="w-12 h-12 md:w-16 md:h-16 rounded-full bg-gray-50 mb-2 flex items-center justify-center border border-gray-100 overflow-hidden">
+        <div className="flex flex-col items-center w-[40%] text-center gap-2">
+          <div className="w-14 h-14 rounded-full bg-gray-50 flex items-center justify-center border border-gray-200 overflow-hidden shadow-sm shadow-gray-100">
             {homeTeamLogo ? (
-              <img
-                src={homeTeamLogo.startsWith('http') ? homeTeamLogo : `${API_BASE_URL.replace('/api', '')}${homeTeamLogo}`}
-                alt={homeTeamName}
-                className="w-full h-full object-cover"
-              />
-            ) : (
-              <span className="font-bold text-gray-400">
-                {homeTeamName[0]}
-              </span>
-            )}
+              <img src={homeTeamLogo} alt={homeTeamName} className="w-full h-full object-cover" />
+            ) : <span className="font-bold text-gray-400">{homeTeamName[0]}</span>}
           </div>
-          <span className="font-bold text-gray-900 text-center text-sm line-clamp-1">
-            {homeTeamName}
-          </span>
+
+          <span className="font-bold text-gray-900 text-sm">{homeTeamName}</span>
         </div>
 
-        {/* Center Info */}
-        <div className="flex flex-col items-center w-1/3">
+        {/* Score/VS */}
+        <div className="flex flex-col items-center w-[20%]">
           {isCompleted && homeScore !== null && homeScore !== undefined ? (
-            <div className="text-2xl md:text-3xl font-black text-gray-900 mb-1">
-              {homeScore} - {awayScore ?? 0}
+            <div className="text-2xl font-black text-gray-900 tracking-tighter">
+              {homeScore} <span className="text-gray-300 mx-1">-</span> {awayScore ?? 0}
             </div>
           ) : (
-            <div className="px-3 py-1 bg-gray-100 rounded text-xs font-bold text-gray-500 mb-2">
-              {date.toLocaleTimeString("fr-FR", {
-                hour: "2-digit",
-                minute: "2-digit",
-              })}
+            <div className="w-8 h-8 rounded-full bg-gray-50 border border-gray-200 flex items-center justify-center">
+              <span className="text-xs font-bold text-gray-500">VS</span>
             </div>
           )}
-
-          <div className="text-xs text-gray-500 uppercase tracking-wide font-medium mb-1">
-            {date.toLocaleDateString("fr-FR", {
-              day: "numeric",
-              month: "short",
-              year: "numeric",
-            })}
-          </div>
-
-          <div className="flex items-center text-xs text-gray-400">
-            <MapPin className="w-3 h-3 mr-1" /> {locationName}
-          </div>
         </div>
 
         {/* Away */}
-        <div className="flex flex-col items-center w-1/3">
-          <div className="w-12 h-12 md:w-16 md:h-16 rounded-full bg-gray-50 mb-2 flex items-center justify-center border border-gray-100 overflow-hidden">
+        <div className="flex flex-col items-center w-[40%] text-center gap-2">
+          <div className="w-14 h-14 rounded-full bg-gray-50 flex items-center justify-center border border-gray-200 overflow-hidden shadow-sm shadow-gray-100">
             {awayTeamLogo ? (
-              <img
-                src={awayTeamLogo.startsWith('http') ? awayTeamLogo : `${API_BASE_URL.replace('/api', '')}${awayTeamLogo}`}
-                alt={awayTeamName}
-                className="w-full h-full object-cover"
-              />
-            ) : (
-              <span className="font-bold text-gray-400">
-                {awayTeamName?.[0] || "?"}
-              </span>
-            )}
+              <img src={awayTeamLogo} alt={awayTeamName} className="w-full h-full object-cover" />
+            ) : <span className="font-bold text-gray-400">{awayTeamName?.[0] || "?"}</span>}
           </div>
-          <span className="font-bold text-gray-900 text-center text-sm line-clamp-1">
-            {awayTeamName}
-          </span>
+
+          <span className="font-bold text-gray-900 text-sm">{awayTeamName}</span>
+        </div>
+      </div>
+
+      {/* Footer Info */}
+      <div className="mt-5 pt-4 border-t border-gray-100 flex items-center justify-between text-sm">
+        <div className="flex items-center text-gray-500 font-medium">
+          <MapPin className="w-4 h-4 mr-1.5 text-gray-400" /> 
+          <span className="truncate max-w-[200px]">{locationName}</span>
+        </div>
+        <div className="text-emerald-600 font-medium group-hover:translate-x-1 transition-transform flex items-center text-xs">
+          Détails <Plus className="w-3 h-3 ml-1" />
         </div>
       </div>
     </Link>

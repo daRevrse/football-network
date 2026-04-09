@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from "react";
 import { Inbox, Send, Check, X, RefreshCw, ChevronRight } from "lucide-react";
 import toast from "react-hot-toast";
-import axios from "axios";
-import SendInvitationModal from "./SendInvitationModal"; // On garde la modale externe car complexe
+import api from "../../services/api";
+import SendInvitationModal from "./SendInvitationModal";
 
-const API_BASE_URL =
-  process.env.REACT_APP_API_URL || "http://localhost:5000/api";
+
+
 
 const Invitations = () => {
   const [activeTab, setActiveTab] = useState("received");
@@ -23,27 +23,28 @@ const Invitations = () => {
     try {
       // Charger les équipes pour le bouton "Envoyer"
       if (myTeams.length === 0) {
-        const teamsRes = await axios.get(`${API_BASE_URL}/teams/my`);
-        setMyTeams(teamsRes.data.filter((t) => t.role === "captain"));
+        const teamsRes = await api.get('/teams/my');
+        // On récupère les équipes gérées par l'utilisateur
+        setMyTeams(teamsRes.data.filter((t) => t.role === "manager" || t.role === "captain"));
       }
 
       // Charger les invitations selon l'onglet
       const endpoint =
-        activeTab === "received" ? "received?status=pending" : "sent";
-      const res = await axios.get(
-        `${API_BASE_URL}/matches/invitations/${endpoint}`
-      );
+        activeTab === "received" ? "/matches/invitations/received" : "/matches/invitations/sent";
+      const res = await api.get(endpoint);
       setInvitations(res.data);
     } catch (e) {
       console.error(e);
+      toast.error("Erreur lors du chargement des données");
     } finally {
       setLoading(false);
     }
+
   };
 
   const handleRespond = async (id, response) => {
     try {
-      await axios.patch(`${API_BASE_URL}/matches/invitations/${id}/respond`, {
+      await api.patch(`/matches/invitations/${id}/respond`, {
         response,
       });
       toast.success(
@@ -51,9 +52,10 @@ const Invitations = () => {
       );
       loadData();
     } catch (e) {
-      toast.error("Erreur action");
+      toast.error("Erreur lors de la réponse");
     }
   };
+
 
   return (
     <div className="max-w-5xl mx-auto pb-12">

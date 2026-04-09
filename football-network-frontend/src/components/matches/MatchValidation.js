@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
+import toast from "react-hot-toast";
 import {
   CheckCircle,
   XCircle,
@@ -11,11 +12,8 @@ import {
   Trophy,
   AlertOctagon,
 } from "lucide-react";
-import axios from "axios";
-import toast from "react-hot-toast";
+import api from "../../services/api";
 
-const API_BASE_URL =
-  process.env.REACT_APP_API_URL || "http://localhost:5000/api";
 
 const MatchValidation = () => {
   const { matchId } = useParams();
@@ -39,9 +37,8 @@ const MatchValidation = () => {
   const loadStatus = async () => {
     try {
       setLoading(true);
-      const res = await axios.get(
-        `${API_BASE_URL}/matches/${matchId}/validation-status`
-      );
+      const res = await api.get(`/matches/${matchId}/validation-status`);
+
       setData(res.data);
       if (res.data.match.homeScore !== null) {
         setScores({
@@ -63,10 +60,11 @@ const MatchValidation = () => {
 
     setSubmitting(true);
     try {
-      await axios.post(`${API_BASE_URL}/matches/${matchId}/validate-score`, {
+      await api.post(`/matches/${matchId}/validate-score`, {
         homeScore: parseInt(scores.home),
         awayScore: parseInt(scores.away),
       });
+
       toast.success("Score soumis !");
       loadStatus();
     } catch (error) {
@@ -86,9 +84,10 @@ const MatchValidation = () => {
       return toast.error("Expliquez la raison (min 10 cars)");
     setSubmitting(true);
     try {
-      await axios.post(`${API_BASE_URL}/matches/${matchId}/dispute`, {
+      await api.post(`/matches/${matchId}/dispute`, {
         reason: disputeReason,
       });
+
       toast.success("Contestation ouverte");
       loadStatus();
       setShowDispute(false);

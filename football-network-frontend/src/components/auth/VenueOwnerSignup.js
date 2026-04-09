@@ -25,10 +25,10 @@ import {
   TrendingUp,
   Shield
 } from "lucide-react";
-import axios from "axios";
+import { useAuth } from "../../contexts/AuthContext";
+import { db } from "../../config/firebase";
+import { collection, addDoc, serverTimestamp } from "firebase/firestore";
 import toast from "react-hot-toast";
-
-const API_BASE_URL = process.env.REACT_APP_API_URL || "http://localhost:5000/api";
 
 // Input Field Component - défini EN DEHORS du composant principal pour éviter les re-créations
 const InputField = React.memo(({ icon: Icon, name, type = "text", placeholder, label, error, registerFn, ...props }) => (
@@ -114,6 +114,7 @@ const schema = yup.object({
 });
 
 const VenueOwnerSignup = () => {
+  const { signup } = useAuth();
   const navigate = useNavigate();
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -171,26 +172,37 @@ const VenueOwnerSignup = () => {
         confirmPassword: data.confirmPassword,
         userType: "venue_owner",
         locationCity: data.venueCity,
-        // Informations du terrain pour création automatique
-        venue: {
-          name: data.venueName,
-          address: data.venueAddress,
-          city: data.venueCity,
-          field_type: data.fieldType,
-          field_surface: data.fieldSurface,
-          field_size: data.fieldSize,
-        },
       };
 
-      const response = await axios.post(`${API_BASE_URL}/auth/signup`, payload);
+      const result = await signup(payload);
 
-      if (response.data.success !== false) {
-        toast.success("Compte créé avec succès ! Vérifiez votre email.");
-        navigate("/login");
+      if (result.success && result.user) {
+        try {
+          // Informations du terrain pour création automatique via Firebase
+          await addDoc(collection(db, "locations"), {
+             name: data.venueName,
+             address: data.venueAddress,
+             city: data.venueCity,
+             owner_id: result.user.uid,
+             field_type: data.fieldType,
+             field_surface: data.fieldSurface,
+             field_size: data.fieldSize,
+             latitude: 0, // Fallback requires default
+             longitude: 0, // Fallback requires default
+             created_at: serverTimestamp(),
+             updated_at: serverTimestamp()
+          });
+
+          // Toast succés déjà géré dans AuthContext
+          navigate("/login");
+        } catch (venueError) {
+          console.error("Erreur création terrain:", venueError);
+          toast.error("Compte créé mais erreur lors de l'enregistrement du terrain.");
+        }
       }
     } catch (error) {
       console.error("Signup error:", error);
-      toast.error(error.response?.data?.error || "Erreur lors de l'inscription");
+      toast.error("Erreur inattendue de l'inscription");
     } finally {
       setIsLoading(false);
     }

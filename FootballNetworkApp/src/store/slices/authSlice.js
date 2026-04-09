@@ -2,11 +2,10 @@ import { createSlice } from '@reduxjs/toolkit';
 import { SecureStorage } from '../../services/storage';
 
 const initialState = {
-  user: null,
-  token: null,
-  refreshToken: null,
+  user: null, // Le profil complet issu de notre table 'users'
+  session: null, // L'objet session brut renvoyé par Supabase
   isAuthenticated: false,
-  isLoading: false,
+  isLoading: true, // true par défaut pour éviter le "flicker" de l'écran de login au démarrage
   error: null,
 };
 
@@ -25,39 +24,37 @@ const authSlice = createSlice({
       state.error = null;
     },
     loginSuccess: (state, action) => {
-      const { user, token, refreshToken } = action.payload;
+      // action.payload = { user: profilMétier, session: objetSessionSupabase }
+      const { user, session } = action.payload;
       state.user = user;
-      state.token = token;
-      state.refreshToken = refreshToken;
-      state.isAuthenticated = true;
+      state.session = session;
+      state.isAuthenticated = !!session;
       state.isLoading = false;
       state.error = null;
-
-      // Sauvegarder en stockage sécurisé
-      SecureStorage.setTokens(token, refreshToken);
+      
+      // Stockage local non sensible (Supabase gère ses propres tokens)
       SecureStorage.setUser(user);
     },
     logout: state => {
       state.user = null;
-      state.token = null;
-      state.refreshToken = null;
+      state.session = null;
       state.isAuthenticated = false;
       state.isLoading = false;
       state.error = null;
 
-      // Nettoyer le stockage
-      SecureStorage.clearAll();
+      SecureStorage.removeUser();
     },
     updateUser: (state, action) => {
       state.user = { ...state.user, ...action.payload };
       SecureStorage.setUser(state.user);
     },
-    setTokens: (state, action) => {
-      const { token, refreshToken } = action.payload;
-      state.token = token;
-      state.refreshToken = refreshToken;
-      SecureStorage.setTokens(token, refreshToken);
+      // Le refreshToken est obsolète avec la configuration Supabase AutoRefreshToken
     },
+    setSessionOnly: (state, action) => {
+      // Pour une restauration au démarrage quand getProfile() est en cours
+      state.session = action.payload;
+      state.isAuthenticated = !!action.payload;
+    }
   },
 });
 
@@ -68,7 +65,7 @@ export const {
   loginSuccess,
   logout,
   updateUser,
-  setTokens,
+  setSessionOnly,
 } = authSlice.actions;
 
 export default authSlice.reducer;

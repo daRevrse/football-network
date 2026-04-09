@@ -4,11 +4,11 @@
  */
 
 :root {
-  /* Primary Colors */
-  --color-primary: #1B5E20;
-  --color-primary-dark: #0D4414;
-  --color-primary-light: #2E7D32;
-  --color-primary-hover: #2E7D32;
+  /* Primary Colors (Emerald Scale) */
+  --color-primary: #059669;       /* Emerald 600 */
+  --color-primary-dark: #047857;  /* Emerald 700 */
+  --color-primary-light: #10b981; /* Emerald 500 */
+  --color-primary-hover: #047857; /* Emerald 700 */
 
   /* Secondary */
   --color-secondary: #FFFFFF;
@@ -80,10 +80,10 @@
   --color-placeholder: #9E9E9E;
 
   /* Gradients */
-  --gradient-primary: linear-gradient(135deg, #1B5E20 0%, #2E7D32 100%);
+  --gradient-primary: linear-gradient(135deg, #059669 0%, #10b981 100%);
   --gradient-success: linear-gradient(135deg, #388E3C 0%, #4CAF50 100%);
   --gradient-error: linear-gradient(135deg, #C62828 0%, #E53935 100%);
-  --gradient-header: linear-gradient(135deg, #1B5E20 0%, #2E7D32 100%);
+  --gradient-header: linear-gradient(135deg, #059669 0%, #10b981 100%);
 
   /* Shadows */
   --shadow-small: 0 1px 2px rgba(0, 0, 0, 0.1);

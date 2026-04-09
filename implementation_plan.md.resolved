@@ -1,0 +1,118 @@
+# Analyse du Projet et Plan de Migration vers Supabase
+
+## 1. Architecture Actuelle du Projet
+Le projet `Football Network` (FootConnect) est divisé en trois parties principales :
+- **Backend (`football-network-backend`)** : Une API Node.js/Express bien structurée.
+  - **Base de données** : MySQL (utilisant `mysql2` avec des requêtes brutes dans des dossiers [sql/](file:///c:/football-network/football-network-backend/sql/schema_dump.sql)).
+  - **Authentification** : Gestion maison avec JWT (`jsonwebtoken`) et `bcryptjs` pour les mots de passe.
+  - **Fichiers / Médias** : Stockage local avec `multer` dans le dossier `uploads/`.
+  - **Temps Réel** : `socket.io` pour le chat (matchs, etc.) et les notifications.
+- **Application Mobile (`FootballNetworkApp`)** : Application React Native (Expo) avec Redux et Axios.
+- **Application Web (`football-network-frontend`)** : Application React classique avec TailwindCSS et React Router.
+
+## 2. Pourquoi migrer vers Supabase ?
+Supabase va vous permettre de simplifier drastiquement l'infrastructure en remplaçant la majorité de votre backend actuel par des services managés :
+- **MySQL -> PostgreSQL** : Base de données relationnelle robuste avec accès direct via API auto-générée.
+- **JWT Custom -> Supabase Auth** : Gestion complète des utilisateurs (inscription, login, mots de passe oubliés, OAuth) sans gérer la sécurité cryptographique vous-même.
+- **Multer / Local Uploads -> Supabase Storage** : Stockage cloud de fichiers (serveur de fichiers S3-compatible) avec gestion fine des permissions.
+- **Socket.io -> Supabase Realtime** : Vous pourrez vous abonner directement aux changements de votre base de données (ex: un nouveau message inséré déclenche une update côté frontend).
+
+## 3. Plan de Migration par Étapes
+
+### Étape 1 : Migration du Schéma de Base de Données (MySQL vers Supabase Postgres)
+- Exporter le schéma actuel de la base MySQL.
+- Convertir ce schéma en PostgreSQL (types de données, auto-increment vs serial, etc.).
+- Convertir les fichiers SQL bruts (dossier [sql/](file:///c:/football-network/football-network-backend/sql/schema_dump.sql)) au format Postgres.
+- Exécuter le schéma sur le projet Supabase (uniquement la structure, pas de migration des données de test existantes).
+- Configurer les règles de sécurité **Row Level Security (RLS)**.
+
+### Étape 2 : Migration de l'Authentification
+- Activer Supabase Auth.
+- Dans les interfaces React Native et React Web, remplacer les appels à `/api/auth/login` par la méthode `supabase.auth.signInWithPassword()`.
+- Migrer les utilisateurs existants : une mécanique d'import de mots de passe hachés est possible via l'API Admin de Supabase, ou en demandant un reset de mot de passe à la première connexion.
+
+### Étape 3 : Migration du Stockage des Fichiers (uploads)
+- Créer un ou plusieurs _buckets_ Storage dans Supabase (par ex : `avatars`, `team_logos`, `match_media`).
+- Uploader le contenu actuel du dossier `uploads/` vers ces buckets.
+- Mettre à jour les références en base de données pour utiliser les URLs publiques de Supabase.
+- Sur les frontends, remplacer `multipart/form-data` via axios par `supabase.storage.from('bucket').upload()`.
+
+### Étape 4 : Migration du Temps Réel (Socket.io)
+- Activer **Supabase Realtime** sur les tables concernées (messages de match, statuts de match, notifications).
+- Dans React Native et JS, remplacer les abonnements `socket.on(...)` par l'écouteur `supabase.channel('messages').on('postgres_changes', ...).subscribe()`.
+
+### Étape 5 : Refonte de l'API Backend (Full Serverless)
+**Choix validé : Full Serverless**. Les app frontends (Web et Mobile) interrogeront directement Supabase avec le client `@supabase/supabase-js`. Le code métier complexe sera géré par des **Supabase Edge Functions** (Deno) ou des **Triggers PostgreSQL**.
+- Remplacement des appels API par des requêtes directes via le SDK Supabase.
+- **Sécurité (RLS)** : Contrairement à l'ancien backend Node qui avait tous les droits, le Frontend devra respecter les **Row Level Security (RLS) policies**. Chaque table aura ses propres règles (ex: "Un utilisateur ne peut modifier que son propre profil").
+- Migration de la logique complexe vers Edge Functions/Triggers (ex: Création automatique du profil via Trigger lors de l'inscription Auth).
+- Décommissionnement progressif du backend Express (`football-network-backend`).
+
+## Prochaines Actions
+
+### En cours : Migration de l'Authentification du Frontend Web (`football-network-frontend`)
+Voici le plan détaillé pour remplacer le système JWT local par Supabase Auth sur l'application Web :
+
+1.  **Configuration Client**
+    *   Installer `@supabase/supabase-js`.
+    *   Ajouter les variables `REACT_APP_SUPABASE_URL` et `REACT_APP_SUPABASE_ANON_KEY` dans le [.env](file:///c:/football-network/football-network-backend/.env) frontend.
+    *   Créer le client Supabase dans un nouveau fichier [src/lib/supabase.js](file:///c:/football-network/FootballNetworkApp/src/lib/supabase.js).
+
+2.  **Mise à jour de [AuthContext.js](file:///c:/football-network/football-network-frontend/src/contexts/AuthContext.js)**
+    *   **État initial** : Utiliser `supabase.auth.getSession()` puis s'abonner avec `supabase.auth.onAuthStateChange()`.
+    *   **Données Utilisateur** : Supabase Auth gère l'identité (email, mot de passe), mais les données de profil (`first_name`, `user_type`, `bio`, etc.) résident dans notre table publique `users`. Lorsqu'une session est détectée, le contexte fera une requête `supabase.from('users').select('*').eq('email', session.user.email).single()` pour récupérer le profil complet et hydrater l'application.
+    *   **Login** : Remplacer l'appel `/auth/login` par `supabase.auth.signInWithPassword({ email, password })`.
+    *   **Signup** : Remplacer `/auth/signup` par `supabase.auth.signUp()`. Après le succès de l'inscription Auth, insérer immédiatement le profil métier dans la table publique `users` via `supabase.from('users').insert({...})`.
+    *   **Logout** : Remplacer la suppression du localStorage par `supabase.auth.signOut()`.
+
+3.  **Nettoyage**
+    *   Supprimer ou adapter les intercepteurs Axios (qui injectaient l'ancien token JWT) si nous remplaçons petit à petit tous les appels vers le backend Node par des appels Supabase.
+
+4.  **Test (Terminé - Validé ✅)**
+    *   L'inscription et l'insertion en base fonctionnent parfaitement !
+
+### Terminé ✅ : Migration du Stockage (Storage) du Frontend Web
+L'objectif était d'abandonner `multer` sur le backend Node et de permettre aux utilisateurs d'uploader directement leurs médias sur Supabase Storage.
+
+1.  **Configuration Supabase**
+    *   Création par l'utilisateur du bucket public `medias`.
+
+2.  **Helpers d'Upload côté Front**
+    *   Création de la méthode [uploadMedia](file:///c:/football-network/football-network-frontend/src/lib/supabase.js#12-49) exportée dans [src/lib/supabase.js](file:///c:/football-network/FootballNetworkApp/src/lib/supabase.js).
+
+3.  **Adaptation des Composants Web**
+    *   [Profile.js](file:///c:/football-network/football-network-frontend/src/components/Profile.js) : remplacement de l'API `/uploads` pour les avatars et bannières avec un update direct vers la table `users`.
+    *   [TeamMediaManager.js](file:///c:/football-network/football-network-frontend/src/components/teams/TeamMediaManager.js) : remplacement de l'API `/media/logo` et `/media/banner` pour `teams`.
+    *   [GalleryManager.js](file:///c:/football-network/football-network-frontend/src/components/teams/GalleryManager.js) : refonte de l'upload local par un upload groupé vers Storage + un batch insert vers `team_photos`.
+
+*(Note : La migration de l'App Mobile est temporairement en pause à la demande de l'utilisateur)*
+
+### À faire : Étape 5 - Refonte Full Serverless (Frontend Web)
+Suite à la validation de la stratégie "Full Serverless", il faut maintenant remplacer **tous les appels API existants (`axios`)** du frontend Web par des requêtes directes au SDK Supabase (`@supabase/supabase-js`). Étant donné le volume (~125 occurrences), cette étape est découpée par domaine fonctionnel :
+
+1.  **✅ Domaine Utilisateurs & Contextes (Terminé)**
+    *   [Profile.js](file:///c:/football-network/football-network-frontend/src/components/Profile.js) & [PublicProfile.js](file:///c:/football-network/football-network-frontend/src/components/PublicProfile.js) : Fetch complet du profil utilisateur.
+    *   [Dashboard.js](file:///c:/football-network/football-network-frontend/src/components/Dashboard.js) & [AdminDashboard.js](file:///c:/football-network/football-network-frontend/src/components/admin/AdminDashboard.js) : Statistiques de base et vue d'ensemble du tableau de bord.
+    *   [UserContext.js](file:///c:/football-network/football-network-frontend/src/contexts/UserContext.js) : Récupération des données utilisateur de base partagées dans l'app.
+    *   *Outils concernés : `supabase.from('users').select(...)` avec RLS.*
+
+2.  **Domaine Équipes (Teams)**
+    *   `CreateTeam.js`, `TeamList.js`, [TeamDetails.js](file:///c:/football-network/football-network-frontend/src/components/teams/TeamDetails.js), etc.
+    *   Remplacer les endpoints `/teams`, `/teams/:id`, `/teams/my`.
+    *   Lier les relations avec les membres (`team_members`) et le statut des invitations.
+
+3.  **Domaine Matchs, Terrains & Arbitres**
+    *   Création, listing, détails et validation des matchs.
+    *   Remplacer `/matches`, `/matches/invitations`, `/matches/pending-validation`.
+    *   Gestion de l'arbitrage (rapports, statuts) via `match_referees` et `matches`.
+    *   Gestion des réservations (`venue_bookings`).
+
+4.  **Domaine Feed & Interactions Sociaux**
+    *   [Feed.js](file:///c:/football-network/football-network-frontend/src/components/Feed.js), [ImprovedFeed.js](file:///c:/football-network/football-network-frontend/src/components/ImprovedFeed.js).
+    *   Remplacer `/feed`, `/feed/:id/like`, `/feed/:id/comments`.
+    *   Remplacer les uploads attachés aux posts par Supabase Storage.
+    *   *(Note: Ceci peut impliquer des Vues PostgreSQL complexes pour joindre les Users, Teams et Matchs au Feed).*
+
+**Stratégie technique :**
+*   Chaque composant sera refactoré un à un pour isoler les bugs potentiels.
+*   Certaines agrégations backend complexes (ex: Dashboards) nécessiteront peut-être la création de **Vues PostgreSQL (Views)** ou l'utilisation de Supabase RPC (Remote Procedure Calls) pour limiter la quantité de code JavaScript sur le client.

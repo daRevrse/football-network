@@ -1,16 +1,12 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { ChevronLeft, Users, AlertCircle } from "lucide-react";
-import axios from "axios";
-import { useAuth } from "../../contexts/AuthContext";
+import api from "../../services/api";
 import SendInvitationModal from "./SendInvitationModal";
 import toast from "react-hot-toast";
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || "http://localhost:5000/api";
-
 const CreateMatch = () => {
   const navigate = useNavigate();
-  const { token } = useAuth();
   const [managedTeams, setManagedTeams] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -24,9 +20,8 @@ const CreateMatch = () => {
       setLoading(true);
       setError(null);
 
-      const response = await axios.get(`${API_BASE_URL}/teams/my`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      // Utilise le nouvel endpoint /api/teams/my
+      const response = await api.get("/teams/my");
 
       // Filter only teams where user is manager or captain
       const teamsWithAdminRole = response.data.filter((team) =>
@@ -60,10 +55,10 @@ const CreateMatch = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div className="flex items-center justify-center p-12 text-blue-500">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Chargement...</p>
+          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-current mx-auto mb-4"></div>
+          <p className="text-gray-500 font-medium">Chargement...</p>
         </div>
       </div>
     );
@@ -71,39 +66,37 @@ const CreateMatch = () => {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gray-50 py-12 px-4">
-        <div className="max-w-2xl mx-auto">
-          <button
-            onClick={() => navigate("/matches")}
-            className="flex items-center text-gray-600 hover:text-gray-900 mb-6 transition"
-          >
-            <ChevronLeft className="w-5 h-5 mr-1" />
-            Retour aux matchs
-          </button>
+      <div className="py-8 max-w-2xl mx-auto">
+        <button
+          onClick={() => navigate("/matches")}
+          className="flex items-center text-gray-500 hover:text-gray-900 mb-6 transition font-medium"
+        >
+          <ChevronLeft className="w-5 h-5 mr-1" />
+          Retour aux matchs
+        </button>
 
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8">
-            <div className="flex items-center justify-center w-16 h-16 bg-red-100 rounded-full mx-auto mb-4">
-              <AlertCircle className="w-8 h-8 text-red-600" />
-            </div>
-            <h2 className="text-xl font-bold text-gray-900 text-center mb-2">
-              Impossible d'organiser un match
-            </h2>
-            <p className="text-gray-600 text-center mb-6">{error}</p>
-            <div className="flex justify-center gap-4">
-              <button
-                onClick={() => navigate("/matches")}
-                className="px-6 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl font-medium transition"
-              >
-                Retour aux matchs
-              </button>
-              <button
-                onClick={() => navigate("/teams")}
-                className="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-medium transition"
-              >
-                <Users className="w-5 h-5 inline mr-2" />
-                Voir mes équipes
-              </button>
-            </div>
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
+          <div className="flex items-center justify-center w-16 h-16 bg-red-50 rounded-full mx-auto mb-4">
+            <AlertCircle className="w-8 h-8 text-red-600" />
+          </div>
+          <h2 className="text-xl font-bold text-gray-900 text-center mb-2">
+            Impossible d'organiser un match
+          </h2>
+          <p className="text-gray-500 text-center mb-8">{error}</p>
+          <div className="flex flex-col sm:flex-row justify-center gap-4">
+            <button
+              onClick={() => navigate("/matches")}
+              className="px-6 py-2.5 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 rounded-lg font-medium transition"
+            >
+              Retour aux matchs
+            </button>
+            <button
+              onClick={() => navigate("/teams")}
+              className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition flex items-center justify-center shadow-sm"
+            >
+              <Users className="w-5 h-5 mr-2" />
+              Voir mes équipes
+            </button>
           </div>
         </div>
       </div>
@@ -111,15 +104,14 @@ const CreateMatch = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8 px-4">
-      <div className="max-w-7xl mx-auto">
-        <button
-          onClick={() => navigate("/matches")}
-          className="flex items-center text-gray-600 hover:text-gray-900 mb-6 transition"
-        >
-          <ChevronLeft className="w-5 h-5 mr-1" />
-          Retour aux matchs
-        </button>
+    <div className="py-4 max-w-7xl mx-auto">
+      <button
+        onClick={() => navigate("/matches")}
+        className="flex items-center text-gray-500 hover:text-gray-900 mb-6 transition font-medium"
+      >
+        <ChevronLeft className="w-5 h-5 mr-1" />
+        Retour aux matchs
+      </button>
 
         {/* Modal d'invitation */}
         <SendInvitationModal
@@ -127,7 +119,6 @@ const CreateMatch = () => {
           onClose={handleClose}
           onSuccess={handleSuccess}
         />
-      </div>
     </div>
   );
 };

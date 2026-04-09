@@ -170,7 +170,7 @@ const TeamDetails = () => {
   if (loading)
     return (
       <div className="flex justify-center items-center h-screen">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-500"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600"></div>
       </div>
     );
   if (!team) return null;
@@ -190,8 +190,8 @@ const TeamDetails = () => {
             <div
               className={`w-full h-full bg-gradient-to-r ${
                 isOwner
-                  ? "from-yellow-500 to-orange-600"
-                  : "from-blue-600 to-indigo-700"
+                  ? "from-emerald-800 to-slate-900"
+                  : "from-slate-800 to-slate-900"
               }`}
             >
               <div className="absolute inset-0 bg-black/20 pattern-grid-lg opacity-30"></div>
@@ -241,7 +241,7 @@ const TeamDetails = () => {
                           }}
                           className="w-full px-4 py-3 hover:bg-gray-50 text-left flex items-center text-gray-700 text-sm font-medium"
                         >
-                          <UserPlus className="w-4 h-4 mr-3 text-green-500" />{" "}
+                          <UserPlus className="w-4 h-4 mr-3 text-emerald-500" />{" "}
                           Inviter
                         </button>
                         {/* Bouton Désigner capitaine - uniquement pour les managers */}
@@ -273,7 +273,7 @@ const TeamDetails = () => {
                               </>
                             ) : (
                               <>
-                                <UserCheck className="w-4 h-4 mr-3 text-green-500" />{" "}
+                                <UserCheck className="w-4 h-4 mr-3 text-emerald-500" />{" "}
                                 Ouvrir le mercato
                               </>
                             )}
@@ -350,7 +350,7 @@ const TeamDetails = () => {
                 </span>
                 {/* Badge Mercato */}
                 {team.mercatoActif ? (
-                  <span className="flex items-center px-2 py-0.5 rounded-md bg-green-100 text-green-700 border border-green-300 text-xs font-semibold">
+                  <span className="flex items-center px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-700 border border-emerald-300 text-xs font-semibold">
                     <UserCheck className="w-3.5 h-3.5 mr-1" />
                     Mercato Ouvert
                   </span>
@@ -381,7 +381,7 @@ const TeamDetails = () => {
                       disabled={!team.mercatoActif}
                       className={`flex items-center px-6 py-3 rounded-xl font-bold shadow-lg transition transform ${
                         team.mercatoActif
-                          ? "bg-green-600 text-white hover:bg-green-500 hover:-translate-y-0.5"
+                          ? "bg-emerald-600 text-white hover:bg-emerald-500 hover:-translate-y-0.5"
                           : "bg-gray-300 text-gray-500 cursor-not-allowed"
                       }`}
                     >
@@ -517,7 +517,7 @@ const OverviewTab = ({ team }) => {
         <StatBox
           label="Victoires"
           value={team.stats?.matchesWon || 0}
-          color="bg-green-50 text-green-600"
+          color="bg-emerald-50 text-emerald-600"
         />
         <StatBox
           label="Défaites"
@@ -557,7 +557,7 @@ const OverviewTab = ({ team }) => {
               {team.members.find((m) => m.role === "manager").lastName?.[0]}
             </div>
             <div>
-              <div className="font-bold text-gray-900 hover:text-green-600 transition">
+              <div className="font-bold text-gray-900 hover:text-emerald-600 transition">
                 {team.members.find((m) => m.role === "manager").firstName}{" "}
                 {team.members.find((m) => m.role === "manager").lastName}
               </div>
@@ -586,7 +586,7 @@ const OverviewTab = ({ team }) => {
               {team.members.find((m) => m.role === "captain").lastName?.[0]}
             </div>
             <div>
-              <div className="font-bold text-gray-900 hover:text-green-600 transition">
+              <div className="font-bold text-gray-900 hover:text-emerald-600 transition">
                 {team.members.find((m) => m.role === "captain").firstName}{" "}
                 {team.members.find((m) => m.role === "captain").lastName}
               </div>
@@ -647,7 +647,7 @@ const MembersTab = ({ team, isOwner, onRemoveMember, onInvite }) => {
                 {member.firstName[0]}
               </div>
               <div>
-                <div className="font-medium text-gray-900 flex items-center hover:text-green-600 transition">
+                <div className="font-medium text-gray-900 flex items-center hover:text-emerald-600 transition">
                   {member.firstName} {member.lastName}
                   {member.role === "captain" && (
                     <Crown className="w-3 h-3 ml-2 text-yellow-500 fill-current" />
@@ -716,7 +716,7 @@ const MatchesTab = ({ matches }) => (
             className={`px-3 py-1 rounded-full text-xs font-bold ${
               match.status === "completed"
                 ? "bg-gray-100 text-gray-600"
-                : "bg-green-100 text-green-700"
+                : "bg-emerald-100 text-emerald-700"
             }`}
           >
             {match.status === "completed" ? "Terminé" : "À venir"}

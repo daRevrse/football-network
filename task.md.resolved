@@ -1,0 +1,27 @@
+# Migration vers Supabase
+
+- [x] Analyser la stack actuelle du projet (Backend, Frontend Web, Mobile App).
+- [x] Identifier les équivalences Supabase pour chaque composant (BDD, Auth, Storage, Realtime).
+- [x] Rédiger le plan de migration détaillé.
+- [x] Valider l'approche avec l'utilisateur (Choix Full Serverless, pas de migration des données de test).
+- [x] Convertir les fichiers SQL MySQL en PostgreSQL.
+- [x] Exécuter les scripts de création de table sur le projet Supabase.
+
+## Migration de l'Authentification
+- [ ] Configurer Supabase Auth (Providers, etc.) sur le dashboard.
+- [x] Initialiser le client `@supabase/supabase-js` dans les frontends.
+- [x] Migrer l'authentification (login/register) sur React Web (`football-network-frontend`).
+- [x] Tester les parcours d'inscription et de connexion sur le Web.
+- [x] Migrer l'authentification (login/register) sur React Native (`FootballNetworkApp`).
+- [ ] Tester les parcours d'inscription et de connexion sur React Native.
+
+## Migration du Stockage (Storage)
+- [x] Créer les buckets de stockage dans Supabase (avatars, etc.).
+- [x] Mettre à jour l'upload de fichiers sur le Frontend Web.
+- [ ] Mettre à jour l'upload de fichiers sur l'application Mobile.
+
+## Refonte Full Serverless (Frontend Web)
+- [x] Domaine 1: Utilisateurs & Contextes ([Profile.js](file:///c:/football-network/football-network-frontend/src/components/Profile.js), [Dashboard.js](file:///c:/football-network/football-network-frontend/src/components/Dashboard.js), [UserContext.js](file:///c:/football-network/football-network-frontend/src/contexts/UserContext.js), etc.)
+- [ ] Domaine 2: Équipes (Teams)
+- [ ] Domaine 3: Matchs, Terrains & Arbitres
+- [ ] Domaine 4: Feed & Interactions Sociaux

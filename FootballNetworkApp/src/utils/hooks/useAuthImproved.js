@@ -1,15 +1,12 @@
-// ====== src/utils/hooks/useAuthImproved.js ======
 import { useSelector, useDispatch } from 'react-redux';
-import { AuthApi, authApi } from '../../services/api/authApi';
+import { supabase } from '../../lib/supabase';
 import {
   loginSuccess,
   logout,
   setLoading,
   setError,
   clearError,
-  setTokens,
-} from '../../store/slices/authSlice'; // Chemin corrigé
-import { SecureStorage } from '../../services/storage';
+} from '../../store/slices/authSlice';
 
 export const useAuthImproved = () => {
   const dispatch = useDispatch();
@@ -20,19 +17,23 @@ export const useAuthImproved = () => {
       dispatch(setLoading(true));
       dispatch(clearError());
 
-      const result = await AuthApi.login(email, password);
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
 
-      if (result.success) {
-        dispatch(loginSuccess(result.data));
-        return { success: true, user: result.data.user };
-      } else {
-        dispatch(setError(result.error));
-        return { success: false, error: result.error, code: result.code };
+      if (error) {
+        dispatch(setError(error.message));
+        return { success: false, error: error.message };
       }
+      
+      return { success: true, user: data.user };
     } catch (error) {
-      const errorMessage = 'Une erreur inattendue est survenue';
+      const errorMessage = "Une erreur inattendue est survenue";
       dispatch(setError(errorMessage));
       return { success: false, error: errorMessage };
+    } finally {
+      dispatch(setLoading(false));
     }
   };
 
@@ -41,78 +42,67 @@ export const useAuthImproved = () => {
       dispatch(setLoading(true));
       dispatch(clearError());
 
-      const result = await authApi.signup(userData);
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email: userData.email,
+        password: userData.password,
+        options: {
+          data: {
+            first_name: userData.firstName || '',
+            last_name: userData.lastName || '',
+            user_type: userData.userType || 'player',
+          }
+        }
+      });
 
-      if (result.success) {
-        dispatch(loginSuccess(result.data));
-        return { success: true, user: result.data.user };
-      } else {
-        dispatch(setError(result.error));
-        return { success: false, error: result.error, code: result.code };
+      if (authError) {
+         dispatch(setError(authError.message));
+         return { success: false, error: authError.message };
       }
+
+      // Insertion du profil dans la table publique 'users'
+      // Identique à la logique Web
+      const { error: dbError } = await supabase.from('users').insert([{
+        email: userData.email,
+        password: 'SUPABASE_AUTH_MANAGED',
+        first_name: userData.firstName || '',
+        last_name: userData.lastName || '',
+        user_type: userData.userType || 'player',
+        is_active: true,
+        email_verified: false
+      }]);
+
+      if (dbError) console.error("Database insert error", dbError);
+
+      return { success: true, user: authData.user };
     } catch (error) {
-      const errorMessage = 'Une erreur inattendue est survenue';
+      const errorMessage = "Une erreur inattendue est survenue";
       dispatch(setError(errorMessage));
       return { success: false, error: errorMessage };
+    } finally {
+      dispatch(setLoading(false));
     }
   };
 
   const verifyAuth = async () => {
-    try {
-      const result = await authApi.verifyToken();
-
-      if (result.success) {
-        // Token valide, mettre à jour les infos utilisateur
-        dispatch(
-          loginSuccess({
-            user: result.data,
-            token: await SecureStorage.getToken(),
-            refreshToken: await SecureStorage.getRefreshToken(),
-          }),
-        );
-        return true;
-      } else {
-        // Token invalide, déconnecter
-        dispatch(logout());
-        return false;
-      }
-    } catch (error) {
-      dispatch(logout());
-      return false;
-    }
+    // Redondant car AppNavigator s'abonne à auth.onAuthStateChange()
+    // et récupère la session via getSession() au montage.
+    return true;
   };
 
   const refreshAuthToken = async () => {
-    try {
-      const result = await authApi.refreshToken();
-
-      if (result.success) {
-        dispatch(
-          setTokens({
-            token: result.data.token,
-            refreshToken: await SecureStorage.getRefreshToken(),
-          }),
-        );
-        return true;
-      } else {
-        dispatch(logout());
-        return false;
-      }
-    } catch (error) {
-      dispatch(logout());
-      return false;
-    }
+    // Géré automatiquement par Supabase (autoRefreshToken: true)
+    return true;
   };
 
   const logoutUser = async () => {
     try {
-      await authApi.logout();
-      dispatch(logout());
+      await supabase.auth.signOut();
       return { success: true };
     } catch (error) {
-      // Même en cas d'erreur, déconnecter localement
+      return { success: false, error: error.message };
+    } finally {
+      // Dans tous les cas on vide le store Redux (ce qui déclenche la navigation vers Auth)
       dispatch(logout());
-      return { success: true };
     }
   };
 

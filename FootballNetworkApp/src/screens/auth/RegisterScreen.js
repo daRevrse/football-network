@@ -22,6 +22,7 @@ import {
 import { Feather as Icon } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAuthImproved } from '../../utils/hooks/useAuthImproved';
+import { supabase } from '../../lib/supabase';
 import { PremiumInput, PremiumButton, StepIndicatorCompact, RoleCardHorizontal } from '../../components/premium';
 import { COLORS, GRADIENTS, SHADOWS, RADIUS } from '../../theme/colors';
 
@@ -193,12 +194,30 @@ export const RegisterScreen = ({ navigation, route }) => {
 
     const result = await signup(userData);
 
-    if (result.success) {
+    if (result.success && result.user) {
       let message = 'Compte créé avec succès !';
       if (formData.userType === 'manager') {
         message = `Compte créé et équipe "${formData.teamName}" initialisée !`;
       } else if (formData.userType === 'referee') {
         message = 'Compte arbitre créé avec succès !';
+      } else if (formData.userType === 'venue_owner') {
+        // Insertion automatique du terrain vierge pour les propriétaires
+        const { error: venueError } = await supabase.from('locations').insert([{
+           name: 'Mon Terrain', // Placeholder, modifiable plus tard
+           address: '', 
+           city: formData.locationCity.trim(),
+           owner_id: result.user.id,
+           latitude: 0,
+           longitude: 0,
+           is_active: false // Inactif tant qu'incomplet
+        }]);
+        
+        if (venueError) {
+          console.error("Erreur création terrain (Supabase):", venueError);
+          message = "Compte créé, mais une erreur est survenue pour votre terrain.";
+        } else {
+          message = 'Compte propriétaire créé avec succès !';
+        }
       }
 
       Alert.alert('Bienvenue sur Foot Connect !', message, [

@@ -1,10 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import axios from 'axios';
-import { CheckCircle, XCircle, HelpCircle, MapPin, Calendar, Shield } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { 
+  Calendar, 
+  Shield, 
+  MapPin, 
+  CheckCircle, 
+  HelpCircle, 
+  XCircle 
+} from "lucide-react";
+import api from "../../services/api";
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
 
 const MyPendingParticipations = () => {
   const [loading, setLoading] = useState(true);
@@ -18,10 +24,8 @@ const MyPendingParticipations = () => {
   const loadPendingParticipations = async () => {
     try {
       setLoading(true);
-      const token = localStorage.getItem('token');
-      const response = await axios.get(`${API_BASE_URL}/participations/my-pending`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const response = await api.get("/participations/my-pending");
+
 
       setParticipations(response.data.participations);
     } catch (error) {
@@ -35,13 +39,9 @@ const MyPendingParticipations = () => {
   const handleResponse = async (participationId, status, note = null) => {
     try {
       setUpdating(prev => ({ ...prev, [participationId]: true }));
-      const token = localStorage.getItem('token');
 
-      await axios.put(
-        `${API_BASE_URL}/participations/${participationId}`,
-        { status, note },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      await api.put(`/participations/${participationId}`, { status, note });
+
 
       const statusText = {
         confirmed: 'confirmée',

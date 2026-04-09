@@ -12,10 +12,8 @@ import {
   Calendar,
   RefreshCw,
 } from "lucide-react";
-import axios from "axios";
+import api from "../../services/api";
 
-const API_BASE_URL =
-  process.env.REACT_APP_API_URL || "http://localhost:5000/api";
 
 const PendingValidations = () => {
   const [matches, setMatches] = useState([]);
@@ -29,9 +27,8 @@ const PendingValidations = () => {
   const loadPendingValidations = async () => {
     try {
       setLoading(true);
-      const response = await axios.get(
-        `${API_BASE_URL}/matches/pending-validation/list`
-      );
+      const response = await api.get("/matches/pending-validation/list");
+
       setMatches(response.data.matches);
     } catch (error) {
       console.error("Error loading pending validations:", error);

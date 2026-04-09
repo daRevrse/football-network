@@ -6,8 +6,17 @@ import React, {
   useMemo,
   useCallback,
 } from "react";
-import axios from "axios";
+import { auth, db } from "../config/firebase";
+import { 
+  signInWithEmailAndPassword, 
+  createUserWithEmailAndPassword, 
+  signOut, 
+  onAuthStateChanged,
+  sendEmailVerification
+} from "firebase/auth";
+import { doc, getDoc, setDoc, updateDoc } from "firebase/firestore";
 import toast from "react-hot-toast";
+import api from "../services/api";
 
 const AuthContext = createContext();
 
@@ -19,144 +28,178 @@ export const useAuth = () => {
   return context;
 };
 
-const API_BASE_URL = process.env.REACT_APP_API_URL;
-
 export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(null);
+  const [user, setUser] = useState(null); // Firebase Auth User + Firestore Profile
+  const [session, setSession] = useState(null); // Just the raw Firebase User object
   const [loading, setLoading] = useState(true);
 
-  // Configuration Axios stable
+  // On ne configure plus Axios ici, c'est fait dans src/services/api.js
+  // Mais on peut conserver un intercepteur de réponse spécifique pour la déconnexion immédiate
   useEffect(() => {
-    const reqInterceptor = axios.interceptors.request.use((config) => {
-      const token = localStorage.getItem("token");
-      if (token) config.headers.Authorization = `Bearer ${token}`;
-      return config;
-    });
-
-    const resInterceptor = axios.interceptors.response.use(
+    const resInterceptor = api.interceptors.response.use(
       (response) => response,
-      (error) => {
-        if (error.response?.status === 401) {
-          localStorage.removeItem("token");
+      async (error) => {
+        if (error.response?.status === 401 || error.response?.status === 403) {
+          await signOut(auth);
           setUser(null);
+          setSession(null);
         }
         return Promise.reject(error);
       }
     );
 
     return () => {
-      axios.interceptors.request.eject(reqInterceptor);
-      axios.interceptors.response.eject(resInterceptor);
+      api.interceptors.response.eject(resInterceptor);
     };
   }, []);
 
+  // Synchronisation de l'état d'authentification avec le profil Firestore
   useEffect(() => {
-    const initAuth = async () => {
-      const token = localStorage.getItem("token");
-      if (token) {
-        try {
-          const response = await axios.get(`${API_BASE_URL}/auth/verify`);
-          setUser(response.data.user);
-        } catch (error) {
-          console.error("Auth verify failed", error);
-          localStorage.removeItem("token");
+    let mounted = true;
+
+    async function fetchProfile(firebaseUser) {
+      if (!firebaseUser) {
+        if (mounted) {
           setUser(null);
+          setLoading(false);
         }
+        return;
       }
-      setLoading(false);
+
+      try {
+        // Appeler le backend pour récupérer ou créer le profil (synchronisation RBAC)
+        const response = await api.get('/users/profile');
+        if (mounted) {
+          setUser({
+            ...response.data.user,
+            uid: firebaseUser.uid,
+            email: firebaseUser.email,
+            email_verified: firebaseUser.emailVerified,
+          });
+        }
+      } catch (err) {
+        console.error("Error fetching user profile from backend:", err);
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    }
+
+    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+      if (mounted) {
+        setSession(firebaseUser);
+        setLoading(true);
+        fetchProfile(firebaseUser);
+      }
+    });
+
+    return () => {
+      mounted = false;
+      unsubscribe();
     };
-    initAuth();
   }, []);
 
   const login = useCallback(async (email, password) => {
     try {
-      const response = await axios.post(`${API_BASE_URL}/auth/login`, {
-        email,
-        password,
-      });
-      const { token, user } = response.data;
-      localStorage.setItem("token", token);
-      setUser(user);
+      await signInWithEmailAndPassword(auth, email, password);
       toast.success("Connexion réussie !");
       return { success: true };
     } catch (error) {
-      const message =
-        error.response?.data?.error ||
-        error.response?.data?.message ||
-        "Erreur de connexion";
+      console.error("Login error:", error);
+      let message = "Erreur de connexion";
+      if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
+        message = "Email ou mot de passe incorrect";
+      }
       toast.error(message);
       return { success: false, error: message };
     }
   }, []);
 
-  // MODIFIÉ : Signup ne connecte plus automatiquement, mais renvoie un succès pour afficher le message "Vérifiez vos emails"
   const signup = useCallback(async (userData) => {
     try {
-      const response = await axios.post(
-        `${API_BASE_URL}/auth/signup`, // Attention: vérifiez si votre route est /signup ou /register dans le backend
-        userData
-      );
-      // On ne set PAS le token ici car l'email doit être vérifié d'abord
-      toast.success("Inscription réussie ! Vérifiez vos emails.");
-      return { success: true, message: response.data.message };
-    } catch (error) {
-      const message = error.response?.data?.error || "Erreur d'inscription";
-      toast.error(message);
-      return { success: false, error: message };
-    }
-  }, []);
+      // 1. Inscription via Firebase Auth
+      const userCredential = await createUserWithEmailAndPassword(auth, userData.email, userData.password);
+      const firebaseUser = userCredential.user;
 
-  // NOUVEAU : Fonction de vérification d'email
-  const verifyEmail = useCallback(async (token) => {
-    try {
-      const response = await axios.get(`${API_BASE_URL}/auth/verify-email`, {
-        params: { token },
+      // 2. Création immédiate du profil dans Firestore
+      const userDocRef = doc(db, "users", firebaseUser.uid);
+      await setDoc(userDocRef, {
+        email: userData.email,
+        first_name: userData.firstName || userData.first_name || '',
+        last_name: userData.lastName || userData.last_name || '',
+        user_type: userData.userType || userData.user_type || 'player',
+        is_active: true,
+        created_at: new Date().toISOString()
       });
-      toast.success("Email vérifié avec succès !");
-      return { success: true, message: response.data.message };
-    } catch (error) {
-      const message = error.response?.data?.error || "Lien invalide ou expiré";
-      return { success: false, error: message };
-    }
-  }, []);
 
-  // NOUVEAU : Fonction de renvoi d'email
-  const resendVerification = useCallback(async (email) => {
-    try {
-      await axios.post(`${API_BASE_URL}/auth/resend-verification`, { email });
-      toast.success("Email de vérification renvoyé !");
-      return { success: true };
+      toast.success("Inscription réussie !");
+      return { success: true, message: "Inscription réussie", user: firebaseUser };
     } catch (error) {
-      const message = error.response?.data?.error || "Erreur lors de l'envoi";
+      console.error("Signup error:", error);
+      let message = "Erreur d'inscription";
+      if (error.code === 'auth/email-already-in-use') {
+        message = "Cet email est déjà utilisé.";
+      }
       toast.error(message);
       return { success: false, error: message };
     }
   }, []);
 
-  const logout = useCallback(() => {
-    localStorage.removeItem("token");
-    setUser(null);
-    toast.success("Déconnexion réussie");
-    // window.location.href = "/login"; // Utiliser navigate dans le composant est préférable, mais ceci fonctionne
+  const verifyEmail = useCallback(async () => {
+    try {
+      if (auth.currentUser) {
+        await sendEmailVerification(auth.currentUser);
+        toast.success("Email de vérification envoyé avec succès !");
+        return { success: true, message: "Sent" };
+      }
+    } catch (error) {
+       toast.error("Erreur à l'envoi de la vérification");
+       return { success: false, error: error.message };
+    }
   }, []);
 
-  const updateUser = useCallback((userData) => {
+  const resendVerification = verifyEmail;
+
+  const logout = useCallback(async () => {
+    try {
+      await signOut(auth);
+      setUser(null);
+      setSession(null);
+      toast.success("Déconnexion réussie");
+    } catch (error) {
+      toast.error("Erreur à la déconnexion");
+    }
+  }, []);
+
+  const updateUser = useCallback(async (userData) => {
+    // Optimistic update pour l'interface
     setUser((prev) => ({ ...prev, ...userData }));
+    
+    // Met à jour Firestore si un utilisateur est authentifié
+    if (auth.currentUser) {
+      try {
+        const userDocRef = doc(db, "users", auth.currentUser.uid);
+        await updateDoc(userDocRef, userData);
+      } catch (error) {
+        console.error("Error updating user:", error);
+      }
+    }
   }, []);
 
   const value = useMemo(
     () => ({
       user,
+      session,
       loading,
       login,
       signup,
       logout,
       updateUser,
-      verifyEmail, // Exporté
-      resendVerification, // Exporté
+      verifyEmail,
+      resendVerification,
     }),
     [
       user,
+      session,
       loading,
       login,
       signup,

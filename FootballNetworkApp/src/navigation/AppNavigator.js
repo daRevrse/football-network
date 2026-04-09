@@ -5,7 +5,8 @@ import { AuthNavigator } from './AuthNavigator';
 import { RoleBasedNavigator } from './RoleBasedNavigator';
 import { LoadingSpinner } from '../components/common';
 import { SecureStorage } from '../services/storage';
-import { loginSuccess } from '../store/slices/authSlice';
+import { loginSuccess, logout, setSessionOnly } from '../store/slices/authSlice';
+import { supabase } from '../lib/supabase';
 
 export const AppNavigator = () => {
   const dispatch = useDispatch();
@@ -22,37 +23,66 @@ export const AppNavigator = () => {
   const [isInitializing, setIsInitializing] = React.useState(true);
 
   useEffect(() => {
-    initializeAuth();
-  }, []);
+    let mounted = true;
 
-  const initializeAuth = async () => {
-    try {
-      console.log("🔍 Vérification de l'authentification...");
-
-      const token = await SecureStorage.getToken();
-      const user = await SecureStorage.getUser();
-
-      if (token && user) {
-        console.log(
-          '✅ Token et utilisateur trouvés - Restauration de la session',
-        );
-        dispatch(
-          loginSuccess({
-            user,
-            token,
-            refreshToken: await SecureStorage.getRefreshToken(),
-          }),
-        );
-        console.log('token', token);
-      } else {
-        console.log('❌ Pas de session sauvegardée');
+    async function getProfile(sessionObj) {
+      if (!sessionObj) {
+        if (mounted) {
+          dispatch(logout());
+          setIsInitializing(false);
+        }
+        return;
       }
-    } catch (error) {
-      console.error('❌ Erreur lors de la vérification auth:', error);
-    } finally {
-      setIsInitializing(false);
+
+      try {
+        const { user: authUser } = sessionObj;
+        
+        // Optimistic UI state
+        dispatch(setSessionOnly(sessionObj));
+
+        // Récupérer le profil depuis notre table "users" métier
+        const { data: profile, error } = await supabase
+          .from("users")
+          .select("*")
+          .eq("email", authUser.email)
+          .single();
+
+        if (error && error.code !== 'PGRST116') {
+          console.error("Error fetching user profile:", error);
+        }
+
+        if (mounted) {
+          dispatch(loginSuccess({
+            user: profile || { email: authUser.email, is_verified: false },
+            session: sessionObj
+          }));
+        }
+      } catch (err) {
+        console.error("Error in getProfile", err);
+      } finally {
+        if (mounted) setIsInitializing(false);
+      }
     }
-  };
+
+    // Capture de la session initiale
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      getProfile(session);
+    });
+
+    // Écouteur des changements d'état d'authentification
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (_event, session) => {
+        if (mounted) {
+          getProfile(session);
+        }
+      }
+    );
+
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
+  }, [dispatch]);
 
   // Affichage du loading pendant l'initialisation
   if (isInitializing || isLoading) {

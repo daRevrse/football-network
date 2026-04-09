@@ -21,9 +21,9 @@ import {
 import { useAuth } from "../contexts/AuthContext";
 import { useUserProfile } from "../contexts/UserContext";
 import toast from "react-hot-toast";
-import axios from "axios";
+import api from "../services/api";
+// Removed direct Firestore/Storage imports used for updates
 
-const API_BASE_URL = process.env.REACT_APP_API_URL;
 
 // Schema de validation
 const profileSchema = yup.object({
@@ -99,114 +99,140 @@ const Profile = () => {
 
   const loadProfile = async () => {
     try {
+      if (!user?.uid) return;
       setLoading(true);
-      const response = await axios.get(`${API_BASE_URL}/users/profile`);
-      const profile = response.data;
+      
+      const response = await api.get('/users/profile');
+      const profile = response.data.user;
 
-      // Sécurisation : on s'assure d'avoir le userType
-      if (!profile.userType && user?.userType) {
-        profile.userType = user.userType;
-      }
+      setProfileData({
+        ...profile,
+        userType: profile.role || profile.user_type,
+        firstName: profile.first_name || profile.displayName?.split(' ')[0] || "",
+        lastName: profile.last_name || profile.displayName?.split(' ')[1] || "",
+        birthDate: profile.birth_date,
+        skillLevel: profile.skill_level,
+        locationCity: profile.location_city,
+      });
 
-      setProfileData(profile);
       reset({
-        firstName: profile.firstName || "",
-        lastName: profile.lastName || "",
-        phone: profile.phone || "",
-        birthDate: profile.birthDate ? profile.birthDate.split("T")[0] : "",
+        firstName: profile.first_name || profile.displayName?.split(' ')[0] || "",
+        lastName: profile.last_name || profile.displayName?.split(' ')[1] || "",
+        phone: profile.phone || profile.phoneNumber || "",
+        birthDate: profile.birth_date ? profile.birth_date.split("T")[0] : "",
         bio: profile.bio || "",
         position: profile.position || "any",
-        skillLevel: profile.skillLevel || "amateur",
-        locationCity: profile.locationCity || "",
+        skillLevel: profile.skill_level || "amateur",
+        locationCity: profile.location_city || "",
       });
     } catch (error) {
-      toast.error("Erreur chargement profil");
+      console.error(error);
+      toast.error("Erreur chargement profil via API");
     } finally {
       setLoading(false);
     }
   };
 
+
   const loadStats = async () => {
-    try {
-      const response = await axios.get(`${API_BASE_URL}/users/stats`);
-      setStats((prev) => ({ ...prev, ...response.data }));
-    } catch (error) {
-      console.log("Stats non disponibles");
-    }
+    // Stats will need to be fetched via the Node.js backend APIs later
+    setStats({
+      teamsCount: 0,
+      matchesCount: 0,
+      winRate: 0,
+      goals: 0,
+      assists: 0,
+    });
   };
 
   const onSubmit = async (data) => {
     try {
+      if (!user?.uid) return;
       setSaving(true);
+      
       const cleanData = Object.fromEntries(
         Object.entries(data).filter(([_, v]) => v !== "" && v !== null)
       );
 
-      // Si c'est un manager, on retire les champs liés au joueur pour ne pas polluer la DB
-      if (profileData?.userType === "manager") {
-        delete cleanData.position;
-        delete cleanData.skillLevel;
+      const updateData = {
+        first_name: cleanData.firstName,
+        last_name: cleanData.lastName,
+        displayName: `${cleanData.firstName} ${cleanData.lastName}`,
+        phone: cleanData.phone || null,
+        birth_date: cleanData.birthDate || null,
+        bio: cleanData.bio || null,
+        location_city: cleanData.locationCity || null,
+      };
+
+      if (profileData?.userType !== "manager") {
+        updateData.position = cleanData.position || 'any';
+        updateData.skill_level = cleanData.skillLevel || 'amateur';
       }
 
-      await axios.put(`${API_BASE_URL}/users/profile`, cleanData);
+      await api.put('/users/profile', updateData);
+
       toast.success("Profil mis à jour !");
       setIsEditing(false);
       await loadProfile();
-      if (updateUser)
+      
+      if (updateUser) {
         updateUser({
           ...user,
           firstName: data.firstName,
           lastName: data.lastName,
+          displayName: `${data.firstName} ${data.lastName}`,
         });
+      }
     } catch (error) {
-      toast.error("Erreur mise à jour");
+      console.error(error);
+      toast.error("Erreur mise à jour via API");
     } finally {
       setSaving(false);
     }
   };
 
+
   const handlePhotoUpload = async (file, isProfilePicture = true) => {
     try {
+      if (!user?.uid) return;
       setUploadingPhoto(true);
+
       const formData = new FormData();
-      formData.append("files", file);
-      const uploadContext = isProfilePicture ? "user_profile" : "user_cover";
+      formData.append('file', file);
+      formData.append('folder', isProfilePicture ? 'avatars' : 'covers');
 
-      const uploadRes = await axios.post(
-        `${API_BASE_URL}/uploads?upload_context=${uploadContext}`,
-        formData,
-        {
-          headers: { "Content-Type": "multipart/form-data" },
-        }
-      );
-
-      const endpoint = isProfilePicture
-        ? "/users/profile/picture"
-        : "/users/profile/cover";
-      const response = await axios.post(`${API_BASE_URL}${endpoint}`, {
-        uploadId: uploadRes.data.files[0].id,
+      const uploadResponse = await api.post('/upload', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
       });
 
-      const fullUrl = `${API_BASE_URL.replace("/api", "")}${
-        isProfilePicture
-          ? response.data.profilePictureUrl
-          : response.data.coverPhotoUrl
-      }`;
+      const url = uploadResponse.data.url;
 
+      const updateData = isProfilePicture 
+        ? { profile_picture_id: url, photoURL: url } 
+        : { cover_photo_id: url };
+
+      await api.put('/users/profile', updateData);
+
+      // Update the local state
       if (isProfilePicture) {
-        refreshProfilePicture(fullUrl);
+        refreshProfilePicture(url);
         toast.success("Photo de profil mise à jour");
       } else {
-        refreshCoverPhoto(fullUrl);
+        refreshCoverPhoto(url);
         toast.success("Couverture mise à jour");
       }
-      await loadProfile();
+      
+      await loadProfile(); // Refresh full profile data
     } catch (error) {
-      toast.error("Erreur upload photo");
+      console.error(error);
+      toast.error("Erreur upload photo via serveur Node");
     } finally {
       setUploadingPhoto(false);
     }
   };
+
 
   const InfoRow = ({ icon: Icon, label, value, isLink }) => (
     <div className="flex items-center py-3 border-b border-gray-50 last:border-0">

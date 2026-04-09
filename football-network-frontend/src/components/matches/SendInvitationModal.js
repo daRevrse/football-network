@@ -15,10 +15,7 @@ import {
   Loader2,
 } from "lucide-react";
 import toast from "react-hot-toast";
-import axios from "axios";
-
-const API_BASE_URL =
-  process.env.REACT_APP_API_URL || "http://localhost:5000/api";
+import api from "../../services/api";
 
 // Schema de validation
 const sendInvitationSchema = yup.object({
@@ -82,8 +79,8 @@ const SendInvitationModal = ({
   const loadLocations = async () => {
     try {
       setLoadingLocations(true);
-      // On récupère les vrais terrains depuis l'API
-      const response = await axios.get(`${API_BASE_URL}/venues?limit=100`);
+      // On récupère les terrains via l'API centralisée
+      const response = await api.get("/venues?limit=100");
       if (response.data && response.data.venues) {
         setLocations(response.data.venues);
       }
@@ -97,8 +94,8 @@ const SendInvitationModal = ({
   const searchTeams = async () => {
     try {
       setSearchingReceiver(true);
-      const response = await axios.get(`${API_BASE_URL}/teams`, {
-        params: { search: receiverSearchTerm, limit: 5 },
+      const response = await api.get("/teams", {
+        params: { search: receiverSearchTerm, limit: 10 },
       });
 
       // Filtrer pour ne pas afficher mes propres équipes
@@ -127,7 +124,7 @@ const SendInvitationModal = ({
     }
 
     // Vérification basique pour ne pas s'inviter soi-même
-    if (parseInt(data.senderTeamId) === selectedReceiver.id) {
+    if (data.senderTeamId === selectedReceiver.id) {
       return toast.error("Vous ne pouvez pas inviter votre propre équipe");
     }
 
@@ -140,12 +137,12 @@ const SendInvitationModal = ({
       );
 
       const payload = {
-        senderTeamId: parseInt(data.senderTeamId),
+        senderTeamId: data.senderTeamId,
         receiverTeamId: selectedReceiver.id,
         proposedDate: proposedDate.toISOString(),
         proposedLocationId:
           data.proposedLocationId && data.proposedLocationId !== ""
-            ? parseInt(data.proposedLocationId)
+            ? data.proposedLocationId
             : null,
         verifyPlayerAvailability: verifyPlayerAvailability,
         message: data.message,
@@ -153,10 +150,8 @@ const SendInvitationModal = ({
 
       console.log("payload", payload);
 
-      const token = localStorage.getItem("token");
-      await axios.post(`${API_BASE_URL}/matches/invitations`, payload, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      // Utilise l'endpoint /api/matches/invitations via l'API centralisée
+      await api.post("/matches/invitations", payload);
 
       toast.success("Invitation envoyée avec succès !");
       if (onSuccess) onSuccess();
@@ -165,11 +160,7 @@ const SendInvitationModal = ({
       console.error("Send invitation error:", error);
       const errorData = error.response?.data;
 
-      if (errorData?.error === "Insufficient players") {
-        toast.error(
-          `Effectif insuffisant : ${errorData.playersCount}/${errorData.minimumRequired} joueurs requis.`
-        );
-      } else if (errorData?.error) {
+      if (errorData?.error) {
         toast.error(errorData.error);
       } else {
         toast.error("Erreur lors de l'envoi de l'invitation");
@@ -185,23 +176,23 @@ const SendInvitationModal = ({
   const minDateStr = minDate.toISOString().split("T")[0];
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
-      <div className="bg-white rounded-2xl w-full max-w-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+    <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
+      <div className="bg-white rounded-xl w-full max-w-2xl shadow-xl overflow-hidden flex flex-col max-h-[90vh]">
         {/* Header */}
-        <div className="bg-gray-900 p-6 flex justify-between items-center shrink-0">
-          <div className="text-white">
-            <h2 className="text-lg font-bold flex items-center">
-              <Send className="w-5 h-5 mr-2 text-blue-400" /> Organiser un match
+        <div className="bg-white border-b border-gray-100 p-5 flex justify-between items-center shrink-0">
+          <div>
+            <h2 className="text-lg font-bold text-gray-900 flex items-center">
+              <Send className="w-5 h-5 mr-2 text-blue-600" /> Organiser un match
             </h2>
-            <p className="text-xs text-gray-400 mt-1">
+            <p className="text-xs text-gray-500 mt-1">
               Invitez une équipe à vous affronter
             </p>
           </div>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-white transition-colors"
+            className="text-gray-400 hover:text-gray-600 bg-gray-50 hover:bg-gray-100 rounded-lg p-2 transition-colors"
           >
-            <X className="w-6 h-6" />
+            <X className="w-5 h-5" />
           </button>
         </div>
 
@@ -226,7 +217,7 @@ const SendInvitationModal = ({
                   <Shield className="absolute left-3 top-2.5 h-5 w-5 text-gray-400" />
                   <select
                     {...register("senderTeamId")}
-                    className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none appearance-none"
+                    className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none appearance-none transition-all"
                   >
                     {teams.map((team) => (
                       <option key={team.id} value={team.id}>
@@ -244,9 +235,9 @@ const SendInvitationModal = ({
                 </label>
 
                 {selectedReceiver ? (
-                  <div className="flex items-center justify-between p-2.5 bg-blue-50 border border-blue-200 rounded-xl">
+                  <div className="flex items-center justify-between p-2.5 bg-blue-50 border border-blue-200 rounded-lg">
                     <div className="flex items-center gap-3 overflow-hidden">
-                      <div className="w-8 h-8 bg-blue-200 rounded-full flex items-center justify-center text-blue-700 font-bold text-xs shrink-0">
+                      <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center text-blue-700 font-bold text-xs shrink-0">
                         {selectedReceiver.name[0]}
                       </div>
                       <div className="truncate">
@@ -254,18 +245,18 @@ const SendInvitationModal = ({
                           {selectedReceiver.name}
                         </p>
                         <p className="text-xs text-blue-700">
-                          {selectedReceiver.skillLevel || "Amateur"}
+                          {selectedReceiver.skill_level || "Amateur"}
                         </p>
                       </div>
                     </div>
                     <button
                       type="button"
                       onClick={() => !targetTeam && setSelectedReceiver(null)}
-                      className={`text-blue-400 hover:text-blue-600 ${
+                      className={`text-blue-500 hover:text-blue-700 transition-colors p-1.5 rounded-md hover:bg-blue-100 ${
                         targetTeam ? "hidden" : ""
                       }`}
                     >
-                      <X className="w-5 h-5" />
+                      <X className="w-4 h-4" />
                     </button>
                   </div>
                 ) : (
@@ -274,14 +265,14 @@ const SendInvitationModal = ({
                     <input
                       type="text"
                       placeholder="Rechercher une équipe..."
-                      className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                      className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
                       value={receiverSearchTerm}
                       onChange={(e) => setReceiverSearchTerm(e.target.value)}
                     />
 
                     {/* Liste déroulante de recherche */}
                     {(searchingReceiver || foundTeams.length > 0) && (
-                      <div className="absolute z-10 left-0 right-0 mt-2 bg-white rounded-xl shadow-lg border border-gray-100 max-h-48 overflow-y-auto">
+                      <div className="absolute z-10 left-0 right-0 mt-2 bg-white rounded-lg shadow-lg border border-gray-100 max-h-48 overflow-y-auto">
                         {searchingReceiver ? (
                           <div className="p-4 text-center text-gray-500 text-sm">
                             Recherche...
@@ -301,7 +292,7 @@ const SendInvitationModal = ({
                                   {team.name}
                                 </p>
                                 <p className="text-xs text-gray-500">
-                                  {team.locationCity || "Ville inconnue"}
+                                  {team.city || team.locationCity || "Ville inconnue"}
                                 </p>
                               </div>
                             </div>
@@ -332,13 +323,13 @@ const SendInvitationModal = ({
                     type="date"
                     min={minDateStr}
                     {...register("proposedDate")}
-                    className={`w-full pl-10 pr-4 py-2.5 bg-gray-50 border rounded-xl focus:ring-2 focus:ring-blue-500 outline-none ${
-                      errors.proposedDate ? "border-red-500" : "border-gray-200"
+                    className={`w-full pl-10 pr-4 py-2.5 bg-gray-50 border rounded-lg focus:ring-2 focus:ring-blue-500/20 outline-none transition-all ${
+                      errors.proposedDate ? "border-red-500 focus:border-red-500" : "border-gray-200 focus:border-blue-500"
                     }`}
                   />
                 </div>
                 {errors.proposedDate && (
-                  <p className="text-red-500 text-xs mt-1">
+                  <p className="text-red-500 text-xs mt-1.5 font-medium">
                     {errors.proposedDate.message}
                   </p>
                 )}
@@ -351,12 +342,12 @@ const SendInvitationModal = ({
                 <input
                   type="time"
                   {...register("proposedTime")}
-                  className={`w-full px-4 py-2.5 bg-gray-50 border rounded-xl focus:ring-2 focus:ring-blue-500 outline-none ${
-                    errors.proposedTime ? "border-red-500" : "border-gray-200"
+                  className={`w-full px-4 py-2.5 bg-gray-50 border rounded-lg focus:ring-2 focus:ring-blue-500/20 outline-none transition-all ${
+                    errors.proposedTime ? "border-red-500 focus:border-red-500" : "border-gray-200 focus:border-blue-500"
                   }`}
                 />
                 {errors.proposedTime && (
-                  <p className="text-red-500 text-xs mt-1">
+                  <p className="text-red-500 text-xs mt-1.5 font-medium">
                     {errors.proposedTime.message}
                   </p>
                 )}
@@ -372,7 +363,7 @@ const SendInvitationModal = ({
                 <select
                   {...register("proposedLocationId")}
                   disabled={loadingLocations}
-                  className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none appearance-none"
+                  className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none appearance-none transition-all"
                 >
                   <option value="">À définir plus tard</option>
                   {locations.map((loc) => (
@@ -392,7 +383,7 @@ const SendInvitationModal = ({
             </h3>
 
             {/* Vérification disponibilité joueurs */}
-            <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+            <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
               <label className="flex items-start space-x-3 cursor-pointer">
                 <input
                   type="checkbox"
@@ -400,29 +391,28 @@ const SendInvitationModal = ({
                   onChange={(e) =>
                     setVerifyPlayerAvailability(e.target.checked)
                   }
-                  className="mt-1 w-5 h-5 text-blue-600 border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
+                  className="mt-1 w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500/20"
                 />
                 <div className="flex-1">
                   <div className="flex items-center space-x-2">
-                    <CheckCircle className="w-4 h-4 text-blue-600" />
+                    <CheckCircle className={`w-4 h-4 ${verifyPlayerAvailability ? 'text-blue-600' : 'text-gray-400'}`} />
                     <span className="text-sm font-medium text-gray-900">
                       Vérifier la disponibilité des joueurs
                     </span>
                   </div>
-                  <p className="text-xs text-gray-600 mt-1">
+                  <p className="text-xs text-gray-500 mt-1 leading-relaxed">
                     {verifyPlayerAvailability ? (
                       <>
-                        <strong>Activé:</strong> Les deux équipes doivent avoir
-                        minimum 6 joueurs disponibles. Le match sera{" "}
-                        <strong>confirmé automatiquement</strong> dès
-                        l'acceptation de l'invitation.
+                        <strong>Activé :</strong> Les deux équipes doivent avoir
+                        un nombre minimum de joueurs disponibles (6 pour match à onze, 4 pour les autres). Le match sera{" "}
+                        <span className="text-blue-700 font-medium">confirmé automatiquement</span> dès
+                        l'acceptation.
                       </>
                     ) : (
                       <>
-                        <strong>Désactivé:</strong> Pas de vérification
-                        immédiate. Le match restera en <strong>attente</strong>{" "}
-                        jusqu'à ce que les joueurs confirment leur
-                        participation.
+                        <strong>Désactivé :</strong> Pas de vérification
+                        immédiate. Le match restera en <span className="text-amber-600 font-medium">attente</span>{" "}
+                        jusqu'à confirmation des participations.
                       </>
                     )}
                   </p>
@@ -441,7 +431,7 @@ const SendInvitationModal = ({
               <textarea
                 {...register("message")}
                 rows={3}
-                className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none resize-none"
+                className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none resize-none transition-all text-sm"
                 placeholder="Ex: Salut, on cherche un match amical 5v5, vous êtes dispos ?"
               />
             </div>
@@ -454,18 +444,18 @@ const SendInvitationModal = ({
           </div>
 
           {/* Footer Actions */}
-          <div className="pt-2 flex gap-4">
+          <div className="pt-4 border-t border-gray-100 flex gap-3">
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 px-4 py-3 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-xl font-medium transition-colors"
+              className="flex-1 px-4 py-2.5 text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 rounded-lg font-medium transition-colors"
             >
               Annuler
             </button>
             <button
               type="submit"
               disabled={sending}
-              className="flex-1 flex items-center justify-center px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex-[2] flex items-center justify-center px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium shadow-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {sending ? (
                 <Loader2 className="w-5 h-5 animate-spin mr-2" />
